@@ -41,13 +41,13 @@ Publish with the `browser-wasm` runtime:
 dotnet publish -c Release -r browser-wasm
 ```
 
-Workers defaults to invariant globalization for smaller bundles. If your Worker needs culture-specific formatting or comparisons, set `WorkersInvariantGlobalization` to `false`.
-
 Publishing writes a `dist/` folder with the Worker module, runtime adapter, and `_framework` files for deployment with Wrangler.
 
 Keep deployment settings like routes, bindings, migrations, vars, and observability in your Wrangler config.
 
 For HTTP-only Workers that do not call platform bindings or helper APIs, set `WorkersIncludePlatformApis` to `false` to emit a smaller adapter.
+
+Workers defaults to invariant globalization for smaller bundles. If your Worker needs culture-specific formatting or comparisons, set `WorkersInvariantGlobalization` to `false`.
 
 ## Examples
 

@@ -11,6 +11,8 @@
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
     <OutputType>Exe</OutputType>
+    <PublishTrimmed Condition="'$(PublishTrimmed)' == ''">true</PublishTrimmed>
+    <TrimMode Condition="'$(TrimMode)' == ''">full</TrimMode>
     <InvariantGlobalization Condition="'$(InvariantGlobalization)' == '' and '$(WorkersInvariantGlobalization)' != 'false'">true</InvariantGlobalization>
     <WasmMainJSPath Condition="'$(WasmMainJSPath)' == ''">$(MSBuildThisFileDirectory)Workers.main.js</WasmMainJSPath>
   </PropertyGroup>
