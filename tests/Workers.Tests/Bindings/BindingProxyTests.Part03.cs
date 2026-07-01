@@ -360,6 +360,31 @@ public sealed partial class BindingProxyTests
     }
 
     [Fact]
+    public async Task QueueRejectsInvalidDelaySecondsBeforeDispatch()
+    {
+        var dispatcher = new CapturingDispatcher("{}");
+        using var _ = BindingDispatcher.Use(dispatcher);
+        var queue = EnvironmentWithInvocation("invocation-queue-invalid-delay").Queue("JOBS");
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            queue.SendJsonAsync(new { id = 1 }, new QueueSendOptions { DelaySeconds = -1 }));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            queue.SendTextAsync("plain", new QueueSendOptions { DelaySeconds = 86401 }));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            queue.SendBytesBatchAsync([new byte[] { 1 }], new QueueSendOptions { DelaySeconds = -1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            QueueSendRequest.Text("plain", delaySeconds: 86401));
+
+        var message = new QueueMessage<string>("message-1", "body", DateTimeOffset.UnixEpoch);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            message.Retry(new QueueRetryOptions { DelaySeconds = -1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            message.Retry(new QueueRetryOptions { DelaySeconds = 86401 }));
+
+        Assert.Empty(dispatcher.Invocations);
+    }
+
+    [Fact]
     public async Task QueueProxyDispatchesMetrics()
     {
         var dispatcher = new CapturingDispatcher(

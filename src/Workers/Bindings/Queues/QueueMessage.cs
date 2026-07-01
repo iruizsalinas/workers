@@ -56,6 +56,7 @@ public sealed class QueueMessage<T>
     /// <summary>Marks the message for retry.</summary>
     public void Retry(QueueRetryOptions? options = null)
     {
+        QueueProducerBinding.ValidateDelaySeconds(options?.DelaySeconds);
         Retried = true;
         Acked = false;
         RetryOptions = options;

@@ -46,18 +46,18 @@ public sealed class QueueSendRequest
 
     /// <summary>Creates a JSON message request.</summary>
     public static QueueSendRequest Json<T>(T body, int? delaySeconds = null) =>
-        new(JsonSerializer.SerializeToElement(body, QueueProducerBinding.JsonOptions), QueueContentType.Json, delaySeconds, null);
+        new(JsonSerializer.SerializeToElement(body, QueueProducerBinding.JsonOptions), QueueContentType.Json, QueueProducerBinding.ValidateDelaySeconds(delaySeconds), null);
 
     /// <summary>Creates a text message request.</summary>
     public static QueueSendRequest Text(string body, int? delaySeconds = null)
     {
         ArgumentNullException.ThrowIfNull(body);
-        return new(JsonSerializer.SerializeToElement(body, QueueProducerBinding.JsonOptions), QueueContentType.Text, delaySeconds, null);
+        return new(JsonSerializer.SerializeToElement(body, QueueProducerBinding.JsonOptions), QueueContentType.Text, QueueProducerBinding.ValidateDelaySeconds(delaySeconds), null);
     }
 
     /// <summary>Creates a binary message request.</summary>
     public static QueueSendRequest Bytes(ReadOnlyMemory<byte> body, int? delaySeconds = null) =>
-        new(null, QueueContentType.Bytes, delaySeconds, Convert.ToBase64String(body.Span));
+        new(null, QueueContentType.Bytes, QueueProducerBinding.ValidateDelaySeconds(delaySeconds), Convert.ToBase64String(body.Span));
 }
 
 /// <summary>Realtime metrics for a Workers Queue.</summary>
@@ -86,11 +86,12 @@ internal sealed class QueueProducerBinding : IQueueProducer
 
     public Task SendJsonAsync<T>(T message, QueueSendOptions? options = null, CancellationToken cancellationToken = default)
     {
+        var delaySeconds = ValidateDelaySeconds(options?.DelaySeconds);
         var payload = new JsonObject
         {
             ["body"] = JsonNode.Parse(JsonSerializer.Serialize(message, JsonOptions)),
             ["contentType"] = "json",
-            ["delaySeconds"] = options?.DelaySeconds
+            ["delaySeconds"] = delaySeconds
         };
 
         return DispatchAsync("queue.send", payload, cancellationToken);
@@ -99,12 +100,13 @@ internal sealed class QueueProducerBinding : IQueueProducer
     public Task SendTextAsync(string message, QueueSendOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
+        var delaySeconds = ValidateDelaySeconds(options?.DelaySeconds);
 
         var payload = new JsonObject
         {
             ["body"] = JsonSerializer.SerializeToNode(message, JsonOptions),
             ["contentType"] = "text",
-            ["delaySeconds"] = options?.DelaySeconds
+            ["delaySeconds"] = delaySeconds
         };
 
         return DispatchAsync("queue.send", payload, cancellationToken);
@@ -115,10 +117,11 @@ internal sealed class QueueProducerBinding : IQueueProducer
         QueueSendOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        var delaySeconds = ValidateDelaySeconds(options?.DelaySeconds);
         var payload = new JsonObject
         {
             ["contentType"] = "bytes",
-            ["delaySeconds"] = options?.DelaySeconds,
+            ["delaySeconds"] = delaySeconds,
             ["bodyBase64"] = Convert.ToBase64String(message.Span)
         };
 
@@ -131,6 +134,7 @@ internal sealed class QueueProducerBinding : IQueueProducer
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
+        var delaySeconds = ValidateDelaySeconds(options?.DelaySeconds);
 
         var payload = new JsonObject
         {
@@ -142,7 +146,7 @@ internal sealed class QueueProducerBinding : IQueueProducer
                 })
                 .Cast<JsonNode?>()
                 .ToArray()),
-            ["delaySeconds"] = options?.DelaySeconds
+            ["delaySeconds"] = delaySeconds
         };
 
         return DispatchAsync("queue.sendBatch", payload, cancellationToken);
@@ -154,6 +158,7 @@ internal sealed class QueueProducerBinding : IQueueProducer
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
+        var delaySeconds = ValidateDelaySeconds(options?.DelaySeconds);
 
         var payload = new JsonObject
         {
@@ -161,7 +166,7 @@ internal sealed class QueueProducerBinding : IQueueProducer
                 .Select(ToPayloadNode)
                 .Cast<JsonNode?>()
                 .ToArray()),
-            ["delaySeconds"] = options?.DelaySeconds
+            ["delaySeconds"] = delaySeconds
         };
 
         return DispatchAsync("queue.sendBatch", payload, cancellationToken);
@@ -173,6 +178,7 @@ internal sealed class QueueProducerBinding : IQueueProducer
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
+        var delaySeconds = ValidateDelaySeconds(options?.DelaySeconds);
 
         var payload = new JsonObject
         {
@@ -188,7 +194,7 @@ internal sealed class QueueProducerBinding : IQueueProducer
                 })
                 .Cast<JsonNode?>()
                 .ToArray()),
-            ["delaySeconds"] = options?.DelaySeconds
+            ["delaySeconds"] = delaySeconds
         };
 
         return DispatchAsync("queue.sendBatch", payload, cancellationToken);
@@ -200,6 +206,7 @@ internal sealed class QueueProducerBinding : IQueueProducer
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
+        var delaySeconds = ValidateDelaySeconds(options?.DelaySeconds);
 
         var payload = new JsonObject
         {
@@ -211,7 +218,7 @@ internal sealed class QueueProducerBinding : IQueueProducer
                 })
                 .Cast<JsonNode?>()
                 .ToArray()),
-            ["delaySeconds"] = options?.DelaySeconds
+            ["delaySeconds"] = delaySeconds
         };
 
         return DispatchAsync("queue.sendBatch", payload, cancellationToken);
@@ -233,6 +240,14 @@ internal sealed class QueueProducerBinding : IQueueProducer
             payload is JsonNode node ? node.ToJsonString(JsonOptions) : JsonSerializer.Serialize(payload, JsonOptions));
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
+    }
+
+    internal static int? ValidateDelaySeconds(int? delaySeconds)
+    {
+        if (delaySeconds is < 0 or > 86400)
+            throw new ArgumentOutOfRangeException(nameof(delaySeconds), delaySeconds, "Queue delaySeconds must be between 0 and 86400.");
+
+        return delaySeconds;
     }
 
     private static string ContentTypeName(QueueContentType contentType) =>
