@@ -307,13 +307,14 @@ internal static partial class RuntimeAdapterWriter
 
           if (envelope.nativeRequestHandle != null) {
             const request = nativeRequest(invocation, envelope.nativeRequestHandle);
+            const bodySource = request.clone();
             const init = {
               method: envelope.method,
               headers
             };
 
-            if (request.body != null && envelope.method !== 'GET' && envelope.method !== 'HEAD') {
-              init.body = request.body;
+            if (bodySource.body != null && envelope.method !== 'GET' && envelope.method !== 'HEAD') {
+              init.body = bodySource.body;
             }
 
             return new Request(envelope.url, init);

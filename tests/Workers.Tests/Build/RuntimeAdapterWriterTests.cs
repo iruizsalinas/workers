@@ -118,6 +118,9 @@ public sealed class RuntimeAdapterWriterTests
         Assert.Contains("function requiredInvocation(invocationId)", adapter, StringComparison.Ordinal);
         Assert.Contains("function nativeRequest(invocation, handle)", adapter, StringComparison.Ordinal);
         Assert.Contains("if (envelope.nativeRequestHandle != null)", adapter, StringComparison.Ordinal);
+        Assert.Contains("const bodySource = request.clone();", adapter, StringComparison.Ordinal);
+        Assert.Contains("if (bodySource.body != null && envelope.method !== 'GET' && envelope.method !== 'HEAD')", adapter, StringComparison.Ordinal);
+        Assert.Contains("init.body = bodySource.body;", adapter, StringComparison.Ordinal);
         Assert.Contains("case 'native.request.text':", adapter, StringComparison.Ordinal);
         Assert.Contains("await nativeRequest(invocation, payload.handle).clone().text()", adapter, StringComparison.Ordinal);
         Assert.Contains("case 'native.request.bytes':", adapter, StringComparison.Ordinal);
