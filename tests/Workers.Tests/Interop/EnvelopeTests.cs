@@ -26,6 +26,46 @@ public sealed class EnvelopeTests
         Assert.Equal(["a", "b"], roundTripped.Headers.GetAll("x-test"));
     }
 
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("HEAD")]
+    public void RequestEnvelopeRejectsBodiesForGetAndHead(string method)
+    {
+        var envelope = new RequestEnvelope(
+            "https://example.com/path",
+            method,
+            [],
+            Convert.ToBase64String("body"u8));
+
+        Assert.Throws<ArgumentException>(() => envelope.ToRequest());
+    }
+
+    [Theory]
+    [InlineData("CONNECT")]
+    [InlineData("TRACE")]
+    [InlineData("TRACK")]
+    [InlineData("bad method")]
+    [InlineData("A@B")]
+    public void RequestEnvelopeRejectsUnsupportedPlatformMethods(string method)
+    {
+        var request = Request.Create("https://example.com/path", method);
+
+        Assert.Throws<ArgumentException>(() => RequestEnvelope.FromRequest(request));
+    }
+
+    [Theory]
+    [InlineData("M-SEARCH")]
+    [InlineData("PROPFIND")]
+    [InlineData("A_B")]
+    [InlineData("A+B")]
+    public void RequestEnvelopeAllowsSupportedCustomPlatformMethods(string method)
+    {
+        var request = Request.Create("https://example.com/path", method);
+        var envelope = RequestEnvelope.FromRequest(request);
+
+        Assert.Equal(method, envelope.Method);
+    }
+
     [Fact]
     public void RequestEnvelopeRoundTripsCloudflareMetadata()
     {

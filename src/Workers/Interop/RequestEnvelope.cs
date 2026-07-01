@@ -49,6 +49,7 @@ internal sealed class RequestEnvelope
     public static RequestEnvelope FromRequest(Request request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        request.ThrowIfUnsupportedPlatformMethod();
 
         return new RequestEnvelope(
             request.Url.ToString(),

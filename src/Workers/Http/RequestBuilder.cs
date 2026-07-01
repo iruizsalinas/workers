@@ -71,7 +71,7 @@ public sealed class RequestBuilder
         if (!pathAndQuery.StartsWith('/'))
             throw new ArgumentException("URL paths must start with '/'.", nameof(pathAndQuery));
 
-        _url = new Uri(_url, pathAndQuery);
+        _url = Request.WithPreservedOriginPathAndQuery(_url, pathAndQuery);
         return this;
     }
 

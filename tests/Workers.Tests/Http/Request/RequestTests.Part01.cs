@@ -54,6 +54,37 @@ public sealed partial class RequestTests
         Assert.Equal("application/merge-patch+json", request.Headers.Get("content-type"));
     }
 
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("HEAD")]
+    public void CreateRejectsBodiesForGetAndHead(string method)
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Request.Create("https://example.com/value", method, Body.Text("body")));
+        Assert.Throws<ArgumentException>(() =>
+            Request.Create("https://example.com/value", method, Body.Text("")));
+        Assert.Throws<ArgumentException>(() =>
+            Request.Create("https://example.com/value", method, Body.FromBytes([])));
+
+        var request = Request.Create("https://example.com/value", method, Body.Empty);
+
+        Assert.Equal(method, request.Method);
+        Assert.True(request.Body.IsEmpty);
+    }
+
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("HEAD")]
+    public void RequestVariantsRejectBodiesForGetAndHead(string method)
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Request.Post("https://example.com/value", Body.Text("body")).WithMethod(method));
+        Assert.Throws<ArgumentException>(() =>
+            Request.Create("https://example.com/value", method).WithBody(Body.Text("body")));
+        Assert.Throws<ArgumentException>(() =>
+            Request.Create("https://example.com/value", method).WithText(""));
+    }
+
     [Fact]
     public void CreateDoesNotMutateProvidedHeaders()
     {
@@ -86,6 +117,13 @@ public sealed partial class RequestTests
         headers.Set("x-test", "changed");
 
         Assert.Equal("one", request.Headers.Get("x-test"));
+    }
+
+    [Fact]
+    public void ConstructorRejectsRelativeUrls()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new Request(new Uri("/relative", UriKind.Relative), "GET"));
     }
 
     [Fact]
@@ -213,6 +251,18 @@ public sealed partial class RequestTests
     }
 
     [Fact]
+    public void WithPathAndQueryPreservesOriginForNetworkPathLikeValues()
+    {
+        var request = Request.Get("https://api.example.com/old?q=old")
+            .WithPathAndQuery("//origin-looking.example/new?x=1");
+
+        Assert.Equal("https://api.example.com", request.Origin);
+        Assert.Equal("api.example.com", request.Host);
+        Assert.Equal("//origin-looking.example/new", request.Path);
+        Assert.Equal("//origin-looking.example/new?x=1", request.PathAndQuery);
+    }
+
+    [Fact]
     public void QueryMutationHelpersUpdateIndividualParameters()
     {
         var original = Request.Post(
@@ -294,6 +344,31 @@ public sealed partial class RequestTests
         Assert.True(request.Json<JsonElement>().GetProperty("ok").GetBoolean());
     }
 
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("HEAD")]
+    public void RequestBuilderRejectsBodiesForGetAndHead(string method)
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Request.Builder("https://example.com/value")
+                .WithMethod(method)
+                .WithText("body")
+                .Build());
+        Assert.Throws<ArgumentException>(() =>
+            Request.Builder("https://example.com/value")
+                .WithText("body")
+                .WithMethod(method)
+                .Build());
+
+        var request = Request.Builder("https://example.com/value")
+            .WithMethod(method)
+            .WithBody(Body.Empty)
+            .Build();
+
+        Assert.Equal(method, request.Method);
+        Assert.True(request.Body.IsEmpty);
+    }
+
     [Fact]
     public void RequestBuilderRewritesUrlParts()
     {
@@ -312,6 +387,12 @@ public sealed partial class RequestTests
         Assert.Equal("1", request.QueryParameters.Get("q"));
         Assert.Equal("https://api.example.com/next?x=1", pathAndQuery.Url.ToString());
         Assert.Equal("https://api.example.com/old", cleared.Url.ToString());
+
+        var networkPathLike = Request.Builder("https://api.example.com/old?q=old")
+            .WithPathAndQuery("//origin-looking.example/new?x=1")
+            .Build();
+        Assert.Equal("https://api.example.com", networkPathLike.Origin);
+        Assert.Equal("//origin-looking.example/new?x=1", networkPathLike.PathAndQuery);
 
         Assert.Throws<ArgumentException>(() => Request.Builder("https://api.example.com").WithPath("relative"));
         Assert.Throws<ArgumentException>(() => Request.Builder("https://api.example.com").WithPathAndQuery("relative?x=1"));

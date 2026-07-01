@@ -29,7 +29,11 @@ public sealed class Request
         string? invocationId = null,
         IBindingDispatcher? bindingDispatcher = null)
     {
-        Url = url ?? throw new ArgumentNullException(nameof(url));
+        ArgumentNullException.ThrowIfNull(url);
+        if (!url.IsAbsoluteUri)
+            throw new ArgumentException("Request URLs must be absolute.", nameof(url));
+
+        Url = url;
         ArgumentException.ThrowIfNullOrWhiteSpace(method);
         Method = method.ToUpperInvariant();
         Headers = headers is null ? new Headers() : Headers.From(headers);
@@ -38,6 +42,8 @@ public sealed class Request
         NativeRequestHandle = nativeRequestHandle;
         InvocationId = invocationId;
         BindingDispatcher = bindingDispatcher;
+
+        ThrowIfBodyForbidden(Method, Body);
     }
 
     /// <summary>The absolute request URL.</summary>
@@ -248,7 +254,7 @@ public sealed class Request
         if (!pathAndQuery.StartsWith('/'))
             throw new ArgumentException("URL paths must start with '/'.", nameof(pathAndQuery));
 
-        return WithUri(new Uri(Url, pathAndQuery));
+        return WithUri(WithPreservedOriginPathAndQuery(Url, pathAndQuery));
     }
 
     /// <summary>Returns a request with a different HTTP method.</summary>
@@ -372,8 +378,57 @@ public sealed class Request
     private Request WithUri(Uri url) =>
         new(url, Method, Headers.From(Headers), Body, Cf, NativeRequestHandle, InvocationId, BindingDispatcher);
 
+    internal void ThrowIfUnsupportedPlatformMethod()
+    {
+        if (!IsHttpToken(Method))
+            throw new ArgumentException($"'{Method}' is not a valid HTTP method.", nameof(Method));
+
+        if (string.Equals(Method, "CONNECT", StringComparison.Ordinal) ||
+            string.Equals(Method, "TRACE", StringComparison.Ordinal) ||
+            string.Equals(Method, "TRACK", StringComparison.Ordinal))
+            throw new ArgumentException($"'{Method}' HTTP method is unsupported.", nameof(Method));
+    }
+
+    private static void ThrowIfBodyForbidden(string method, Body body)
+    {
+        if ((string.Equals(method, "GET", StringComparison.Ordinal) ||
+             string.Equals(method, "HEAD", StringComparison.Ordinal)) &&
+            (!body.IsEmpty || body.ContentType is not null))
+            throw new ArgumentException($"Request with {method} method cannot have a body.", nameof(body));
+    }
+
+    private static bool IsHttpToken(string value)
+    {
+        foreach (var character in value)
+        {
+            if (!IsHttpTokenCharacter(character))
+                return false;
+        }
+
+        return value.Length > 0;
+    }
+
+    private static bool IsHttpTokenCharacter(char character) =>
+        character is >= 'A' and <= 'Z' ||
+        character is >= 'a' and <= 'z' ||
+        character is >= '0' and <= '9' ||
+        character is '!' or '#' or '$' or '%' or '&' or '\'' or '*' or '+' or '-' or '.' or '^' or '_' or '`' or '|' or '~';
+
     private static string NormalizeQuery(string? query) =>
         string.IsNullOrEmpty(query) ? "" : query.TrimStart('?');
+
+    internal static Uri WithPreservedOriginPathAndQuery(Uri url, string pathAndQuery)
+    {
+        var queryStart = pathAndQuery.IndexOf('?');
+        var path = queryStart < 0 ? pathAndQuery : pathAndQuery[..queryStart];
+        var query = queryStart < 0 ? "" : pathAndQuery[(queryStart + 1)..];
+        var builder = new UriBuilder(url)
+        {
+            Path = path,
+            Query = query
+        };
+        return builder.Uri;
+    }
 
     internal static Uri SetQueryParameter(Uri url, string name, string value)
     {
