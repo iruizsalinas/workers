@@ -19,14 +19,7 @@ public sealed class KvListOptions
 public sealed record KvListResult(IReadOnlyList<KvKey> Keys, bool ListComplete, string? Cursor);
 
 /// <summary>A Workers KV key entry.</summary>
-public sealed record KvKey(string Name, ulong? Expiration, JsonElement? Metadata)
-{
-    internal static KvKey FromEnvelope(KvKeyEnvelope envelope)
-    {
-        ArgumentNullException.ThrowIfNull(envelope);
-        return new KvKey(envelope.Name, envelope.Expiration, envelope.Metadata?.Clone());
-    }
-}
+public sealed record KvKey(string Name, ulong? Expiration, JsonElement? Metadata);
 
 internal sealed class KvListRequest
 {
@@ -48,22 +41,4 @@ internal sealed class KvListRequest
             Prefix = options?.Prefix
         };
     }
-}
-
-internal sealed class KvListEnvelope
-{
-    public IReadOnlyList<KvKeyEnvelope> Keys { get; init; } = [];
-
-    public bool ListComplete { get; init; }
-
-    public string? Cursor { get; init; }
-}
-
-internal sealed class KvKeyEnvelope
-{
-    public string Name { get; init; } = "";
-
-    public ulong? Expiration { get; init; }
-
-    public JsonElement? Metadata { get; init; }
 }

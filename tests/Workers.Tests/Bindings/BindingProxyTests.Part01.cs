@@ -18,6 +18,41 @@ public sealed partial class BindingProxyTests
     }
 
     [Fact]
+    public async Task KvListParsesRuntimeEnvelope()
+    {
+        var dispatcher = new CapturingDispatcher(
+            """
+            {
+              "keys": [
+                {
+                  "name": "workers-rs-coverage",
+                  "expiration": 2000000000,
+                  "metadata": {
+                    "kind": "test"
+                  }
+                }
+              ],
+              "listComplete": false,
+              "cursor": "next"
+            }
+            """);
+        using var _ = BindingDispatcher.Use(dispatcher);
+        var environment = EnvironmentWithInvocation("invocation-kv-list");
+
+        var result = await environment.Kv("CACHE").ListAsync(new KvListOptions { Prefix = "workers-rs-" });
+
+        Assert.False(result.ListComplete);
+        Assert.Equal("next", result.Cursor);
+        var key = Assert.Single(result.Keys);
+        Assert.Equal("workers-rs-coverage", key.Name);
+        Assert.Equal(2000000000ul, key.Expiration);
+        Assert.Equal("test", key.Metadata!.Value.GetProperty("kind").GetString());
+
+        using var payload = JsonDocument.Parse(dispatcher.Invocations[0].PayloadJson);
+        Assert.Equal("workers-rs-", payload.RootElement.GetProperty("prefix").GetString());
+    }
+
+    [Fact]
     public async Task KvProxyDispatchesMetadataAndOptions()
     {
         var dispatcher = new CapturingDispatcher(

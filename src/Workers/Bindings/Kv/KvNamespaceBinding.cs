@@ -226,13 +226,7 @@ internal sealed class KvNamespaceBinding : IKvNamespace
     public async Task<KvListResult> ListAsync(KvListOptions? options = null, CancellationToken cancellationToken = default)
     {
         var result = await DispatchAsync("kv.list", KvListRequest.From(options), cancellationToken);
-        var envelope = JsonSerializer.Deserialize<KvListEnvelope>(result, JsonOptions)
-            ?? throw new WorkersException("KV list returned an empty result.");
-
-        return new KvListResult(
-            envelope.Keys.Select(KvKey.FromEnvelope).ToArray(),
-            envelope.ListComplete,
-            envelope.Cursor);
+        return ParseListResult(result);
     }
 
     private Task<string> DispatchAsync(string operation, object payload, CancellationToken cancellationToken)
@@ -252,5 +246,42 @@ internal sealed class KvNamespaceBinding : IKvNamespace
             return default;
 
         return element.Deserialize<T>(jsonOptions);
+    }
+
+    private static KvListResult ParseListResult(string result)
+    {
+        using var document = JsonDocument.Parse(result);
+        var root = document.RootElement;
+
+        var keys = root.TryGetProperty("keys", out var keysElement) && keysElement.ValueKind == JsonValueKind.Array
+            ? keysElement.EnumerateArray().Select(ParseKey).ToArray()
+            : [];
+        var listComplete = root.TryGetProperty("listComplete", out var listCompleteElement)
+            && listCompleteElement.ValueKind == JsonValueKind.True;
+        var cursor = root.TryGetProperty("cursor", out var cursorElement) && cursorElement.ValueKind is not JsonValueKind.Null and not JsonValueKind.Undefined
+            ? cursorElement.GetString()
+            : null;
+
+        return new KvListResult(keys, listComplete, cursor);
+    }
+
+    private static KvKey ParseKey(JsonElement element)
+    {
+        var name = element.TryGetProperty("name", out var nameElement)
+            ? nameElement.GetString()
+            : null;
+        if (string.IsNullOrEmpty(name))
+            throw new WorkersException("KV list returned a key without a name.");
+
+        var expiration = element.TryGetProperty("expiration", out var expirationElement) &&
+            expirationElement.ValueKind is not JsonValueKind.Null and not JsonValueKind.Undefined
+            ? expirationElement.GetUInt64()
+            : (ulong?)null;
+        var metadata = element.TryGetProperty("metadata", out var metadataElement) &&
+            metadataElement.ValueKind is not JsonValueKind.Null and not JsonValueKind.Undefined
+            ? metadataElement.Clone()
+            : (JsonElement?)null;
+
+        return new KvKey(name, expiration, metadata);
     }
 }
