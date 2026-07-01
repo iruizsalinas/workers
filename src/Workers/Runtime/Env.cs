@@ -271,6 +271,7 @@ public sealed partial class Env
 
     private sealed record AbortControllerEnvelope(string Handle);
 
+    [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
     [JsonSerializable(typeof(RuntimeDelayRequest))]
     [JsonSerializable(typeof(AbortControllerEnvelope))]
     private sealed partial class EnvJsonContext : JsonSerializerContext

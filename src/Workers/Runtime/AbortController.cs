@@ -1,12 +1,11 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Workers;
 
 /// <summary>Controls cancellation for platform operations that accept a Worker abort signal.</summary>
-public sealed class AbortController
+public sealed partial class AbortController
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
     private readonly string _invocationId;
     private readonly IBindingDispatcher _dispatcher;
 
@@ -37,12 +36,18 @@ public sealed class AbortController
             _invocationId,
             "$abort",
             "abort.abort",
-            JsonSerializer.Serialize(new AbortRequest(Handle, reason), JsonOptions));
+            JsonSerializer.Serialize(
+                new AbortRequest(Handle, reason),
+                AbortControllerJsonContext.Default.AbortRequest));
 
         await _dispatcher.DispatchAsync(invocation, cancellationToken);
     }
 
     private sealed record AbortRequest(string Handle, string? Reason);
+
+    [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
+    [JsonSerializable(typeof(AbortRequest))]
+    private sealed partial class AbortControllerJsonContext : JsonSerializerContext;
 }
 
 /// <summary>An abort signal that can be passed to cancellable platform operations.</summary>
