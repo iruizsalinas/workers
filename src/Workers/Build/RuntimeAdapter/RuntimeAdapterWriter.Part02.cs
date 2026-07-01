@@ -93,12 +93,23 @@ internal static partial class RuntimeAdapterWriter
           invocation.nativeResponses.delete(handle);
         }
 
+        function nativeBaseHandle(handle) {
+          const separator = handle.indexOf('#stream:');
+          return separator < 0 ? handle : handle.slice(0, separator);
+        }
+
+        function isNativeStreamHandle(handle) {
+          return handle.indexOf('#stream:') >= 0;
+        }
+
         function nativeBodyStream(invocation, source, handle) {
           switch (source) {
             case 'request':
-              return nativeRequest(invocation, handle).body;
+              const request = nativeRequest(invocation, nativeBaseHandle(handle));
+              return isNativeStreamHandle(handle) ? request.clone().body : request.body;
             case 'response':
-              return nativeResponse(invocation, handle).body;
+              const response = nativeResponse(invocation, nativeBaseHandle(handle));
+              return isNativeStreamHandle(handle) ? response.clone().body : response.body;
             default:
               throw new Error(`Unsupported native stream source '${source}'.`);
           }

@@ -173,12 +173,14 @@ public sealed class EnvelopeTests
 
         Assert.Equal("hello", System.Text.Encoding.UTF8.GetString(bytes.Span));
         Assert.Equal(["stream.read", "stream.read", "stream.read"], dispatcher.Invocations.Select(static invocation => invocation.Operation));
+        var payloads = dispatcher.Invocations.Select(static invocation => invocation.PayloadJson).ToArray();
         Assert.All(dispatcher.Invocations, invocation =>
         {
             Assert.Equal("$stream", invocation.BindingName);
             Assert.Contains("\"source\":\"request\"", invocation.PayloadJson, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("\"handle\":\"request:1\"", invocation.PayloadJson, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("\"handle\":\"request:1#stream:", invocation.PayloadJson, StringComparison.OrdinalIgnoreCase);
         });
+        Assert.Single(payloads.Select(ExtractHandle).Distinct(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -326,12 +328,14 @@ public sealed class EnvelopeTests
         Assert.False(read.Done);
         Assert.Equal([1, 2, 3], read.Bytes.ToArray());
         Assert.Equal(["stream.read", "stream.cancel"], dispatcher.Invocations.Select(static invocation => invocation.Operation));
+        var payloads = dispatcher.Invocations.Select(static invocation => invocation.PayloadJson).ToArray();
         Assert.All(dispatcher.Invocations, invocation =>
         {
             Assert.Equal("$stream", invocation.BindingName);
             Assert.Contains("\"source\":\"response\"", invocation.PayloadJson, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("\"handle\":\"response:1\"", invocation.PayloadJson, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("\"handle\":\"response:1#stream:", invocation.PayloadJson, StringComparison.OrdinalIgnoreCase);
         });
+        Assert.Single(payloads.Select(ExtractHandle).Distinct(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -351,9 +355,46 @@ public sealed class EnvelopeTests
 
         Assert.Null(envelope.BodyBase64);
         Assert.Equal("request", envelope.NativeBodyStreamSource);
-        Assert.Equal("request:1", envelope.NativeBodyStreamHandle);
+        Assert.StartsWith("request:1#stream:", envelope.NativeBodyStreamHandle, StringComparison.Ordinal);
         Assert.Equal("text/plain", roundTripped.Headers.Get("content-type"));
         Assert.Throws<WorkersException>(() => roundTripped.Text());
+    }
+
+    [Fact]
+    public void NativeRequestBodyStreamsUseIndependentHandles()
+    {
+        var dispatcher = new CapturingDispatcher("{}");
+        var request = new RequestEnvelope(
+            "https://example.com/path",
+            "POST",
+            [],
+            bodyBase64: null,
+            nativeRequestHandle: "request:1").ToRequest("invocation:1", dispatcher);
+
+        var first = request.BodyStream();
+        var second = request.Clone().BodyStream();
+
+        Assert.StartsWith("request:1#stream:", first.Handle, StringComparison.Ordinal);
+        Assert.StartsWith("request:1#stream:", second.Handle, StringComparison.Ordinal);
+        Assert.NotEqual(first.Handle, second.Handle);
+    }
+
+    [Fact]
+    public void NativeResponseBodyStreamsUseIndependentHandles()
+    {
+        var dispatcher = new CapturingDispatcher("{}");
+        var response = new ResponseEnvelope(
+            200,
+            [],
+            bodyBase64: null,
+            nativeResponseHandle: "response:1").ToResponse("invocation:1", dispatcher);
+
+        var first = response.BodyStream();
+        var second = response.Clone().BodyStream();
+
+        Assert.StartsWith("response:1#stream:", first.Handle, StringComparison.Ordinal);
+        Assert.StartsWith("response:1#stream:", second.Handle, StringComparison.Ordinal);
+        Assert.NotEqual(first.Handle, second.Handle);
     }
 
     [Fact]
@@ -426,6 +467,13 @@ public sealed class EnvelopeTests
         await Task.Yield();
         yield return "managed "u8.ToArray();
         yield return "stream"u8.ToArray();
+    }
+
+    private static string ExtractHandle(string payloadJson)
+    {
+        using var document = JsonDocument.Parse(payloadJson);
+        return document.RootElement.GetProperty("handle").GetString()
+            ?? throw new InvalidOperationException("Stream payload did not contain a handle.");
     }
 
     private sealed class CapturingDispatcher : IBindingDispatcher

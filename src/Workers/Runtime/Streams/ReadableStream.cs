@@ -7,6 +7,7 @@ public sealed class ReadableStream
 {
     private readonly string? _invocationId;
     private readonly IBindingDispatcher? _dispatcher;
+    private static long _nextNativeStreamId;
 
     internal ReadableStream(string invocationId, NativeStreamSource source, string handle, IBindingDispatcher dispatcher)
     {
@@ -28,6 +29,13 @@ public sealed class ReadableStream
     internal NativeStreamSource Source { get; }
 
     internal string Handle { get; }
+
+    internal static ReadableStream FromNativeBody(
+        string invocationId,
+        NativeStreamSource source,
+        string handle,
+        IBindingDispatcher dispatcher) =>
+        new(invocationId, source, $"{handle}#stream:{System.Threading.Interlocked.Increment(ref _nextNativeStreamId)}", dispatcher);
 
     /// <summary>Creates a readable stream from C#-produced byte chunks.</summary>
     public static ReadableStream FromAsyncEnumerable(

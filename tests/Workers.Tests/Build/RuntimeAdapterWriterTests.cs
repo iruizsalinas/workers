@@ -142,6 +142,10 @@ public sealed class RuntimeAdapterWriterTests
         Assert.Contains("case 'native.response.bytes':", adapter, StringComparison.Ordinal);
         Assert.Contains("await nativeResponse(invocation, payload.handle).clone().arrayBuffer()", adapter, StringComparison.Ordinal);
         Assert.Contains("nativeReaders: new Map()", adapter, StringComparison.Ordinal);
+        Assert.Contains("function nativeBaseHandle(handle)", adapter, StringComparison.Ordinal);
+        Assert.Contains("function isNativeStreamHandle(handle)", adapter, StringComparison.Ordinal);
+        Assert.Contains("return isNativeStreamHandle(handle) ? request.clone().body : request.body;", adapter, StringComparison.Ordinal);
+        Assert.Contains("return isNativeStreamHandle(handle) ? response.clone().body : response.body;", adapter, StringComparison.Ordinal);
         Assert.Contains("case 'stream.read':", adapter, StringComparison.Ordinal);
         Assert.Contains("case 'stream.cancel':", adapter, StringComparison.Ordinal);
         Assert.Contains("return new Response(nativeBodyStream(invocation, envelope.nativeBodyStreamSource, envelope.nativeBodyStreamHandle), init);", adapter, StringComparison.Ordinal);

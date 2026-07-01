@@ -94,7 +94,7 @@ public sealed class Request
         if (NativeRequestHandle is null || InvocationId is null || BindingDispatcher is null)
             throw new WorkersException("Native request body stream is only available during a live Worker invocation.");
 
-        return new ReadableStream(InvocationId, NativeStreamSource.Request, NativeRequestHandle, BindingDispatcher);
+        return ReadableStream.FromNativeBody(InvocationId, NativeStreamSource.Request, NativeRequestHandle, BindingDispatcher);
     }
 
     /// <summary>Typed Cloudflare edge metadata for an inbound request, when supplied by the runtime.</summary>

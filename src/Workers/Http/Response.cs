@@ -82,7 +82,7 @@ public sealed class Response
         if (NativeResponseHandle is null || InvocationId is null || BindingDispatcher is null)
             throw new WorkersException("Native response body stream is only available during a live Worker invocation.");
 
-        return new ReadableStream(InvocationId, NativeStreamSource.Response, NativeResponseHandle, BindingDispatcher);
+        return ReadableStream.FromNativeBody(InvocationId, NativeStreamSource.Response, NativeResponseHandle, BindingDispatcher);
     }
 
     /// <summary>Creates a fluent response builder.</summary>
