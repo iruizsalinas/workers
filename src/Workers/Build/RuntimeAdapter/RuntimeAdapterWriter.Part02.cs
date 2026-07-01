@@ -410,7 +410,7 @@ internal static partial class RuntimeAdapterWriter
                 throw new Error(`Service binding RPC method '${payload.methodName}' is not defined.`);
               }
 
-              const value = await method.apply(binding, fromRpcArguments(payload.arguments));
+              const value = await method(...fromRpcArguments(payload.arguments));
               return JSON.stringify({ value: value === undefined ? null : value });
             }
             case 'service.rpcStub': {
@@ -420,7 +420,7 @@ internal static partial class RuntimeAdapterWriter
                 throw new Error(`Service binding RPC method '${payload.methodName}' is not defined.`);
               }
 
-              const value = await method.apply(binding, fromRpcArguments(payload.arguments));
+              const value = await method(...fromRpcArguments(payload.arguments));
               return JSON.stringify({ handle: retainRpcStub(value) });
             }
             case 'queue.send': {
@@ -552,7 +552,7 @@ internal static partial class RuntimeAdapterWriter
                 throw new Error(`Durable Object RPC method '${payload.methodName}' is not defined.`);
               }
 
-              const value = await method.apply(stub, fromRpcArguments(payload.arguments));
+              const value = await method(...fromRpcArguments(payload.arguments));
               return JSON.stringify({ value: value === undefined ? null : value });
             }
             case 'durable.rpcStub': {
@@ -563,7 +563,7 @@ internal static partial class RuntimeAdapterWriter
                 throw new Error(`Durable Object RPC method '${payload.methodName}' is not defined.`);
               }
 
-              const value = await method.apply(stub, fromRpcArguments(payload.arguments));
+              const value = await method(...fromRpcArguments(payload.arguments));
               return JSON.stringify({ handle: retainRpcStub(value) });
             }
             case 'durable.state.blockConcurrencyWhile': {

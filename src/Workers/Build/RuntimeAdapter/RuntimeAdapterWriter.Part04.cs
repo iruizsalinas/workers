@@ -215,7 +215,7 @@ internal static partial class RuntimeAdapterWriter
                 throw new Error(`RPC stub method '${payload.methodName}' is not defined.`);
               }
 
-              const value = await method.apply(stub, fromRpcArguments(payload.arguments));
+              const value = await method(...fromRpcArguments(payload.arguments));
               return JSON.stringify({ value: value === undefined ? null : value });
             }
             case 'rpc.stub.invokeStub': {
@@ -225,7 +225,7 @@ internal static partial class RuntimeAdapterWriter
                 throw new Error(`RPC stub method '${payload.methodName}' is not defined.`);
               }
 
-              const value = await method.apply(stub, fromRpcArguments(payload.arguments));
+              const value = await method(...fromRpcArguments(payload.arguments));
               return JSON.stringify({ handle: retainRpcStub(value) });
             }
             case 'rpc.stub.call': {
