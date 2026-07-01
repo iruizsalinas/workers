@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Workers;
 
@@ -50,19 +51,30 @@ public sealed class ForwardableEmailMessage
     /// <summary>Reads the raw MIME message body. The Workers raw stream may only be consumed once.</summary>
     public async Task<Body> RawAsync(CancellationToken cancellationToken = default)
     {
-        var result = await DispatchAsync<RawEmailResult>("email.rawBytes", new { handle = _handle }, cancellationToken)
-            ;
+        var result = await DispatchStringAsync("email.rawBytes", PayloadWithHandle(), cancellationToken);
+        using var document = JsonDocument.Parse(result);
+        var bodyBase64 = document.RootElement.TryGetProperty("bodyBase64", out var bodyElement) &&
+            bodyElement.ValueKind is not JsonValueKind.Null and not JsonValueKind.Undefined
+            ? bodyElement.GetString()
+            : null;
 
-        return result.BodyBase64 is null
+        return bodyBase64 is null
             ? Body.Empty
-            : Body.FromBytes(Convert.FromBase64String(result.BodyBase64), "message/rfc822");
+            : Body.FromBytes(Convert.FromBase64String(bodyBase64), "message/rfc822");
     }
 
     /// <summary>Rejects the message with a reason.</summary>
     public Task RejectAsync(string reason, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
-        return DispatchEmptyAsync("email.reject", new { handle = _handle, reason }, cancellationToken);
+        return DispatchEmptyAsync(
+            "email.reject",
+            new JsonObject
+            {
+                ["handle"] = _handle,
+                ["reason"] = reason
+            },
+            cancellationToken);
     }
 
     /// <summary>Forwards the message to another recipient.</summary>
@@ -73,14 +85,14 @@ public sealed class ForwardableEmailMessage
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(recipient);
 
-        var payload = new
+        var payload = new JsonObject
         {
-            handle = _handle,
-            recipient,
-            headers = headers?.Select(static header => new Header(header.Key, header.Value)).ToArray()
+            ["handle"] = _handle,
+            ["recipient"] = recipient,
+            ["headers"] = HeadersToJson(headers)
         };
 
-        return DispatchAsync<EmailSendResult>("email.forward", payload, cancellationToken);
+        return DispatchEmailResultAsync("email.forward", payload, cancellationToken);
     }
 
     /// <summary>Replies to the message with a raw MIME message.</summary>
@@ -94,34 +106,67 @@ public sealed class ForwardableEmailMessage
         ArgumentException.ThrowIfNullOrWhiteSpace(to);
         ArgumentNullException.ThrowIfNull(raw);
 
-        return DispatchAsync<EmailSendResult>("email.replyRaw", new { handle = _handle, from, to, raw }, cancellationToken);
+        return DispatchEmailResultAsync(
+            "email.replyRaw",
+            new JsonObject
+            {
+                ["handle"] = _handle,
+                ["from"] = from,
+                ["to"] = to,
+                ["raw"] = raw
+            },
+            cancellationToken);
     }
 
-    private async Task DispatchEmptyAsync(string operation, object payload, CancellationToken cancellationToken)
+    private async Task DispatchEmptyAsync(string operation, JsonObject payload, CancellationToken cancellationToken)
     {
         _ = await DispatchStringAsync(operation, payload, cancellationToken);
     }
 
-    private async Task<T> DispatchAsync<T>(string operation, object payload, CancellationToken cancellationToken)
+    private async Task<EmailSendResult> DispatchEmailResultAsync(string operation, JsonObject payload, CancellationToken cancellationToken)
     {
         var result = await DispatchStringAsync(operation, payload, cancellationToken);
-        return JsonSerializer.Deserialize<T>(result, JsonOptions)
-            ?? throw new WorkersException($"Email operation '{operation}' returned an empty result.");
+        using var document = JsonDocument.Parse(result);
+
+        if (!document.RootElement.TryGetProperty("messageId", out var messageIdElement) ||
+            messageIdElement.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            throw new WorkersException($"Email operation '{operation}' returned an empty result.");
+
+        return new EmailSendResult(messageIdElement.GetString() ?? "");
     }
 
-    private Task<string> DispatchStringAsync(string operation, object payload, CancellationToken cancellationToken)
+    private Task<string> DispatchStringAsync(string operation, JsonObject payload, CancellationToken cancellationToken)
     {
         var invocation = new BindingInvocation(
             _invocationId,
             "$email",
             operation,
-            JsonSerializer.Serialize(payload, JsonOptions));
+            payload.ToJsonString(JsonOptions));
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
     }
 
-    private sealed class RawEmailResult
+    private JsonObject PayloadWithHandle() =>
+        new()
+        {
+            ["handle"] = _handle
+        };
+
+    private static JsonArray? HeadersToJson(Headers? headers)
     {
-        public string? BodyBase64 { get; init; }
+        if (headers is null)
+            return null;
+
+        var array = new JsonArray();
+        foreach (var header in headers)
+        {
+            array.Add(new JsonObject
+            {
+                ["key"] = header.Key,
+                ["value"] = header.Value
+            });
+        }
+
+        return array;
     }
 }

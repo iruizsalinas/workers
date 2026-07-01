@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -157,6 +158,7 @@ internal sealed class KvPutOptionsEnvelope
         };
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "KV metadata intentionally accepts user-provided JSON-compatible objects; browser-wasm workers keep reflection JSON enabled by default.")]
     public JsonObject ToJsonObject()
     {
         var json = new JsonObject
