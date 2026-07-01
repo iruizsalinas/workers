@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using System.Text.Json;
 
 namespace Workers;
@@ -194,6 +195,9 @@ public sealed class Response
     /// <summary>Reads the response body as UTF-8 text, using the native Workers response body when available.</summary>
     public async Task<string> TextAsync(CancellationToken cancellationToken = default)
     {
+        if (NativeBodyStream is not null)
+            return Encoding.UTF8.GetString((await NativeBodyStream.ReadAllBytesAsync(cancellationToken)).Span);
+
         if (NativeResponseHandle is null)
             return Text();
 
@@ -212,6 +216,9 @@ public sealed class Response
     /// <summary>Reads the response body as bytes, using the native Workers response body when available.</summary>
     public async Task<ReadOnlyMemory<byte>> BytesAsync(CancellationToken cancellationToken = default)
     {
+        if (NativeBodyStream is not null)
+            return await NativeBodyStream.ReadAllBytesAsync(cancellationToken);
+
         if (NativeResponseHandle is null)
             return Bytes();
 
@@ -239,8 +246,25 @@ public sealed class Response
     }
 
     /// <summary>Creates an independent response copy with cloned headers.</summary>
-    public Response Clone() =>
-        new(Status, Headers.Clone(), Body, WebSocket, Cf, EncodeBody, StatusText, NativeResponseHandle, NativeBodyStream, InvocationId, BindingDispatcher);
+    public Response Clone()
+    {
+        var nativeBodyStream = NativeResponseHandle is not null && InvocationId is not null && BindingDispatcher is not null
+            ? ReadableStream.FromNativeBody(InvocationId, NativeStreamSource.Response, NativeResponseHandle, BindingDispatcher)
+            : NativeBodyStream;
+
+        return new Response(
+            Status,
+            Headers.Clone(),
+            Body,
+            WebSocket,
+            Cf,
+            EncodeBody,
+            StatusText,
+            nativeResponseHandle: nativeBodyStream is null ? NativeResponseHandle : null,
+            nativeBodyStream: nativeBodyStream,
+            InvocationId,
+            BindingDispatcher);
+    }
 
     /// <summary>Creates an empty response.</summary>
     public static Response Empty(int status = 200, string? statusText = null) =>

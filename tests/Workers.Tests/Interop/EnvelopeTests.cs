@@ -398,6 +398,59 @@ public sealed class EnvelopeTests
     }
 
     [Fact]
+    public void NativeResponseCloneSerializesAsIndependentBodyStream()
+    {
+        var dispatcher = new CapturingDispatcher("{}");
+        var response = new ResponseEnvelope(
+            200,
+            [new Header("content-type", "text/plain")],
+            bodyBase64: null,
+            nativeResponseHandle: "response:1").ToResponse("invocation:1", dispatcher);
+
+        var envelope = ResponseEnvelope.FromResponse(response.Clone());
+
+        Assert.Null(envelope.NativeResponseHandle);
+        Assert.Equal("response", envelope.NativeBodyStreamSource);
+        Assert.StartsWith("response:1#stream:", envelope.NativeBodyStreamHandle, StringComparison.Ordinal);
+        Assert.Null(envelope.BodyBase64);
+        Assert.Equal("text/plain", envelope.Headers.Single().Value);
+    }
+
+    [Fact]
+    public async Task NativeResponseCloneCanBeReadAsTextAsync()
+    {
+        var dispatcher = new CapturingDispatcher(
+            """{"done":false,"bodyBase64":"Y2xvbmVk"}""",
+            """{"done":true,"bodyBase64":null}""");
+        var response = new ResponseEnvelope(
+            200,
+            [new Header("content-type", "text/plain")],
+            bodyBase64: null,
+            nativeResponseHandle: "response:1").ToResponse("invocation:1", dispatcher);
+
+        var text = await response.Clone().TextAsync();
+
+        Assert.Equal("cloned", text);
+        Assert.Equal(["stream.read", "stream.read"], dispatcher.Invocations.Select(static invocation => invocation.Operation));
+        Assert.All(dispatcher.Invocations, invocation =>
+        {
+            Assert.Equal("$stream", invocation.BindingName);
+            Assert.Contains("\"source\":\"response\"", invocation.PayloadJson, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("\"handle\":\"response:1#stream:", invocation.PayloadJson, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
+    public async Task StreamBackedResponseCanBeReadAsBytesAsync()
+    {
+        var response = Response.FromStream(ReadableStream.FromAsyncEnumerable(ManagedChunks()));
+
+        var bytes = await response.BytesAsync();
+
+        Assert.Equal("managed stream", System.Text.Encoding.UTF8.GetString(bytes.Span));
+    }
+
+    [Fact]
     public async Task ResponseEnvelopeBridgesAlreadyReadNativeRequestStream()
     {
         var dispatcher = new CapturingDispatcher(
