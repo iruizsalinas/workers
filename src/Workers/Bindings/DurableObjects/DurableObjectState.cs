@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Runtime.InteropServices.JavaScript;
 using Workers.Interop;
 
 namespace Workers;
@@ -8,14 +9,17 @@ public sealed class DurableObjectState
 {
     private static readonly TimeSpan MaxHibernatableWebSocketEventTimeout = TimeSpan.FromDays(7);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly DurableObjectStorageJsonContext JsonContext = new(new JsonSerializerOptions(JsonOptions));
 
     private readonly string _invocationId;
     private readonly IBindingDispatcher _dispatcher;
+    private readonly JSObject? _nativeState;
 
     internal DurableObjectState(
         string invocationId,
         DurableObjectId id,
-        IBindingDispatcher dispatcher)
+        IBindingDispatcher dispatcher,
+        JSObject? nativeState = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
         ArgumentNullException.ThrowIfNull(id);
@@ -23,9 +27,10 @@ public sealed class DurableObjectState
 
         _invocationId = invocationId;
         _dispatcher = dispatcher;
+        _nativeState = nativeState;
         Id = id;
         Container = new DurableObjectContainer(invocationId, dispatcher);
-        Storage = new DurableObjectStorage(invocationId, dispatcher);
+        Storage = new DurableObjectStorage(invocationId, dispatcher, nativeState);
     }
 
     /// <summary>The Durable Object ID for this instance.</summary>
@@ -53,12 +58,18 @@ public sealed class DurableObjectState
     {
         ArgumentNullException.ThrowIfNull(callback);
 
+        if (_nativeState is not null && OperatingSystem.IsBrowser())
+        {
+            await callback();
+            return;
+        }
+
         var handle = DurableObjectStateCallbackRegistry.Retain(callback);
         try
         {
             await DispatchAsync(
                 "durable.state.blockConcurrencyWhile",
-                new { handle },
+                JsonSerializer.Serialize(new DurableStateCallbackPayload { Handle = handle }, JsonContext.DurableStateCallbackPayload),
                 cancellationToken);
         }
         finally
@@ -96,7 +107,7 @@ public sealed class DurableObjectState
             _invocationId,
             DurableObjectStorage.BindingName,
             "durable.state.abort",
-            JsonSerializer.Serialize(new { reason }, JsonOptions));
+            JsonSerializer.Serialize(new DurableStateAbortPayload { Reason = reason }, JsonContext.DurableStateAbortPayload));
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
     }
@@ -112,7 +123,7 @@ public sealed class DurableObjectState
 
         return DispatchAsync(
             "durable.state.acceptWebSocket",
-            new { handle = socket.Handle, tags = tagArray },
+            JsonSerializer.Serialize(new DurableStateWebSocketAcceptPayload { Handle = socket.Handle, Tags = tagArray }, JsonContext.DurableStateWebSocketAcceptPayload),
             cancellationToken);
     }
 
@@ -126,9 +137,9 @@ public sealed class DurableObjectState
 
         var result = await DispatchAsync(
             "durable.state.getWebSockets",
-            new { tag },
+            JsonSerializer.Serialize(new DurableStateWebSocketTagPayload { Tag = tag }, JsonContext.DurableStateWebSocketTagPayload),
             cancellationToken);
-        var envelope = JsonSerializer.Deserialize<WebSocketHandlesEnvelope>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableStateWebSocketHandlesEnvelope)
             ?? throw new WorkersException("Durable Object state returned an empty WebSocket list result.");
 
         return envelope.Handles
@@ -145,9 +156,9 @@ public sealed class DurableObjectState
 
         var result = await DispatchAsync(
             "durable.state.getTags",
-            new { handle = socket.Handle },
+            JsonSerializer.Serialize(new DurableStateWebSocketHandlePayload { Handle = socket.Handle }, JsonContext.DurableStateWebSocketHandlePayload),
             cancellationToken);
-        var envelope = JsonSerializer.Deserialize<WebSocketTagsEnvelope>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableStateWebSocketTagsEnvelope)
             ?? throw new WorkersException("Durable Object state returned an empty WebSocket tags result.");
 
         return envelope.Tags;
@@ -166,7 +177,7 @@ public sealed class DurableObjectState
 
         return DispatchAsync(
             "durable.state.setWebSocketAutoResponse",
-            new { pair },
+            JsonSerializer.Serialize(new DurableStateWebSocketAutoResponsePayload { Pair = pair }, JsonContext.DurableStateWebSocketAutoResponsePayload),
             cancellationToken);
     }
 
@@ -176,9 +187,9 @@ public sealed class DurableObjectState
     {
         var result = await DispatchAsync(
             "durable.state.getWebSocketAutoResponse",
-            new { },
+            EmptyPayload(),
             cancellationToken);
-        var envelope = JsonSerializer.Deserialize<WebSocketAutoResponseEnvelope>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableStateWebSocketAutoResponseEnvelope)
             ?? throw new WorkersException("Durable Object state returned an empty WebSocket auto-response result.");
 
         return envelope.Pair;
@@ -203,9 +214,9 @@ public sealed class DurableObjectState
 
         var result = await DispatchAsync(
             "durable.state.getWebSocketAutoResponseTimestamp",
-            new { handle = socket.Handle },
+            JsonSerializer.Serialize(new DurableStateWebSocketHandlePayload { Handle = socket.Handle }, JsonContext.DurableStateWebSocketHandlePayload),
             cancellationToken);
-        return JsonSerializer.Deserialize<WebSocketAutoResponseTimestampEnvelope>(result, JsonOptions)?.Timestamp;
+        return JsonSerializer.Deserialize(result, JsonContext.DurableStateWebSocketAutoResponseTimestampEnvelope)?.Timestamp;
     }
 
     /// <summary>Sets or clears the maximum runtime for a hibernatable WebSocket event.</summary>
@@ -224,7 +235,7 @@ public sealed class DurableObjectState
 
         return DispatchAsync(
             "durable.state.setHibernatableWebSocketEventTimeout",
-            new { timeoutMilliseconds },
+            JsonSerializer.Serialize(new DurableStateWebSocketEventTimeoutPayload { TimeoutMilliseconds = timeoutMilliseconds }, JsonContext.DurableStateWebSocketEventTimeoutPayload),
             cancellationToken);
     }
 
@@ -234,21 +245,21 @@ public sealed class DurableObjectState
     {
         var result = await DispatchAsync(
             "durable.state.getHibernatableWebSocketEventTimeout",
-            new { },
+            EmptyPayload(),
             cancellationToken);
-        var milliseconds = JsonSerializer.Deserialize<HibernatableWebSocketEventTimeoutEnvelope>(result, JsonOptions)
+        var milliseconds = JsonSerializer.Deserialize(result, JsonContext.DurableStateWebSocketEventTimeoutEnvelope)
             ?.TimeoutMilliseconds;
 
         return milliseconds is null ? null : TimeSpan.FromMilliseconds(milliseconds.Value);
     }
 
-    private Task<string> DispatchAsync(string operation, object payload, CancellationToken cancellationToken)
+    private Task<string> DispatchAsync(string operation, string payloadJson, CancellationToken cancellationToken)
     {
         var invocation = new BindingInvocation(
             _invocationId,
             DurableObjectStorage.BindingName,
             operation,
-            JsonSerializer.Serialize(payload, JsonOptions));
+            payloadJson);
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
     }
@@ -259,13 +270,68 @@ public sealed class DurableObjectState
         return tag;
     }
 
-    private sealed record WebSocketHandlesEnvelope(IReadOnlyList<string> Handles);
+    private static string EmptyPayload() =>
+        JsonSerializer.Serialize(new DurableStorageEmptyPayload(), JsonContext.DurableStorageEmptyPayload);
+}
 
-    private sealed record WebSocketTagsEnvelope(IReadOnlyList<string> Tags);
+internal sealed class DurableStateCallbackPayload
+{
+    public string Handle { get; set; } = "";
+}
 
-    private sealed record WebSocketAutoResponseEnvelope(WebSocketAutoResponse? Pair);
+internal sealed class DurableStateAbortPayload
+{
+    public string? Reason { get; set; }
+}
 
-    private sealed record WebSocketAutoResponseTimestampEnvelope(long? Timestamp);
+internal sealed class DurableStateWebSocketHandlePayload
+{
+    public string Handle { get; set; } = "";
+}
 
-    private sealed record HibernatableWebSocketEventTimeoutEnvelope(double? TimeoutMilliseconds);
+internal sealed class DurableStateWebSocketAcceptPayload
+{
+    public string Handle { get; set; } = "";
+
+    public IReadOnlyList<string> Tags { get; set; } = [];
+}
+
+internal sealed class DurableStateWebSocketTagPayload
+{
+    public string? Tag { get; set; }
+}
+
+internal sealed class DurableStateWebSocketAutoResponsePayload
+{
+    public WebSocketAutoResponse? Pair { get; set; }
+}
+
+internal sealed class DurableStateWebSocketEventTimeoutPayload
+{
+    public double? TimeoutMilliseconds { get; set; }
+}
+
+internal sealed class DurableStateWebSocketHandlesEnvelope
+{
+    public IReadOnlyList<string> Handles { get; set; } = [];
+}
+
+internal sealed class DurableStateWebSocketTagsEnvelope
+{
+    public IReadOnlyList<string> Tags { get; set; } = [];
+}
+
+internal sealed class DurableStateWebSocketAutoResponseEnvelope
+{
+    public WebSocketAutoResponse? Pair { get; set; }
+}
+
+internal sealed class DurableStateWebSocketAutoResponseTimestampEnvelope
+{
+    public long? Timestamp { get; set; }
+}
+
+internal sealed class DurableStateWebSocketEventTimeoutEnvelope
+{
+    public double? TimeoutMilliseconds { get; set; }
 }

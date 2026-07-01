@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
 using System.Text.Json;
 
@@ -101,10 +102,11 @@ internal static partial class Host
         RuntimeDurableObject durableObject,
         string durableObjectId,
         RequestEnvelope requestEnvelope,
-        EnvEnvelope? environmentEnvelope)
+        EnvEnvelope? environmentEnvelope,
+        JSObject? nativeState = null)
     {
         var method = ResolveDurableObjectMethod(durableObject, durableObject.FetchMethodName, "fetch");
-        var instance = CreateDurableObjectInstance(durableObject, durableObjectId, environmentEnvelope);
+        var instance = CreateDurableObjectInstance(durableObject, durableObjectId, environmentEnvelope, nativeState);
         var result = Invoke(
             instance,
             method,
@@ -132,10 +134,11 @@ internal static partial class Host
         string methodName,
         string durableObjectId,
         EnvEnvelope? environmentEnvelope,
-        IReadOnlyList<JsonElement> arguments)
+        IReadOnlyList<JsonElement> arguments,
+        JSObject? nativeState = null)
     {
         var method = ResolveDurableObjectRpcMethod(durableObject, methodName);
-        var instance = CreateDurableObjectInstance(durableObject, durableObjectId, environmentEnvelope);
+        var instance = CreateDurableObjectInstance(durableObject, durableObjectId, environmentEnvelope, nativeState);
         var invocationId = environmentEnvelope?.InvocationId
             ?? throw new WorkersException("Durable Object RPC invocation is missing an invocation id.");
         var result = Invoke(instance, method, ConvertArguments(method, arguments, invocationId));

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Runtime.InteropServices.JavaScript;
+using System.Runtime.Versioning;
 
 namespace Workers;
 
@@ -6,15 +8,18 @@ namespace Workers;
 public sealed class DurableObjectSqlStorage
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly DurableObjectStorageJsonContext JsonContext = new(new JsonSerializerOptions(JsonOptions));
 
     private readonly string _invocationId;
     private readonly IBindingDispatcher _dispatcher;
+    private readonly JSObject? _nativeState;
 
-    internal DurableObjectSqlStorage(string invocationId, IBindingDispatcher dispatcher)
+    internal DurableObjectSqlStorage(string invocationId, IBindingDispatcher dispatcher, JSObject? nativeState = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
         _invocationId = invocationId;
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _nativeState = nativeState;
     }
 
     /// <summary>Prepares a SQLite statement for execution against this Durable Object's private database.</summary>
@@ -33,16 +38,25 @@ public sealed class DurableObjectSqlStorage
         var payload = statements.Select(statement =>
         {
             ArgumentNullException.ThrowIfNull(statement);
-            return new SqlStatementPayload(statement.Query, statement.Values);
+            return new DurableStorageSqlStatementPayload
+            {
+                Query = statement.Query,
+                Values = statement.Values
+            };
         }).ToArray();
         if (payload.Length == 0)
             throw new ArgumentException("At least one SQL statement is required.", nameof(statements));
 
-        var result = await DispatchAsync(
-            "durable.storage.sql.transactionSync.raw",
-            new { statements = payload },
-            cancellationToken);
-        var envelope = JsonSerializer.Deserialize<SqlTransactionRawEnvelope>(result, JsonOptions)
+        var payloadJson = JsonSerializer.Serialize(
+            new DurableStorageSqlStatementsPayload { Statements = payload },
+            JsonContext.DurableStorageSqlStatementsPayload);
+        var result = _nativeState is not null && OperatingSystem.IsBrowser()
+            ? NativeDurableObjectSqlStorage.TransactionSyncRaw(_nativeState, payloadJson)
+            : await DispatchAsync(
+                "durable.storage.sql.transactionSync.raw",
+                payloadJson,
+                cancellationToken);
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableStorageSqlTransactionRawEnvelope)
             ?? throw new WorkersException("Durable Object SQL transactionSync returned an empty result.");
 
         return envelope.Results;
@@ -51,11 +65,13 @@ public sealed class DurableObjectSqlStorage
     /// <summary>Reads the current SQLite database size in bytes.</summary>
     public async Task<long> GetDatabaseSizeAsync(CancellationToken cancellationToken = default)
     {
-        var result = await DispatchAsync(
-            "durable.storage.sql.databaseSize",
-            new { },
-            cancellationToken);
-        return JsonSerializer.Deserialize<DatabaseSizeEnvelope>(result, JsonOptions)?.DatabaseSize
+        var result = _nativeState is not null && OperatingSystem.IsBrowser()
+            ? NativeDurableObjectSqlStorage.GetDatabaseSize(_nativeState)
+            : await DispatchAsync(
+                "durable.storage.sql.databaseSize",
+                EmptyPayload(),
+                cancellationToken);
+        return JsonSerializer.Deserialize(result, JsonContext.DurableStorageSqlDatabaseSizeEnvelope)?.DatabaseSize
             ?? throw new WorkersException("Durable Object SQL storage returned an empty database size result.");
     }
 
@@ -63,40 +79,49 @@ public sealed class DurableObjectSqlStorage
         DurableObjectSqlStatement statement,
         CancellationToken cancellationToken)
     {
-        var result = await DispatchStatementAsync(
-            "durable.storage.sql.all",
-            statement,
-            cancellationToken);
+        var result = _nativeState is not null && OperatingSystem.IsBrowser()
+            ? NativeDurableObjectSqlStorage.All(_nativeState, StatementJson(statement))
+            : await DispatchStatementAsync(
+                "durable.storage.sql.all",
+                statement,
+                cancellationToken);
 
-        return JsonSerializer.Deserialize<DurableObjectSqlResult<T>>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableStorageSqlRowsEnvelope)
             ?? throw new WorkersException("Durable Object SQL all returned an empty result.");
+
+        return ToSqlResult<T>(envelope);
     }
 
     internal async Task<T> OneAsync<T>(
         DurableObjectSqlStatement statement,
         CancellationToken cancellationToken)
     {
-        var result = await DispatchStatementAsync(
-            "durable.storage.sql.one",
-            statement,
-            cancellationToken);
+        var result = _nativeState is not null && OperatingSystem.IsBrowser()
+            ? NativeDurableObjectSqlStorage.One(_nativeState, StatementJson(statement))
+            : await DispatchStatementAsync(
+                "durable.storage.sql.one",
+                statement,
+                cancellationToken);
 
-        var envelope = JsonSerializer.Deserialize<DurableObjectSqlOneResult<T>>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableStorageSqlOneEnvelope)
             ?? throw new WorkersException("Durable Object SQL one returned an empty result.");
 
-        return envelope.Value;
+        return envelope.Value.Deserialize<T>(JsonOptions)
+            ?? throw new WorkersException("Durable Object SQL row could not be deserialized.");
     }
 
     internal async Task<DurableObjectSqlRawResult> RawAsync(
         DurableObjectSqlStatement statement,
         CancellationToken cancellationToken)
     {
-        var result = await DispatchStatementAsync(
-            "durable.storage.sql.raw",
-            statement,
-            cancellationToken);
+        var result = _nativeState is not null && OperatingSystem.IsBrowser()
+            ? NativeDurableObjectSqlStorage.Raw(_nativeState, StatementJson(statement))
+            : await DispatchStatementAsync(
+                "durable.storage.sql.raw",
+                statement,
+                cancellationToken);
 
-        return JsonSerializer.Deserialize<DurableObjectSqlRawResult>(result, JsonOptions)
+        return JsonSerializer.Deserialize(result, JsonContext.DurableObjectSqlRawResult)
             ?? throw new WorkersException("Durable Object SQL raw returned an empty result.");
     }
 
@@ -105,11 +130,21 @@ public sealed class DurableObjectSqlStorage
         JsonSerializerOptions? jsonOptions,
         CancellationToken cancellationToken)
     {
-        var result = await DispatchStatementAsync(
-            "durable.storage.sql.cursor.open",
-            statement,
-            cancellationToken);
-        var envelope = JsonSerializer.Deserialize<SqlCursorOpenEnvelope>(result, JsonOptions)
+        string result;
+        var nativeCursor = false;
+        if (_nativeState is not null && OperatingSystem.IsBrowser())
+        {
+            result = NativeDurableObjectSqlStorage.OpenCursor(_nativeState, StatementJson(statement));
+            nativeCursor = true;
+        }
+        else
+        {
+            result = await DispatchStatementAsync(
+                "durable.storage.sql.cursor.open",
+                statement,
+                cancellationToken);
+        }
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableStorageSqlCursorOpenEnvelope)
             ?? throw new WorkersException("Durable Object SQL cursor open returned an empty result.");
 
         ArgumentException.ThrowIfNullOrWhiteSpace(envelope.Handle);
@@ -120,7 +155,8 @@ public sealed class DurableObjectSqlStorage
             envelope.RowsRead,
             envelope.RowsWritten,
             _dispatcher,
-            jsonOptions);
+            jsonOptions,
+            nativeCursor);
     }
 
     private Task<string> DispatchStatementAsync(
@@ -130,32 +166,122 @@ public sealed class DurableObjectSqlStorage
     {
         return DispatchAsync(
             operation,
-            new SqlStatementPayload(statement.Query, statement.Values),
+            StatementJson(statement),
             cancellationToken);
     }
 
-    private Task<string> DispatchAsync(string operation, object payload, CancellationToken cancellationToken)
+    private Task<string> DispatchAsync(string operation, string payloadJson, CancellationToken cancellationToken)
     {
         var invocation = new BindingInvocation(
             _invocationId,
             DurableObjectStorage.BindingName,
             operation,
-            JsonSerializer.Serialize(payload, JsonOptions));
+            payloadJson);
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
     }
 
-    private sealed record SqlStatementPayload(string Query, IReadOnlyList<D1Value> Values);
+    private static string EmptyPayload() =>
+        JsonSerializer.Serialize(new DurableStorageEmptyPayload(), JsonContext.DurableStorageEmptyPayload);
 
-    private sealed record DatabaseSizeEnvelope(long DatabaseSize);
+    private static string StatementJson(DurableObjectSqlStatement statement)
+    {
+        ArgumentNullException.ThrowIfNull(statement);
+        return JsonSerializer.Serialize(
+            new DurableStorageSqlStatementPayload
+            {
+                Query = statement.Query,
+                Values = statement.Values
+            },
+            JsonContext.DurableStorageSqlStatementPayload);
+    }
 
-    private sealed record DurableObjectSqlOneResult<T>(T Value);
+    private static DurableObjectSqlResult<T> ToSqlResult<T>(DurableStorageSqlRowsEnvelope envelope)
+    {
+        var rows = new List<T>(envelope.Rows.Count);
+        foreach (var row in envelope.Rows)
+        {
+            rows.Add(row.Deserialize<T>(JsonOptions)
+                ?? throw new WorkersException("Durable Object SQL row could not be deserialized."));
+        }
 
-    private sealed record SqlTransactionRawEnvelope(IReadOnlyList<DurableObjectSqlRawResult> Results);
+        return new DurableObjectSqlResult<T>
+        {
+            Rows = rows,
+            ColumnNames = envelope.ColumnNames,
+            RowsRead = envelope.RowsRead,
+            RowsWritten = envelope.RowsWritten
+        };
+    }
+}
 
-    private sealed record SqlCursorOpenEnvelope(
-        string Handle,
-        IReadOnlyList<string> ColumnNames,
-        long RowsRead,
-        long RowsWritten);
+[SupportedOSPlatform("browser")]
+internal static partial class NativeDurableObjectSqlStorage
+{
+    [JSImport("cloudflareWorkers.durableStorage.sqlAll", "dotnet.js")]
+    internal static partial string All(JSObject state, string statementJson);
+
+    [JSImport("cloudflareWorkers.durableStorage.sqlOne", "dotnet.js")]
+    internal static partial string One(JSObject state, string statementJson);
+
+    [JSImport("cloudflareWorkers.durableStorage.sqlRaw", "dotnet.js")]
+    internal static partial string Raw(JSObject state, string statementJson);
+
+    [JSImport("cloudflareWorkers.durableStorage.sqlTransactionSyncRaw", "dotnet.js")]
+    internal static partial string TransactionSyncRaw(JSObject state, string statementsJson);
+
+    [JSImport("cloudflareWorkers.durableStorage.sqlCursorOpen", "dotnet.js")]
+    internal static partial string OpenCursor(JSObject state, string statementJson);
+
+    [JSImport("cloudflareWorkers.durableStorage.sqlDatabaseSize", "dotnet.js")]
+    internal static partial string GetDatabaseSize(JSObject state);
+}
+
+internal sealed class DurableStorageSqlStatementPayload
+{
+    public string Query { get; set; } = "";
+
+    public IReadOnlyList<D1Value> Values { get; set; } = [];
+}
+
+internal sealed class DurableStorageSqlStatementsPayload
+{
+    public IReadOnlyList<DurableStorageSqlStatementPayload> Statements { get; set; } = [];
+}
+
+internal sealed class DurableStorageSqlDatabaseSizeEnvelope
+{
+    public long DatabaseSize { get; set; }
+}
+
+internal sealed class DurableStorageSqlOneEnvelope
+{
+    public JsonElement Value { get; set; }
+}
+
+internal sealed class DurableStorageSqlRowsEnvelope
+{
+    public IReadOnlyList<JsonElement> Rows { get; set; } = [];
+
+    public IReadOnlyList<string> ColumnNames { get; set; } = [];
+
+    public long RowsRead { get; set; }
+
+    public long RowsWritten { get; set; }
+}
+
+internal sealed class DurableStorageSqlTransactionRawEnvelope
+{
+    public IReadOnlyList<DurableObjectSqlRawResult> Results { get; set; } = [];
+}
+
+internal sealed class DurableStorageSqlCursorOpenEnvelope
+{
+    public string Handle { get; set; } = "";
+
+    public IReadOnlyList<string> ColumnNames { get; set; } = [];
+
+    public long RowsRead { get; set; }
+
+    public long RowsWritten { get; set; }
 }

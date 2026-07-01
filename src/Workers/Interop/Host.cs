@@ -230,12 +230,19 @@ internal static partial class Host
         return await DurableObjectFetchCoreAsync(payloadJson);
     }
 
+    [JSExport]
+    public static async Task<string> DurableObjectFetchNative(string payloadJson, JSObject state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return await RunWithWorkerContextAsync(() => DurableObjectFetchCoreAsync(payloadJson, state));
+    }
+
     /// <summary>Starts a Durable Object fetch dispatch without using a JavaScript-exported Task as the promise boundary.</summary>
     [JSExport]
     public static string DurableObjectFetchStart(string payloadJson) =>
         StartManagedInvocation("durableObjectFetch", RunWithWorkerContextAsync(() => DurableObjectFetchCoreAsync(payloadJson)));
 
-    private static async Task<string> DurableObjectFetchCoreAsync(string payloadJson)
+    private static async Task<string> DurableObjectFetchCoreAsync(string payloadJson, JSObject? nativeState = null)
     {
         var payload = Deserialize(payloadJson, JsonContext.DurableObjectFetchInvocationPayload);
         var durableObject = ResolveDurableObject(payload.Manifest, payload.ExportName);
@@ -243,7 +250,8 @@ internal static partial class Host
             durableObject,
             payload.DurableObjectId,
             payload.Request,
-            payload.Environment);
+            payload.Environment,
+            nativeState);
 
         return JsonSerializer.Serialize(ResponseEnvelope.FromResponse(response), JsonContext.ResponseEnvelope);
     }
@@ -278,12 +286,19 @@ internal static partial class Host
         return await DurableObjectRpcCoreAsync(payloadJson);
     }
 
+    [JSExport]
+    public static async Task<string> DurableObjectRpcNative(string payloadJson, JSObject state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return await RunWithWorkerContextAsync(() => DurableObjectRpcCoreAsync(payloadJson, state));
+    }
+
     /// <summary>Starts a Durable Object RPC dispatch without using a JavaScript-exported Task as the promise boundary.</summary>
     [JSExport]
     public static string DurableObjectRpcStart(string payloadJson) =>
         StartManagedInvocation("durableObjectRpc", RunWithWorkerContextAsync(() => DurableObjectRpcCoreAsync(payloadJson)));
 
-    private static async Task<string> DurableObjectRpcCoreAsync(string payloadJson)
+    private static async Task<string> DurableObjectRpcCoreAsync(string payloadJson, JSObject? nativeState = null)
     {
         var payload = Deserialize(payloadJson, JsonContext.DurableObjectRpcInvocationPayload);
         var durableObject = ResolveDurableObject(payload.Manifest, payload.ExportName);
@@ -292,7 +307,8 @@ internal static partial class Host
             payload.MethodName,
             payload.DurableObjectId,
             payload.Environment,
-            payload.Arguments);
+            payload.Arguments,
+            nativeState);
 
         return JsonSerializer.Serialize(value, JsonContext.DurableObjectRpcResult);
     }

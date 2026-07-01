@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Workers.Interop;
 
 namespace Workers;
@@ -8,6 +9,83 @@ public sealed record DurableObjectIdOptions
 {
     /// <summary>Restricts the object to a supported jurisdiction.</summary>
     public string? Jurisdiction { get; init; }
+}
+
+internal sealed class DurableObjectNamePayload
+{
+    public string Name { get; set; } = "";
+}
+
+internal sealed class DurableObjectIdStringPayload
+{
+    public string Id { get; set; } = "";
+}
+
+internal sealed class DurableObjectUniqueIdPayload
+{
+    public DurableObjectIdOptions? Options { get; set; }
+}
+
+internal sealed class DurableObjectIdPayload
+{
+    public string Id { get; set; } = "";
+
+    public string? Name { get; set; }
+}
+
+internal sealed class DurableObjectStubTarget
+{
+    public string? Id { get; set; }
+
+    public string? Name { get; set; }
+}
+
+internal sealed class DurableObjectFetchPayload
+{
+    public DurableObjectStubTarget Target { get; set; } = new();
+
+    public DurableObjectGetOptions? Options { get; set; }
+
+    public RequestEnvelope Request { get; set; } = null!;
+}
+
+internal sealed class DurableObjectRpcPayload
+{
+    public DurableObjectStubTarget Target { get; set; } = new();
+
+    public DurableObjectGetOptions? Options { get; set; }
+
+    public string MethodName { get; set; } = "";
+
+    public IReadOnlyList<JsonElement> Arguments { get; set; } = [];
+}
+
+internal sealed class DurableObjectRpcResult
+{
+    public JsonElement Value { get; set; }
+}
+
+internal sealed class DurableObjectRpcStubResult
+{
+    public string Handle { get; set; } = "";
+}
+
+[JsonSerializable(typeof(DurableObjectNamePayload))]
+[JsonSerializable(typeof(DurableObjectIdStringPayload))]
+[JsonSerializable(typeof(DurableObjectUniqueIdPayload))]
+[JsonSerializable(typeof(DurableObjectIdPayload))]
+[JsonSerializable(typeof(DurableObjectStubTarget))]
+[JsonSerializable(typeof(DurableObjectFetchPayload))]
+[JsonSerializable(typeof(DurableObjectRpcPayload))]
+[JsonSerializable(typeof(DurableObjectRpcResult))]
+[JsonSerializable(typeof(DurableObjectRpcStubResult))]
+[JsonSerializable(typeof(DurableObjectGetOptions))]
+[JsonSerializable(typeof(DurableObjectIdOptions))]
+[JsonSerializable(typeof(RequestEnvelope))]
+[JsonSerializable(typeof(ResponseEnvelope))]
+[JsonSerializable(typeof(Header))]
+internal sealed partial class DurableObjectBindingJsonContext : JsonSerializerContext
+{
 }
 
 /// <summary>Options used when resolving a Durable Object stub.</summary>
@@ -51,6 +129,7 @@ public sealed class DurableObjectId : IEquatable<DurableObjectId>
 internal sealed class DurableObjectNamespaceBinding : IDurableObjectNamespace
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly DurableObjectBindingJsonContext JsonContext = new(new JsonSerializerOptions(JsonOptions));
 
     private readonly string _invocationId;
     private readonly string _bindingName;
@@ -68,20 +147,29 @@ internal sealed class DurableObjectNamespaceBinding : IDurableObjectNamespace
     public Task<DurableObjectId> IdFromNameAsync(string name, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return DispatchIdAsync("durable.idFromName", new { name }, cancellationToken);
+        return DispatchIdAsync(
+            "durable.idFromName",
+            JsonSerializer.Serialize(new DurableObjectNamePayload { Name = name }, JsonContext.DurableObjectNamePayload),
+            cancellationToken);
     }
 
     public Task<DurableObjectId> IdFromStringAsync(string id, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
-        return DispatchIdAsync("durable.idFromString", new { id }, cancellationToken);
+        return DispatchIdAsync(
+            "durable.idFromString",
+            JsonSerializer.Serialize(new DurableObjectIdStringPayload { Id = id }, JsonContext.DurableObjectIdStringPayload),
+            cancellationToken);
     }
 
     public Task<DurableObjectId> NewUniqueIdAsync(
         DurableObjectIdOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        return DispatchIdAsync("durable.newUniqueId", new { options }, cancellationToken);
+        return DispatchIdAsync(
+            "durable.newUniqueId",
+            JsonSerializer.Serialize(new DurableObjectUniqueIdPayload { Options = options }, JsonContext.DurableObjectUniqueIdPayload),
+            cancellationToken);
     }
 
     public IDurableObjectStub Get(DurableObjectId id, DurableObjectGetOptions? options = null)
@@ -98,33 +186,32 @@ internal sealed class DurableObjectNamespaceBinding : IDurableObjectNamespace
 
     private async Task<DurableObjectId> DispatchIdAsync(
         string operation,
-        object payload,
+        string payloadJson,
         CancellationToken cancellationToken)
     {
-        var result = await DispatchAsync(operation, payload, cancellationToken);
-        var id = JsonSerializer.Deserialize<DurableObjectIdPayload>(result, JsonOptions)
+        var result = await DispatchAsync(operation, payloadJson, cancellationToken);
+        var id = JsonSerializer.Deserialize(result, JsonContext.DurableObjectIdPayload)
             ?? throw new WorkersException("Durable Object namespace returned an empty ID result.");
 
         return new DurableObjectId(id.Id, id.Name);
     }
 
-    private Task<string> DispatchAsync(string operation, object payload, CancellationToken cancellationToken)
+    private Task<string> DispatchAsync(string operation, string payloadJson, CancellationToken cancellationToken)
     {
         var invocation = new BindingInvocation(
             _invocationId,
             _bindingName,
             operation,
-            JsonSerializer.Serialize(payload, JsonOptions));
+            payloadJson);
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
     }
-
-    private sealed record DurableObjectIdPayload(string Id, string? Name);
 }
 
 internal sealed class DurableObjectStubBinding : IDurableObjectStub
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly DurableObjectBindingJsonContext JsonContext = new(new JsonSerializerOptions(JsonOptions));
 
     private readonly string _invocationId;
     private readonly string _bindingName;
@@ -160,7 +247,7 @@ internal sealed class DurableObjectStubBinding : IDurableObjectStub
         return new DurableObjectStubBinding(
             invocationId,
             bindingName,
-            new DurableObjectStubTarget(id.Value, Name: null),
+            new DurableObjectStubTarget { Id = id.Value },
             options,
             dispatcher);
     }
@@ -177,7 +264,7 @@ internal sealed class DurableObjectStubBinding : IDurableObjectStub
         return new DurableObjectStubBinding(
             invocationId,
             bindingName,
-            new DurableObjectStubTarget(Id: null, Name: name),
+            new DurableObjectStubTarget { Name = name },
             options,
             dispatcher);
     }
@@ -197,14 +284,16 @@ internal sealed class DurableObjectStubBinding : IDurableObjectStub
             _bindingName,
             "durable.fetch",
             JsonSerializer.Serialize(
-                new DurableObjectFetchPayload(
-                    _target,
-                    _options,
-                    RequestEnvelope.FromRequest(request)),
-                JsonOptions));
+                new DurableObjectFetchPayload
+                {
+                    Target = _target,
+                    Options = _options,
+                    Request = RequestEnvelope.FromRequest(request)
+                },
+                JsonContext.DurableObjectFetchPayload));
 
         var result = await _dispatcher.DispatchAsync(invocation, cancellationToken);
-        return JsonSerializer.Deserialize<ResponseEnvelope>(result, JsonOptions)?.ToResponse(_invocationId, _dispatcher)
+        return JsonSerializer.Deserialize(result, JsonContext.ResponseEnvelope)?.ToResponse(_invocationId, _dispatcher)
             ?? throw new WorkersException("Durable Object stub returned an empty response envelope.");
     }
 
@@ -222,15 +311,17 @@ internal sealed class DurableObjectStubBinding : IDurableObjectStub
             _bindingName,
             "durable.rpc",
             JsonSerializer.Serialize(
-                new DurableObjectRpcPayload(
-                    _target,
-                    _options,
-                    methodName,
-                    RpcArguments.Serialize(arguments, options)),
-                JsonOptions));
+                new DurableObjectRpcPayload
+                {
+                    Target = _target,
+                    Options = _options,
+                    MethodName = methodName,
+                    Arguments = RpcArguments.Serialize(arguments, options)
+                },
+                JsonContext.DurableObjectRpcPayload));
 
         var result = await _dispatcher.DispatchAsync(invocation, cancellationToken);
-        var envelope = JsonSerializer.Deserialize<DurableObjectRpcResult>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableObjectRpcResult)
             ?? throw new WorkersException("Durable Object RPC returned an empty result.");
 
         return envelope.Value;
@@ -262,15 +353,17 @@ internal sealed class DurableObjectStubBinding : IDurableObjectStub
             _bindingName,
             "durable.rpcStub",
             JsonSerializer.Serialize(
-                new DurableObjectRpcPayload(
-                    _target,
-                    _options,
-                    methodName,
-                    RpcArguments.Serialize(arguments, options)),
-                JsonOptions));
+                new DurableObjectRpcPayload
+                {
+                    Target = _target,
+                    Options = _options,
+                    MethodName = methodName,
+                    Arguments = RpcArguments.Serialize(arguments, options)
+                },
+                JsonContext.DurableObjectRpcPayload));
 
         var result = await _dispatcher.DispatchAsync(invocation, cancellationToken);
-        var envelope = JsonSerializer.Deserialize<DurableObjectRpcStubResult>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableObjectRpcStubResult)
             ?? throw new WorkersException("Durable Object RPC returned an empty stub result.");
 
         return new RpcStub(_invocationId, envelope.Handle, _dispatcher);
@@ -285,20 +378,4 @@ internal sealed class DurableObjectStubBinding : IDurableObjectStub
         _ = await InvokeAsync(methodName, arguments, options, cancellationToken);
     }
 
-    private sealed record DurableObjectStubTarget(string? Id, string? Name);
-
-    private sealed record DurableObjectFetchPayload(
-        DurableObjectStubTarget Target,
-        DurableObjectGetOptions? Options,
-        RequestEnvelope Request);
-
-    private sealed record DurableObjectRpcPayload(
-        DurableObjectStubTarget Target,
-        DurableObjectGetOptions? Options,
-        string MethodName,
-        IReadOnlyList<JsonElement> Arguments);
-
-    private sealed record DurableObjectRpcResult(JsonElement Value);
-
-    private sealed record DurableObjectRpcStubResult(string Handle);
 }

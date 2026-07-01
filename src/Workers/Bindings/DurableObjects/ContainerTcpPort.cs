@@ -6,7 +6,7 @@ namespace Workers;
 /// <summary>A TCP port exposed by a Durable Object container.</summary>
 public sealed class ContainerTcpPort
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly DurableObjectContainerJsonContext JsonContext = DurableObjectContainer.JsonContext;
 
     private readonly string _invocationId;
     private readonly IBindingDispatcher _dispatcher;
@@ -52,10 +52,16 @@ public sealed class ContainerTcpPort
 
         var result = await DispatchAsync(
             "durable.container.tcpPort.fetch",
-            new TcpPortFetchPayload(Port, FetchBindingRequest.From(request, options)),
+            JsonSerializer.Serialize(
+                new DurableContainerTcpPortFetchPayload
+                {
+                    Port = Port,
+                    Fetch = FetchBindingRequest.From(request, options)
+                },
+                JsonContext.DurableContainerTcpPortFetchPayload),
             cancellationToken);
 
-        return JsonSerializer.Deserialize<ResponseEnvelope>(result, JsonOptions)?.ToResponse(_invocationId, _dispatcher)
+        return JsonSerializer.Deserialize(result, JsonContext.ResponseEnvelope)?.ToResponse(_invocationId, _dispatcher)
             ?? throw new WorkersException("Durable Object container TCP port returned an empty fetch response.");
     }
 
@@ -66,9 +72,15 @@ public sealed class ContainerTcpPort
 
         var result = await DispatchAsync(
             "durable.container.tcpPort.connect",
-            new TcpPortConnectPayload(Port, null, address),
+            JsonSerializer.Serialize(
+                new DurableContainerTcpPortConnectPayload
+                {
+                    Port = Port,
+                    AddressText = address
+                },
+                JsonContext.DurableContainerTcpPortConnectPayload),
             cancellationToken);
-        var envelope = JsonSerializer.Deserialize<SocketHandleEnvelope>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.SocketHandleEnvelope)
             ?? throw new WorkersException("Durable Object container TCP port returned an empty socket result.");
 
         return new Socket(_invocationId, envelope.Handle, _dispatcher);
@@ -89,28 +101,49 @@ public sealed class ContainerTcpPort
     {
         var result = await DispatchAsync(
             "durable.container.tcpPort.connect",
-            new TcpPortConnectPayload(Port, address, null),
+            JsonSerializer.Serialize(
+                new DurableContainerTcpPortConnectPayload
+                {
+                    Port = Port,
+                    Address = address
+                },
+                JsonContext.DurableContainerTcpPortConnectPayload),
             cancellationToken);
-        var envelope = JsonSerializer.Deserialize<SocketHandleEnvelope>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.SocketHandleEnvelope)
             ?? throw new WorkersException("Durable Object container TCP port returned an empty socket result.");
 
         return new Socket(_invocationId, envelope.Handle, _dispatcher);
     }
 
-    private Task<string> DispatchAsync(string operation, object payload, CancellationToken cancellationToken)
+    private Task<string> DispatchAsync(string operation, string payloadJson, CancellationToken cancellationToken)
     {
         var invocation = new BindingInvocation(
             _invocationId,
             DurableObjectStorage.BindingName,
             operation,
-            JsonSerializer.Serialize(payload, JsonOptions));
+            payloadJson);
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
     }
+}
 
-    private sealed record TcpPortFetchPayload(int Port, FetchBindingRequest Fetch);
+internal sealed class DurableContainerTcpPortFetchPayload
+{
+    public int Port { get; set; }
 
-    private sealed record TcpPortConnectPayload(int Port, SocketAddress? Address, string? AddressText);
+    public FetchBindingRequest Fetch { get; set; } = null!;
+}
 
-    private sealed record SocketHandleEnvelope(string Handle);
+internal sealed class DurableContainerTcpPortConnectPayload
+{
+    public int Port { get; set; }
+
+    public SocketAddress? Address { get; set; }
+
+    public string? AddressText { get; set; }
+}
+
+internal sealed class SocketHandleEnvelope
+{
+    public string Handle { get; set; } = "";
 }

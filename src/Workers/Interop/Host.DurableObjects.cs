@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.InteropServices.JavaScript;
 using System.Runtime.Versioning;
 
 namespace Workers.Interop;
@@ -11,7 +12,8 @@ internal static partial class Host
     private static object CreateDurableObjectInstance(
         RuntimeDurableObject durableObject,
         string durableObjectId,
-        EnvEnvelope? environmentEnvelope)
+        EnvEnvelope? environmentEnvelope,
+        JSObject? nativeState = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(durableObjectId);
 
@@ -21,7 +23,8 @@ internal static partial class Host
         var state = new DurableObjectState(
             invocationId,
             new DurableObjectId(durableObjectId),
-            BindingDispatcher.Current);
+            BindingDispatcher.Current,
+            nativeState);
         var type = ResolveDurableObjectType(durableObject);
 
         return Activator.CreateInstance(

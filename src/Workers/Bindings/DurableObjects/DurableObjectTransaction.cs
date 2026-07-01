@@ -6,6 +6,7 @@ namespace Workers;
 public sealed class DurableObjectTransaction
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly DurableObjectStorageJsonContext JsonContext = new(new JsonSerializerOptions(JsonOptions));
 
     private readonly string _invocationId;
     private readonly string _handle;
@@ -37,9 +38,16 @@ public sealed class DurableObjectTransaction
 
         var result = await DispatchAsync(
             "durable.storage.transaction.get",
-            new { handle = _handle, key, options },
+            JsonSerializer.Serialize(
+                new DurableStorageTransactionKeyReadPayload
+                {
+                    Handle = _handle,
+                    Key = key,
+                    Options = options
+                },
+                JsonContext.DurableStorageTransactionKeyReadPayload),
             cancellationToken);
-        var envelope = JsonSerializer.Deserialize<StorageValueEnvelope>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.StorageValueEnvelope)
             ?? throw new WorkersException("Durable Object transaction returned an empty get result.");
 
         return DeserializeValue<T>(envelope.Value, jsonOptions);
@@ -56,9 +64,16 @@ public sealed class DurableObjectTransaction
 
         var result = await DispatchAsync(
             "durable.storage.transaction.getMany",
-            new { handle = _handle, keys = keyArray, options },
+            JsonSerializer.Serialize(
+                new DurableStorageTransactionKeysReadPayload
+                {
+                    Handle = _handle,
+                    Keys = keyArray,
+                    Options = options
+                },
+                JsonContext.DurableStorageTransactionKeysReadPayload),
             cancellationToken);
-        var envelope = JsonSerializer.Deserialize<StorageValuesEnvelope>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.StorageValuesEnvelope)
             ?? throw new WorkersException("Durable Object transaction returned an empty multi-get result.");
 
         return DeserializeValues<T>(envelope.Values, jsonOptions);
@@ -77,7 +92,15 @@ public sealed class DurableObjectTransaction
 
         return DispatchAsync(
             "durable.storage.transaction.put",
-            new { handle = _handle, key, value = JsonSerializer.SerializeToElement(value, jsonOptions), options },
+            JsonSerializer.Serialize(
+                new DurableStorageTransactionPutPayload
+                {
+                    Handle = _handle,
+                    Key = key,
+                    Value = JsonSerializer.SerializeToElement(value, jsonOptions),
+                    Options = options
+                },
+                JsonContext.DurableStorageTransactionPutPayload),
             cancellationToken);
     }
 
@@ -100,7 +123,14 @@ public sealed class DurableObjectTransaction
 
         return DispatchAsync(
             "durable.storage.transaction.putMany",
-            new { handle = _handle, values = serialized, options },
+            JsonSerializer.Serialize(
+                new DurableStorageTransactionPutManyPayload
+                {
+                    Handle = _handle,
+                    Values = serialized,
+                    Options = options
+                },
+                JsonContext.DurableStorageTransactionPutManyPayload),
             cancellationToken);
     }
 
@@ -114,10 +144,17 @@ public sealed class DurableObjectTransaction
 
         var result = await DispatchAsync(
             "durable.storage.transaction.delete",
-            new { handle = _handle, key, options },
+            JsonSerializer.Serialize(
+                new DurableStorageTransactionKeyWritePayload
+                {
+                    Handle = _handle,
+                    Key = key,
+                    Options = options
+                },
+                JsonContext.DurableStorageTransactionKeyWritePayload),
             cancellationToken);
 
-        return JsonSerializer.Deserialize<DeleteResultEnvelope>(result, JsonOptions)?.Deleted ?? false;
+        return JsonSerializer.Deserialize(result, JsonContext.DeleteResultEnvelope)?.Deleted ?? false;
     }
 
     /// <summary>Deletes multiple values by key inside the transaction and returns the number of deleted values.</summary>
@@ -130,10 +167,17 @@ public sealed class DurableObjectTransaction
 
         var result = await DispatchAsync(
             "durable.storage.transaction.deleteMany",
-            new { handle = _handle, keys = keyArray, options },
+            JsonSerializer.Serialize(
+                new DurableStorageTransactionKeysWritePayload
+                {
+                    Handle = _handle,
+                    Keys = keyArray,
+                    Options = options
+                },
+                JsonContext.DurableStorageTransactionKeysWritePayload),
             cancellationToken);
 
-        return JsonSerializer.Deserialize<DeleteManyResultEnvelope>(result, JsonOptions)?.DeletedCount ?? 0;
+        return JsonSerializer.Deserialize(result, JsonContext.DeleteManyResultEnvelope)?.DeletedCount ?? 0;
     }
 
     /// <summary>Lists storage entries inside the transaction and deserializes each value as JSON.</summary>
@@ -144,9 +188,15 @@ public sealed class DurableObjectTransaction
     {
         var result = await DispatchAsync(
             "durable.storage.transaction.list",
-            new { handle = _handle, options },
+            JsonSerializer.Serialize(
+                new DurableStorageTransactionListPayload
+                {
+                    Handle = _handle,
+                    Options = options
+                },
+                JsonContext.DurableStorageTransactionListPayload),
             cancellationToken);
-        var envelope = JsonSerializer.Deserialize<StorageValuesEnvelope>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.StorageValuesEnvelope)
             ?? throw new WorkersException("Durable Object transaction returned an empty list result.");
 
         return DeserializeValues<T>(envelope.Values, jsonOptions);
@@ -160,7 +210,7 @@ public sealed class DurableObjectTransaction
 
         await DispatchAsync(
             "durable.storage.transaction.rollback",
-            new { handle = _handle },
+            JsonSerializer.Serialize(new DurableStorageTransactionHandlePayload { Handle = _handle }, JsonContext.DurableStorageTransactionHandlePayload),
             cancellationToken);
         IsCompleted = true;
     }
@@ -172,18 +222,18 @@ public sealed class DurableObjectTransaction
 
         await DispatchAsync(
             "durable.storage.transaction.commit",
-            new { handle = _handle },
+            JsonSerializer.Serialize(new DurableStorageTransactionHandlePayload { Handle = _handle }, JsonContext.DurableStorageTransactionHandlePayload),
             cancellationToken);
         IsCompleted = true;
     }
 
-    private Task<string> DispatchAsync(string operation, object payload, CancellationToken cancellationToken)
+    private Task<string> DispatchAsync(string operation, string payloadJson, CancellationToken cancellationToken)
     {
         var invocation = new BindingInvocation(
             _invocationId,
             DurableObjectStorage.BindingName,
             operation,
-            JsonSerializer.Serialize(payload, JsonOptions));
+            payloadJson);
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
     }
@@ -218,11 +268,73 @@ public sealed class DurableObjectTransaction
         return keyArray;
     }
 
-    private sealed record StorageValueEnvelope(JsonElement Value);
+}
 
-    private sealed record StorageValuesEnvelope(IReadOnlyDictionary<string, JsonElement> Values);
+internal sealed class DurableStorageTransactionHandlePayload
+{
+    public string Handle { get; set; } = "";
+}
 
-    private sealed record DeleteResultEnvelope(bool Deleted);
+internal sealed class DurableStorageTransactionKeyReadPayload
+{
+    public string Handle { get; set; } = "";
 
-    private sealed record DeleteManyResultEnvelope(int DeletedCount);
+    public string Key { get; set; } = "";
+
+    public DurableObjectStorageReadOptions? Options { get; set; }
+}
+
+internal sealed class DurableStorageTransactionKeysReadPayload
+{
+    public string Handle { get; set; } = "";
+
+    public IReadOnlyList<string> Keys { get; set; } = [];
+
+    public DurableObjectStorageReadOptions? Options { get; set; }
+}
+
+internal sealed class DurableStorageTransactionKeyWritePayload
+{
+    public string Handle { get; set; } = "";
+
+    public string Key { get; set; } = "";
+
+    public DurableObjectStorageWriteOptions? Options { get; set; }
+}
+
+internal sealed class DurableStorageTransactionKeysWritePayload
+{
+    public string Handle { get; set; } = "";
+
+    public IReadOnlyList<string> Keys { get; set; } = [];
+
+    public DurableObjectStorageWriteOptions? Options { get; set; }
+}
+
+internal sealed class DurableStorageTransactionPutPayload
+{
+    public string Handle { get; set; } = "";
+
+    public string Key { get; set; } = "";
+
+    public JsonElement Value { get; set; }
+
+    public DurableObjectStorageWriteOptions? Options { get; set; }
+}
+
+internal sealed class DurableStorageTransactionPutManyPayload
+{
+    public string Handle { get; set; } = "";
+
+    public IReadOnlyDictionary<string, JsonElement> Values { get; set; } =
+        new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+
+    public DurableObjectStorageWriteOptions? Options { get; set; }
+}
+
+internal sealed class DurableStorageTransactionListPayload
+{
+    public string Handle { get; set; } = "";
+
+    public DurableObjectStorageListOptions? Options { get; set; }
 }

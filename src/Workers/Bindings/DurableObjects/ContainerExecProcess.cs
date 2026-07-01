@@ -5,7 +5,7 @@ namespace Workers;
 /// <summary>A process started inside a Durable Object container.</summary>
 public sealed class ContainerExecProcess : IAsyncDisposable
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly DurableObjectContainerJsonContext JsonContext = DurableObjectContainer.JsonContext;
 
     private readonly string _invocationId;
     private readonly string _handle;
@@ -38,7 +38,7 @@ public sealed class ContainerExecProcess : IAsyncDisposable
         var result = await DispatchAsync("durable.container.exec.exitCode", cancellationToken)
             ;
 
-        return JsonSerializer.Deserialize<ContainerExecExitCodeEnvelope>(result, JsonOptions)?.ExitCode ?? 0;
+        return JsonSerializer.Deserialize(result, JsonContext.DurableContainerExecExitCodeEnvelope)?.ExitCode ?? 0;
     }
 
     /// <summary>Reads the process buffered output and exit code.</summary>
@@ -46,7 +46,7 @@ public sealed class ContainerExecProcess : IAsyncDisposable
     {
         var result = await DispatchAsync("durable.container.exec.output", cancellationToken)
             ;
-        var envelope = JsonSerializer.Deserialize<ContainerExecOutputEnvelope>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableContainerExecOutputEnvelope)
             ?? throw new WorkersException("Durable Object container returned an empty exec output result.");
 
         return new ContainerExecOutput
@@ -63,7 +63,10 @@ public sealed class ContainerExecProcess : IAsyncDisposable
         if (signal is not null)
             DurableObjectContainer.ValidateSignal(signal.Value);
 
-        return DispatchAsync("durable.container.exec.kill", new { handle = _handle, signal }, cancellationToken);
+        return DispatchAsync(
+            "durable.container.exec.kill",
+            JsonSerializer.Serialize(new DurableContainerExecKillPayload { Handle = _handle, Signal = signal }, JsonContext.DurableContainerExecKillPayload),
+            cancellationToken);
     }
 
     /// <inheritdoc />
@@ -77,15 +80,18 @@ public sealed class ContainerExecProcess : IAsyncDisposable
     }
 
     private Task<string> DispatchAsync(string operation, CancellationToken cancellationToken) =>
-        DispatchAsync(operation, new { handle = _handle }, cancellationToken);
+        DispatchAsync(
+            operation,
+            JsonSerializer.Serialize(new DurableContainerExecHandlePayload { Handle = _handle }, JsonContext.DurableContainerExecHandlePayload),
+            cancellationToken);
 
-    private Task<string> DispatchAsync(string operation, object payload, CancellationToken cancellationToken)
+    private Task<string> DispatchAsync(string operation, string payloadJson, CancellationToken cancellationToken)
     {
         var invocation = new BindingInvocation(
             _invocationId,
             DurableObjectStorage.BindingName,
             operation,
-            JsonSerializer.Serialize(payload, JsonOptions));
+            payloadJson);
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
     }
@@ -93,7 +99,30 @@ public sealed class ContainerExecProcess : IAsyncDisposable
     private static byte[] FromBase64(string? value) =>
         string.IsNullOrEmpty(value) ? [] : Convert.FromBase64String(value);
 
-    private sealed record ContainerExecExitCodeEnvelope(int ExitCode);
+}
 
-    private sealed record ContainerExecOutputEnvelope(string? StdoutBase64, string? StderrBase64, int ExitCode);
+internal sealed class DurableContainerExecHandlePayload
+{
+    public string Handle { get; set; } = "";
+}
+
+internal sealed class DurableContainerExecKillPayload
+{
+    public string Handle { get; set; } = "";
+
+    public int? Signal { get; set; }
+}
+
+internal sealed class DurableContainerExecExitCodeEnvelope
+{
+    public int ExitCode { get; set; }
+}
+
+internal sealed class DurableContainerExecOutputEnvelope
+{
+    public string? StdoutBase64 { get; set; }
+
+    public string? StderrBase64 { get; set; }
+
+    public int ExitCode { get; set; }
 }

@@ -19,6 +19,7 @@ public sealed class ModuleWriterTests
         var module = ModuleWriter.WriteModule(manifest);
 
         Assert.Contains("import dotnet from \"./dotnet.js\";", module, StringComparison.Ordinal);
+        Assert.DoesNotContain("cloudflare:workers", module, StringComparison.Ordinal);
         Assert.Contains("let workerPromise;", module, StringComparison.Ordinal);
         Assert.Contains("workerPromise ??= dotnet(manifest);", module, StringComparison.Ordinal);
         Assert.Contains("async fetch(request, env, ctx)", module, StringComparison.Ordinal);
@@ -108,7 +109,9 @@ public sealed class ModuleWriterTests
 
         var module = ModuleWriter.WriteModule(manifest);
 
-        Assert.Contains("export class CounterObject", module, StringComparison.Ordinal);
+        Assert.Contains("import { DurableObject } from \"cloudflare:workers\";", module, StringComparison.Ordinal);
+        Assert.Contains("export class CounterObject extends DurableObject", module, StringComparison.Ordinal);
+        Assert.Contains("super(ctx, env);", module, StringComparison.Ordinal);
         Assert.Contains("async fetch(request)", module, StringComparison.Ordinal);
         Assert.Contains("worker.durableObjectFetch(\"CounterObject\", this.ctx, request, this.env)", module, StringComparison.Ordinal);
         Assert.Contains("async alarm(alarmInfo)", module, StringComparison.Ordinal);
@@ -121,6 +124,44 @@ public sealed class ModuleWriterTests
         Assert.Contains("worker.durableObjectWebSocketError(\"CounterObject\", this.ctx, ws, error, this.env)", module, StringComparison.Ordinal);
         Assert.Contains("async add(...args)", module, StringComparison.Ordinal);
         Assert.Contains("worker.durableObjectRpc(\"CounterObject\", \"add\", this.ctx, this.env, args)", module, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WritesDurableObjectOnlyModule()
+    {
+        var manifest = new BuildManifest("Example.dll", "worker.js", "Example.wasm", [])
+        {
+            DurableObjects =
+            [
+                new DurableObjectEntrypoint(
+                    "RpcOnlyObject",
+                    "Example.RpcOnlyObject",
+                    FetchMethodName: null,
+                    AlarmMethodName: null,
+                    WebSocketMessageMethodName: null,
+                    WebSocketCloseMethodName: null,
+                    WebSocketErrorMethodName: null)
+                {
+                    RpcMethods =
+                    [
+                        new DurableObjectRpcMethod("ping", "PingAsync")
+                    ]
+                }
+            ]
+        };
+
+        var module = ModuleWriter.WriteModule(manifest);
+
+        Assert.Contains("import { DurableObject } from \"cloudflare:workers\";", module, StringComparison.Ordinal);
+        Assert.Contains("export class RpcOnlyObject extends DurableObject", module, StringComparison.Ordinal);
+        Assert.Contains("async ping(...args)", module, StringComparison.Ordinal);
+        Assert.Contains("worker.durableObjectRpc(\"RpcOnlyObject\", \"ping\", this.ctx, this.env, args)", module, StringComparison.Ordinal);
+        Assert.DoesNotContain("async fetch(request, env, ctx)", module, StringComparison.Ordinal);
+        Assert.DoesNotContain("async fetch(request)", module, StringComparison.Ordinal);
+        Assert.DoesNotContain("async scheduled", module, StringComparison.Ordinal);
+        Assert.DoesNotContain("async queue", module, StringComparison.Ordinal);
+        Assert.DoesNotContain("async email", module, StringComparison.Ordinal);
+        Assert.DoesNotContain("async tail", module, StringComparison.Ordinal);
     }
 
     [Fact]

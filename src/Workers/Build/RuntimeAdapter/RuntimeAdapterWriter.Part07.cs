@@ -257,6 +257,23 @@ internal static partial class RuntimeAdapterWriter
             return Object.fromEntries(values);
           }
 
+          if (typeof values[Symbol.iterator] === 'function') {
+            return Object.fromEntries(values);
+          }
+
+          if (typeof values.entries === 'function') {
+            return Object.fromEntries(values.entries());
+          }
+
+          if (typeof values.keys === 'function' && typeof values.get === 'function') {
+            const result = {};
+            for (const key of values.keys()) {
+              result[key] = values.get(key);
+            }
+
+            return result;
+          }
+
           return values;
         }
 
@@ -753,8 +770,10 @@ internal static partial class RuntimeAdapterWriter
             queueStart: host.QueueStart,
             emailStart: host.EmailStart,
             tailStart: host.TailStart,
+            durableObjectFetchNative: host.DurableObjectFetchNative,
             durableObjectFetchStart: host.DurableObjectFetchStart,
             durableObjectAlarmStart: host.DurableObjectAlarmStart,
+            durableObjectRpcNative: host.DurableObjectRpcNative,
             durableObjectRpcStart: host.DurableObjectRpcStart,
             managedRpcTargetInvokeStart: host.ManagedRpcTargetInvokeStart,
             managedRpcTargetDup: host.ManagedRpcTargetDup,

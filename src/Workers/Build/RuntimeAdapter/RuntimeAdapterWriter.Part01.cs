@@ -146,6 +146,120 @@ internal static partial class RuntimeAdapterWriter
             cloudflareWorkers: {
               bindings: {
                 dispatch: dispatchBinding
+              },
+              durableStorage: {
+                kvGet(state, key) {
+                  const value = state.storage.kv.get(key);
+                  return JSON.stringify({ value: value === undefined ? null : value });
+                },
+                kvPut(state, key, valueJson) {
+                  state.storage.kv.put(key, JSON.parse(valueJson));
+                },
+                kvDelete(state, key) {
+                  return JSON.stringify({ deleted: state.storage.kv.delete(key) });
+                },
+                kvList(state, optionsJson) {
+                  const payload = optionsJson == null || optionsJson.length === 0
+                    ? {}
+                    : JSON.parse(optionsJson);
+                  const values = state.storage.kv.list(durableStorageKvListOptions(payload.options) ?? {});
+                  return JSON.stringify({ values: jsonRecordFromMap(values) });
+                },
+                get(state, key, optionsJson) {
+                  const value = state.storage.kv.get(key);
+                  return JSON.stringify({ value: value === undefined ? null : value });
+                },
+                getMany(state, keysJson, optionsJson) {
+                  const keys = JSON.parse(keysJson) ?? [];
+                  const values = new Map();
+                  for (const key of [...keys].sort()) {
+                    const value = state.storage.kv.get(key);
+                    if (value !== undefined) {
+                      values.set(key, value);
+                    }
+                  }
+
+                  return JSON.stringify({ values: jsonRecordFromMap(values) });
+                },
+                put(state, key, valueJson, optionsJson) {
+                  state.storage.kv.put(key, JSON.parse(valueJson));
+                },
+                putMany(state, valuesJson, optionsJson) {
+                  const payload = JSON.parse(valuesJson) ?? {};
+                  const values = payload.values ?? payload;
+                  for (const [key, value] of Object.entries(values)) {
+                    state.storage.kv.put(key, value);
+                  }
+                },
+                delete(state, key, optionsJson) {
+                  return JSON.stringify({ deleted: state.storage.kv.delete(key) });
+                },
+                deleteMany(state, keysJson, optionsJson) {
+                  const keys = JSON.parse(keysJson) ?? [];
+                  let deletedCount = 0;
+                  for (const key of keys) {
+                    if (state.storage.kv.delete(key)) {
+                      deletedCount++;
+                    }
+                  }
+
+                  return JSON.stringify({ deletedCount });
+                },
+                deleteAll(state, optionsJson) {
+                  const values = jsonRecordFromMap(state.storage.kv.list({}));
+                  for (const key of Object.keys(values)) {
+                    state.storage.kv.delete(key);
+                  }
+                },
+                list(state, optionsJson) {
+                  const payload = optionsJson == null || optionsJson.length === 0
+                    ? {}
+                    : JSON.parse(optionsJson);
+                  const values = state.storage.kv.list(durableStorageKvListOptions(payload.options) ?? {});
+                  return JSON.stringify({ values: jsonRecordFromMap(values) });
+                },
+                sqlAll(state, statementJson) {
+                  const cursor = durableSqlExecOnStorage(state.storage, JSON.parse(statementJson));
+                  return JSON.stringify(durableSqlRowsEnvelope(cursor, cursor.toArray()));
+                },
+                sqlOne(state, statementJson) {
+                  const cursor = durableSqlExecOnStorage(state.storage, JSON.parse(statementJson));
+                  return JSON.stringify({ value: cursor.one() });
+                },
+                sqlRaw(state, statementJson) {
+                  const cursor = durableSqlExecOnStorage(state.storage, JSON.parse(statementJson));
+                  return JSON.stringify(durableSqlRowsEnvelope(cursor, cursor.raw().toArray()));
+                },
+                sqlTransactionSyncRaw(state, statementsJson) {
+                  const payload = JSON.parse(statementsJson) ?? {};
+                  const results = state.storage.transactionSync(() => (payload.statements ?? []).map(statement => {
+                    const cursor = durableSqlExecOnStorage(state.storage, statement);
+                    return durableSqlRowsEnvelope(cursor, cursor.raw().toArray());
+                  }));
+                  return JSON.stringify({ results });
+                },
+                sqlCursorOpen(state, statementJson) {
+                  const cursor = durableSqlExecOnStorage(state.storage, JSON.parse(statementJson));
+                  const handle = retainDurableSqlCursor(cursor);
+                  return JSON.stringify(durableSqlCursorEnvelope(handle, cursor));
+                },
+                sqlCursorNext(handle) {
+                  const cursor = durableSqlCursor(handle);
+                  const result = cursor.next();
+                  return JSON.stringify(durableSqlCursorNextEnvelope(cursor, result));
+                },
+                sqlCursorRawNext(handle) {
+                  const entry = durableSqlCursorEntry(handle);
+                  entry.raw ??= entry.cursor.raw();
+                  const result = entry.raw.next();
+                  return JSON.stringify(durableSqlCursorNextEnvelope(entry.cursor, result));
+                },
+                sqlCursorDispose(handle) {
+                  durableSqlCursors.delete(handle);
+                },
+                sqlDatabaseSize(state) {
+                  return JSON.stringify({ databaseSize: state.storage.sql.databaseSize });
+                }
               }
             }
           });
@@ -291,11 +405,7 @@ internal static partial class RuntimeAdapterWriter
                   request: requestEnvelope,
                   environment: toEnvironmentEnvelope(invocationId, env)
                 });
-                const result = await runManagedInvocation(
-                  runtime,
-                  host.pumpContinuations,
-                  () => host.durableObjectFetchStart(payloadJson),
-                  handle => host.poll(handle));
+                const result = await host.durableObjectFetchNative(payloadJson, state);
                 return toResponseEnvelope(requiredInvocation(invocationId), result);
               } finally {
                 releaseInvocation(invocationId);
@@ -336,11 +446,7 @@ internal static partial class RuntimeAdapterWriter
                   environment: toEnvironmentEnvelope(invocationId, env),
                   arguments: toManagedRpcArguments(args)
                 });
-                const result = await runManagedInvocation(
-                  runtime,
-                  host.pumpContinuations,
-                  () => host.durableObjectRpcStart(payloadJson),
-                  handle => host.poll(handle));
+                const result = await host.durableObjectRpcNative(payloadJson, state);
                 const envelope = typeof result === 'string' ? JSON.parse(result) : result;
                 return managedRpcReturnValue(envelope, host);
               } finally {

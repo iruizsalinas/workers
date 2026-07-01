@@ -1,4 +1,6 @@
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices.JavaScript;
+using System.Runtime.Versioning;
 using System.Text.Json;
 
 namespace Workers;
@@ -7,11 +9,13 @@ namespace Workers;
 public sealed class DurableObjectSqlCursor<T> : IAsyncDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly DurableObjectStorageJsonContext JsonContext = new(new JsonSerializerOptions(JsonOptions));
 
     private readonly string _invocationId;
     private readonly string _handle;
     private readonly IBindingDispatcher _dispatcher;
     private readonly JsonSerializerOptions? _rowJsonOptions;
+    private readonly bool _nativeCursor;
 
     private bool _disposed;
 
@@ -22,7 +26,8 @@ public sealed class DurableObjectSqlCursor<T> : IAsyncDisposable
         long rowsRead,
         long rowsWritten,
         IBindingDispatcher dispatcher,
-        JsonSerializerOptions? rowJsonOptions)
+        JsonSerializerOptions? rowJsonOptions,
+        bool nativeCursor = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
         ArgumentException.ThrowIfNullOrWhiteSpace(handle);
@@ -33,6 +38,7 @@ public sealed class DurableObjectSqlCursor<T> : IAsyncDisposable
         _handle = handle;
         _dispatcher = dispatcher;
         _rowJsonOptions = rowJsonOptions;
+        _nativeCursor = nativeCursor;
         ColumnNames = columnNames;
         RowsRead = rowsRead;
         RowsWritten = rowsWritten;
@@ -66,9 +72,10 @@ public sealed class DurableObjectSqlCursor<T> : IAsyncDisposable
         if (_disposed)
             return null;
 
-        var result = await DispatchAsync("durable.storage.sql.cursor.rawNext", cancellationToken)
-            ;
-        var envelope = JsonSerializer.Deserialize<SqlCursorRawNextEnvelope>(result, JsonOptions)
+        var result = _nativeCursor && OperatingSystem.IsBrowser()
+            ? NativeDurableObjectSqlCursor.RawNext(_handle)
+            : await DispatchAsync("durable.storage.sql.cursor.rawNext", cancellationToken);
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableStorageSqlCursorRawNextEnvelope)
             ?? throw new WorkersException("Durable Object SQL raw cursor next returned an empty result.");
 
         ApplyMetadata(envelope.ColumnNames, envelope.RowsRead, envelope.RowsWritten);
@@ -113,7 +120,10 @@ public sealed class DurableObjectSqlCursor<T> : IAsyncDisposable
             return;
 
         _disposed = true;
-        await DispatchAsync("durable.storage.sql.cursor.dispose", CancellationToken.None);
+        if (_nativeCursor && OperatingSystem.IsBrowser())
+            NativeDurableObjectSqlCursor.Dispose(_handle);
+        else
+            await DispatchAsync("durable.storage.sql.cursor.dispose", CancellationToken.None);
     }
 
     private void ApplyMetadata(IReadOnlyList<string> columnNames, long rowsRead, long rowsWritten)
@@ -123,11 +133,12 @@ public sealed class DurableObjectSqlCursor<T> : IAsyncDisposable
         RowsWritten = rowsWritten;
     }
 
-    private async Task<SqlCursorNextEnvelope> NextCoreAsync(CancellationToken cancellationToken)
+    private async Task<DurableStorageSqlCursorNextEnvelope> NextCoreAsync(CancellationToken cancellationToken)
     {
-        var result = await DispatchAsync("durable.storage.sql.cursor.next", cancellationToken)
-            ;
-        var envelope = JsonSerializer.Deserialize<SqlCursorNextEnvelope>(result, JsonOptions)
+        var result = _nativeCursor && OperatingSystem.IsBrowser()
+            ? NativeDurableObjectSqlCursor.Next(_handle)
+            : await DispatchAsync("durable.storage.sql.cursor.next", cancellationToken);
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableStorageSqlCursorNextEnvelope)
             ?? throw new WorkersException("Durable Object SQL cursor next returned an empty result.");
 
         ApplyMetadata(envelope.ColumnNames, envelope.RowsRead, envelope.RowsWritten);
@@ -143,22 +154,52 @@ public sealed class DurableObjectSqlCursor<T> : IAsyncDisposable
             _invocationId,
             DurableObjectStorage.BindingName,
             operation,
-            JsonSerializer.Serialize(new { handle = _handle }, JsonOptions));
+            JsonSerializer.Serialize(new DurableStorageSqlCursorHandlePayload { Handle = _handle }, JsonContext.DurableStorageSqlCursorHandlePayload));
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
     }
+}
 
-    private sealed record SqlCursorNextEnvelope(
-        bool Done,
-        JsonElement Value,
-        IReadOnlyList<string> ColumnNames,
-        long RowsRead,
-        long RowsWritten);
+[SupportedOSPlatform("browser")]
+internal static partial class NativeDurableObjectSqlCursor
+{
+    [JSImport("cloudflareWorkers.durableStorage.sqlCursorNext", "dotnet.js")]
+    internal static partial string Next(string handle);
 
-    private sealed record SqlCursorRawNextEnvelope(
-        bool Done,
-        IReadOnlyList<JsonElement>? Value,
-        IReadOnlyList<string> ColumnNames,
-        long RowsRead,
-        long RowsWritten);
+    [JSImport("cloudflareWorkers.durableStorage.sqlCursorRawNext", "dotnet.js")]
+    internal static partial string RawNext(string handle);
+
+    [JSImport("cloudflareWorkers.durableStorage.sqlCursorDispose", "dotnet.js")]
+    internal static partial void Dispose(string handle);
+}
+
+internal sealed class DurableStorageSqlCursorHandlePayload
+{
+    public string Handle { get; set; } = "";
+}
+
+internal sealed class DurableStorageSqlCursorNextEnvelope
+{
+    public bool Done { get; set; }
+
+    public JsonElement Value { get; set; }
+
+    public IReadOnlyList<string> ColumnNames { get; set; } = [];
+
+    public long RowsRead { get; set; }
+
+    public long RowsWritten { get; set; }
+}
+
+internal sealed class DurableStorageSqlCursorRawNextEnvelope
+{
+    public bool Done { get; set; }
+
+    public IReadOnlyList<JsonElement>? Value { get; set; }
+
+    public IReadOnlyList<string> ColumnNames { get; set; } = [];
+
+    public long RowsRead { get; set; }
+
+    public long RowsWritten { get; set; }
 }

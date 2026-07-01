@@ -1,4 +1,7 @@
+using System.Runtime.InteropServices.JavaScript;
+using System.Runtime.Versioning;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Workers;
 
@@ -6,15 +9,18 @@ namespace Workers;
 public sealed class DurableObjectKvStorage
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly DurableObjectKvStorageJsonContext JsonContext = new(new JsonSerializerOptions(JsonOptions));
 
     private readonly string _invocationId;
     private readonly IBindingDispatcher _dispatcher;
+    private readonly JSObject? _nativeState;
 
-    internal DurableObjectKvStorage(string invocationId, IBindingDispatcher dispatcher)
+    internal DurableObjectKvStorage(string invocationId, IBindingDispatcher dispatcher, JSObject? nativeState = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(invocationId);
         _invocationId = invocationId;
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _nativeState = nativeState;
     }
 
     /// <summary>Gets and deserializes a JSON value by key from synchronous key-value storage.</summary>
@@ -25,11 +31,13 @@ public sealed class DurableObjectKvStorage
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        var result = await DispatchAsync(
-            "durable.storage.kv.get",
-            new { key },
-            cancellationToken);
-        var envelope = JsonSerializer.Deserialize<StorageValueEnvelope>(result, JsonOptions)
+        var result = _nativeState is not null && OperatingSystem.IsBrowser()
+            ? NativeDurableObjectKvStorage.Get(_nativeState, key)
+            : await DispatchAsync(
+                "durable.storage.kv.get",
+                JsonSerializer.Serialize(new DurableObjectKvKeyPayload { Key = key }, JsonContext.DurableObjectKvKeyPayload),
+                cancellationToken);
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableObjectKvStorageValueEnvelope)
             ?? throw new WorkersException("Durable Object synchronous KV storage returned an empty get result.");
 
         return DeserializeValue<T>(envelope.Value, jsonOptions);
@@ -45,9 +53,22 @@ public sealed class DurableObjectKvStorage
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         jsonOptions ??= JsonOptions;
 
+        if (_nativeState is not null && OperatingSystem.IsBrowser())
+        {
+            var valueJson = JsonSerializer.Serialize(value, jsonOptions);
+            NativeDurableObjectKvStorage.Put(_nativeState, key, valueJson);
+            return Task.CompletedTask;
+        }
+
         return DispatchAsync(
             "durable.storage.kv.put",
-            new { key, value = JsonSerializer.SerializeToElement(value, jsonOptions) },
+            JsonSerializer.Serialize(
+                new DurableObjectKvPutPayload
+                {
+                    Key = key,
+                    Value = JsonSerializer.SerializeToElement(value, jsonOptions)
+                },
+                JsonContext.DurableObjectKvPutPayload),
             cancellationToken);
     }
 
@@ -56,12 +77,14 @@ public sealed class DurableObjectKvStorage
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        var result = await DispatchAsync(
-            "durable.storage.kv.delete",
-            new { key },
-            cancellationToken);
+        var result = _nativeState is not null && OperatingSystem.IsBrowser()
+            ? NativeDurableObjectKvStorage.Delete(_nativeState, key)
+            : await DispatchAsync(
+                "durable.storage.kv.delete",
+                JsonSerializer.Serialize(new DurableObjectKvKeyPayload { Key = key }, JsonContext.DurableObjectKvKeyPayload),
+                cancellationToken);
 
-        return JsonSerializer.Deserialize<DeleteResultEnvelope>(result, JsonOptions)?.Deleted ?? false;
+        return JsonSerializer.Deserialize(result, JsonContext.DurableObjectKvDeleteResultEnvelope)?.Deleted ?? false;
     }
 
     /// <summary>Lists synchronous key-value storage entries and deserializes each value as JSON.</summary>
@@ -70,23 +93,28 @@ public sealed class DurableObjectKvStorage
         JsonSerializerOptions? jsonOptions = null,
         CancellationToken cancellationToken = default)
     {
-        var result = await DispatchAsync(
-            "durable.storage.kv.list",
-            new { options },
-            cancellationToken);
-        var envelope = JsonSerializer.Deserialize<StorageValuesEnvelope>(result, JsonOptions)
+        var payloadJson = JsonSerializer.Serialize(
+            new DurableObjectKvListPayload { Options = options },
+            JsonContext.DurableObjectKvListPayload);
+        var result = _nativeState is not null && OperatingSystem.IsBrowser()
+            ? NativeDurableObjectKvStorage.List(_nativeState, payloadJson)
+            : await DispatchAsync(
+                "durable.storage.kv.list",
+                payloadJson,
+                cancellationToken);
+        var envelope = JsonSerializer.Deserialize(result, JsonContext.DurableObjectKvStorageValuesEnvelope)
             ?? throw new WorkersException("Durable Object synchronous KV storage returned an empty list result.");
 
         return DeserializeValues<T>(envelope.Values, jsonOptions);
     }
 
-    private Task<string> DispatchAsync(string operation, object payload, CancellationToken cancellationToken)
+    private Task<string> DispatchAsync(string operation, string payloadJson, CancellationToken cancellationToken)
     {
         var invocation = new BindingInvocation(
             _invocationId,
             DurableObjectStorage.BindingName,
             operation,
-            JsonSerializer.Serialize(payload, JsonOptions));
+            payloadJson);
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
     }
@@ -106,10 +134,64 @@ public sealed class DurableObjectKvStorage
 
         return result;
     }
+}
 
-    private sealed record StorageValueEnvelope(JsonElement Value);
+[SupportedOSPlatform("browser")]
+internal static partial class NativeDurableObjectKvStorage
+{
+    [JSImport("cloudflareWorkers.durableStorage.kvGet", "dotnet.js")]
+    internal static partial string Get(JSObject state, string key);
 
-    private sealed record StorageValuesEnvelope(IReadOnlyDictionary<string, JsonElement> Values);
+    [JSImport("cloudflareWorkers.durableStorage.kvPut", "dotnet.js")]
+    internal static partial void Put(JSObject state, string key, string valueJson);
 
-    private sealed record DeleteResultEnvelope(bool Deleted);
+    [JSImport("cloudflareWorkers.durableStorage.kvDelete", "dotnet.js")]
+    internal static partial string Delete(JSObject state, string key);
+
+    [JSImport("cloudflareWorkers.durableStorage.kvList", "dotnet.js")]
+    internal static partial string List(JSObject state, string optionsJson);
+}
+
+internal sealed class DurableObjectKvKeyPayload
+{
+    public string Key { get; set; } = "";
+}
+
+internal sealed class DurableObjectKvPutPayload
+{
+    public string Key { get; set; } = "";
+
+    public JsonElement Value { get; set; }
+}
+
+internal sealed class DurableObjectKvListPayload
+{
+    public DurableObjectKvListOptions? Options { get; set; }
+}
+
+internal sealed class DurableObjectKvStorageValueEnvelope
+{
+    public JsonElement Value { get; set; }
+}
+
+internal sealed class DurableObjectKvStorageValuesEnvelope
+{
+    public IReadOnlyDictionary<string, JsonElement> Values { get; set; } =
+        new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+}
+
+internal sealed class DurableObjectKvDeleteResultEnvelope
+{
+    public bool Deleted { get; set; }
+}
+
+[JsonSerializable(typeof(DurableObjectKvKeyPayload))]
+[JsonSerializable(typeof(DurableObjectKvPutPayload))]
+[JsonSerializable(typeof(DurableObjectKvListPayload))]
+[JsonSerializable(typeof(DurableObjectKvListOptions))]
+[JsonSerializable(typeof(DurableObjectKvStorageValueEnvelope))]
+[JsonSerializable(typeof(DurableObjectKvStorageValuesEnvelope))]
+[JsonSerializable(typeof(DurableObjectKvDeleteResultEnvelope))]
+internal sealed partial class DurableObjectKvStorageJsonContext : JsonSerializerContext
+{
 }
