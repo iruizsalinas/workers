@@ -398,6 +398,53 @@ public sealed class EnvelopeTests
     }
 
     [Fact]
+    public async Task ResponseEnvelopeBridgesAlreadyReadNativeRequestStream()
+    {
+        var dispatcher = new CapturingDispatcher(
+            """{"done":false,"bodyBase64":"Zmlyc3Q="}""",
+            """{"done":false,"bodyBase64":"c2Vjb25k"}""",
+            """{"done":true,"bodyBase64":null}""");
+        var request = new RequestEnvelope(
+            "https://example.com/path",
+            "POST",
+            [],
+            bodyBase64: null,
+            nativeRequestHandle: "request:1").ToRequest("invocation:1", dispatcher);
+        var stream = request.BodyStream();
+
+        var first = await stream.ReadAsync();
+        var envelope = ResponseEnvelope.FromResponse(Response.FromStream(stream));
+        var roundTripped = envelope.ToResponse();
+        var remaining = await roundTripped.BodyStream().ReadAllBytesAsync();
+
+        Assert.Equal("first", System.Text.Encoding.UTF8.GetString(first.Bytes.Span));
+        Assert.Null(envelope.NativeBodyStreamSource);
+        Assert.Null(envelope.NativeBodyStreamHandle);
+        Assert.NotNull(envelope.ManagedBodyStreamHandle);
+        Assert.Equal("second", System.Text.Encoding.UTF8.GetString(remaining.Span));
+    }
+
+    [Fact]
+    public async Task NativeStreamReadDoesNotRestartAfterDone()
+    {
+        var dispatcher = new CapturingDispatcher("""{"done":true,"bodyBase64":null}""");
+        var request = new RequestEnvelope(
+            "https://example.com/path",
+            "POST",
+            [],
+            bodyBase64: null,
+            nativeRequestHandle: "request:1").ToRequest("invocation:1", dispatcher);
+        var stream = request.BodyStream();
+
+        var first = await stream.ReadAsync();
+        var second = await stream.ReadAsync();
+
+        Assert.True(first.Done);
+        Assert.True(second.Done);
+        Assert.Single(dispatcher.Invocations);
+    }
+
+    [Fact]
     public async Task ResponseEnvelopePreservesManagedStreamBody()
     {
         var response = Response.FromStream(

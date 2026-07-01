@@ -104,6 +104,10 @@ internal sealed class ResponseEnvelope
         bool passThroughOnException = false)
     {
         ArgumentNullException.ThrowIfNull(response);
+        var nativeBodyStream = response.NativeBodyStream;
+        var remainingNativeBodyStream = nativeBodyStream is not null && ShouldBridgeRemainingNativeBody(nativeBodyStream)
+            ? ReadableStream.FromAsyncEnumerable(nativeBodyStream.ReadRemainingChunksAsync())
+            : null;
 
         return new ResponseEnvelope(
             response.Status,
@@ -116,9 +120,9 @@ internal sealed class ResponseEnvelope
             response.Cf,
             EncodeBodyName(response.EncodeBody),
             response.NativeResponseHandle,
-            response.NativeBodyStream?.Source is NativeStreamSource.Request or NativeStreamSource.Response ? NativeStreamSourceName(response.NativeBodyStream.Source) : null,
-            response.NativeBodyStream?.Source is NativeStreamSource.Request or NativeStreamSource.Response ? response.NativeBodyStream.Handle : null,
-            response.NativeBodyStream?.Source == NativeStreamSource.Managed ? response.NativeBodyStream.Handle : null);
+            nativeBodyStream?.Source is NativeStreamSource.Request or NativeStreamSource.Response && remainingNativeBodyStream is null ? NativeStreamSourceName(nativeBodyStream.Source) : null,
+            nativeBodyStream?.Source is NativeStreamSource.Request or NativeStreamSource.Response && remainingNativeBodyStream is null ? nativeBodyStream.Handle : null,
+            GetManagedBodyStreamHandle(nativeBodyStream, remainingNativeBodyStream));
     }
 
     /// <summary>Converts the envelope into a response.</summary>
@@ -215,6 +219,17 @@ internal sealed class ResponseEnvelope
 
     private static int CountNonNull(params string?[] values) =>
         values.Count(static value => value is not null);
+
+    private static bool ShouldBridgeRemainingNativeBody(ReadableStream? stream) =>
+        stream?.Source is NativeStreamSource.Request or NativeStreamSource.Response && stream.HasNativeReaderStarted;
+
+    private static string? GetManagedBodyStreamHandle(ReadableStream? stream, ReadableStream? remainingNativeBodyStream)
+    {
+        if (remainingNativeBodyStream is not null)
+            return remainingNativeBodyStream.Handle;
+
+        return stream?.Source == NativeStreamSource.Managed ? stream.Handle : null;
+    }
 
     private static void ValidateStatusText(string? statusText)
     {

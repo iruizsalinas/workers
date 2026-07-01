@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Runtime.CompilerServices;
 
 namespace Workers;
 
@@ -8,6 +9,8 @@ public sealed class ReadableStream
     private readonly string? _invocationId;
     private readonly IBindingDispatcher? _dispatcher;
     private static long _nextNativeStreamId;
+    private bool _nativeReaderStarted;
+    private bool _nativeReaderCompleted;
 
     internal ReadableStream(string invocationId, NativeStreamSource source, string handle, IBindingDispatcher dispatcher)
     {
@@ -29,6 +32,8 @@ public sealed class ReadableStream
     internal NativeStreamSource Source { get; }
 
     internal string Handle { get; }
+
+    internal bool HasNativeReaderStarted => Source != NativeStreamSource.Managed && _nativeReaderStarted;
 
     internal static ReadableStream FromNativeBody(
         string invocationId,
@@ -52,9 +57,16 @@ public sealed class ReadableStream
         if (Source == NativeStreamSource.Managed)
             return await ManagedReadableStreamRegistry.PullAsync(Handle);
 
+        if (_nativeReaderCompleted)
+            return new ReadableStreamReadResult(true, ReadOnlyMemory<byte>.Empty);
+
+        _nativeReaderStarted = true;
         var result = await DispatchAsync("stream.read", cancellationToken);
         var read = JsonSerializer.Deserialize(result, NativeBodyJsonContext.Default.NativeStreamReadResult)
             ?? throw new WorkersException("Native stream read returned an empty result.");
+
+        if (read.Done)
+            _nativeReaderCompleted = true;
 
         return new ReadableStreamReadResult(
             read.Done,
@@ -86,7 +98,22 @@ public sealed class ReadableStream
             return;
         }
 
+        _nativeReaderStarted = true;
+        _nativeReaderCompleted = true;
         await DispatchAsync("stream.cancel", cancellationToken);
+    }
+
+    internal async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadRemainingChunksAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        while (true)
+        {
+            var read = await ReadAsync(cancellationToken);
+            if (read.Done)
+                yield break;
+
+            yield return read.Bytes;
+        }
     }
 
     private Task<string> DispatchAsync(string operation, CancellationToken cancellationToken)
