@@ -35,6 +35,7 @@ internal sealed record FetchBindingOptions(
         ValidateCf(options.Cf);
         ValidateCacheMode(options);
         ValidateMode(options);
+        ValidateRedirect(options);
         ValidateReferrer(options.Referrer);
         var envelope = new FetchBindingOptions(
             options.Signal?.Handle,
@@ -103,8 +104,8 @@ internal sealed record FetchBindingOptions(
         {
             null => null,
             RequestRedirect.Follow => "follow",
-            RequestRedirect.Error => "error",
             RequestRedirect.Manual => "manual",
+            RequestRedirect.Error => throw new ArgumentException("The error redirect mode is not supported by Worker fetch requests.", nameof(redirect)),
             _ => throw new ArgumentOutOfRangeException(nameof(redirect), redirect, "Unsupported redirect mode.")
         };
 
@@ -130,6 +131,12 @@ internal sealed record FetchBindingOptions(
     {
         if (options.Mode == RequestMode.Navigate)
             throw new ArgumentException("The navigate request mode is not supported by Worker fetch requests.", nameof(options));
+    }
+
+    private static void ValidateRedirect(FetchOptions options)
+    {
+        if (options.Redirect == RequestRedirect.Error)
+            throw new ArgumentException("The error redirect mode is not supported by Worker fetch requests. Use manual redirect mode and check the response status code.", nameof(options));
     }
 
     private static void ValidateReferrer(string? referrer)

@@ -192,7 +192,7 @@ public sealed partial class BindingProxyTests
                 Credentials = RequestCredentials.Include,
                 Referrer = "https://referrer.example/page",
                 ReferrerPolicy = ReferrerPolicy.StrictOriginWhenCrossOrigin,
-                Redirect = RequestRedirect.Error,
+                Redirect = RequestRedirect.Manual,
                 Cache = RequestCache.Reload,
                 Integrity = "sha256-test",
                 KeepAlive = true
@@ -205,7 +205,7 @@ public sealed partial class BindingProxyTests
         Assert.Equal("include", options.GetProperty("credentials").GetString());
         Assert.Equal("https://referrer.example/page", options.GetProperty("referrer").GetString());
         Assert.Equal("strict-origin-when-cross-origin", options.GetProperty("referrerPolicy").GetString());
-        Assert.Equal("error", options.GetProperty("redirect").GetString());
+        Assert.Equal("manual", options.GetProperty("redirect").GetString());
         Assert.Equal("reload", options.GetProperty("cache").GetString());
         Assert.Equal("sha256-test", options.GetProperty("integrity").GetString());
         Assert.True(options.GetProperty("keepAlive").GetBoolean());
@@ -275,6 +275,10 @@ public sealed partial class BindingProxyTests
             environment.FetchAsync(
                 "https://origin.example/value",
                 new FetchOptions { Mode = RequestMode.Navigate }));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            environment.FetchAsync(
+                "https://origin.example/value",
+                new FetchOptions { Redirect = RequestRedirect.Error }));
         await Assert.ThrowsAsync<ArgumentException>(() =>
             environment.FetchAsync(
                 "https://origin.example/value",
