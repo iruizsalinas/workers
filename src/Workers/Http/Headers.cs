@@ -14,7 +14,7 @@ public sealed class Headers : IEnumerable<KeyValuePair<string, string>>
     /// <summary>Gets a comma-joined header value by name.</summary>
     public string? Get(string name)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ValidateName(name);
         return _headers.TryGetValue(name, out var entry) ? string.Join(", ", entry.Values) : null;
     }
 
@@ -32,14 +32,14 @@ public sealed class Headers : IEnumerable<KeyValuePair<string, string>>
     /// <summary>Gets all values for a header name.</summary>
     public IReadOnlyList<string> GetAll(string name)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ValidateName(name);
         return _headers.TryGetValue(name, out var entry) ? entry.Values.ToArray() : [];
     }
 
     /// <summary>Returns true when a header exists.</summary>
     public bool Contains(string name)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ValidateName(name);
         return _headers.ContainsKey(name);
     }
 
@@ -69,7 +69,7 @@ public sealed class Headers : IEnumerable<KeyValuePair<string, string>>
     /// <summary>Deletes a header by name.</summary>
     public bool Delete(string name)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ValidateName(name);
         return _headers.Remove(name);
     }
 
@@ -114,14 +114,19 @@ public sealed class Headers : IEnumerable<KeyValuePair<string, string>>
 
     private static void Validate(string name, string value)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ValidateName(name);
         ArgumentNullException.ThrowIfNull(value);
-
-        if (name.Any(static c => c <= 32 || c >= 127 || "()<>@,;:\\\"/[]?={}".Contains(c, StringComparison.Ordinal)))
-            throw new ArgumentException("Header names must be valid HTTP tokens.", nameof(name));
 
         if (value.Any(static c => c is '\0' or '\r' or '\n'))
             throw new ArgumentException("Header values cannot contain null, CR, or LF characters.", nameof(value));
+    }
+
+    private static void ValidateName(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        if (name.Any(static c => c <= 32 || c >= 127 || "()<>@,;:\\\"/[]?={}".Contains(c, StringComparison.Ordinal)))
+            throw new ArgumentException("Header names must be valid HTTP tokens.", nameof(name));
     }
 
     private sealed record HeaderEntry(string Name, List<string> Values);

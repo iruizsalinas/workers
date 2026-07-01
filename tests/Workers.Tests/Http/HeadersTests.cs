@@ -87,5 +87,20 @@ public sealed class HeadersTests
         var headers = new Headers();
 
         Assert.Throws<ArgumentException>(() => headers.Set("bad name", "value"));
+        Assert.Throws<ArgumentException>(() => headers.Append("bad name", "value"));
+        Assert.Throws<ArgumentException>(() => headers.Get("bad name"));
+        Assert.Throws<ArgumentException>(() => headers.GetAll("bad name"));
+        Assert.Throws<ArgumentException>(() => headers.Contains("bad name"));
+        Assert.Throws<ArgumentException>(() => headers.Delete("bad name"));
+    }
+
+    [Fact]
+    public void RejectsInvalidHeaderValues()
+    {
+        var headers = new Headers();
+
+        Assert.Throws<ArgumentException>(() => headers.Set("x-test", "bad\nvalue"));
+        Assert.Throws<ArgumentException>(() => headers.Append("x-test", "bad\rvalue"));
+        Assert.Throws<ArgumentException>(() => headers.Set("x-test", "bad\0value"));
     }
 }
