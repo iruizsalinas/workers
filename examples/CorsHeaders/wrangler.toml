@@ -1,0 +1,29 @@
+name = "workers-example-cors-headers"
+main = "dist/worker.js"
+compatibility_date = "2026-06-30"
+find_additional_modules = true
+no_bundle = true
+
+[build]
+command = "dotnet publish -c Release -r browser-wasm"
+
+[[rules]]
+type = "ESModule"
+globs = [
+  "dotnet.js",
+  "_framework/dotnet.boot.js",
+  "_framework/dotnet.js",
+  "_framework/dotnet.native.js",
+  "_framework/dotnet.runtime.js"
+]
+fallthrough = true
+
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/dotnet.native.wasm"]
+fallthrough = false
+
+[[rules]]
+type = "Data"
+globs = ["_framework/CorsHeaders.wasm", "_framework/System.*.wasm", "_framework/Workers.wasm", "_framework/*.dat"]
+fallthrough = true

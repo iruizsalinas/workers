@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Workers</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Iñigo Ruiz-Salinas</Authors>
+    <Description>Idiomatic C# bindings for Cloudflare Workers.</Description>
+    <PackageProjectUrl>https://github.com/iruizsalinas/workers</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/iruizsalinas/workers</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>cloudflare workers wasm webassembly edge serverless</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Required by the .NET JSExport/JSImport source generators used for Workers runtime interop. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="" />
+    <None Include="buildTransitive\Workers.props" Pack="true" PackagePath="buildTransitive" />
+    <None Include="buildTransitive\Workers.targets" Pack="true" PackagePath="buildTransitive" />
+    <None Include="buildTransitive\Workers.ILLink.Descriptors.xml" Pack="true" PackagePath="buildTransitive" />
+    <None Include="buildTransitive\Workers.Program.cs" Pack="true" PackagePath="buildTransitive" />
+    <None Include="buildTransitive\Workers.main.js" Pack="true" PackagePath="buildTransitive" />
+  </ItemGroup>
+</Project>

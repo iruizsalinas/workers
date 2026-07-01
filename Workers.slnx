@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/examples/">
+    <Project Path="examples/BasicResponse/BasicResponse.csproj" />
+    <Project Path="examples/CacheApi/CacheApi.csproj" />
+    <Project Path="examples/CorsHeaders/CorsHeaders.csproj" />
+    <Project Path="examples/HelloWorld/HelloWorld.csproj" />
+    <Project Path="examples/JsonApi/JsonApi.csproj" />
+    <Project Path="examples/KvBinding/KvBinding.csproj" />
+    <Project Path="examples/ProxyFetch/ProxyFetch.csproj" />
+    <Project Path="examples/QueueConsumer/QueueConsumer.csproj" />
+    <Project Path="examples/QueueProducer/QueueProducer.csproj" />
+    <Project Path="examples/R2Binding/R2Binding.csproj" />
+    <Project Path="examples/Redirects/Redirects.csproj" />
+    <Project Path="examples/ScheduledTask/ScheduledTask.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Workers/Workers.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Workers.Tests/Workers.Tests.csproj" />
+  </Folder>
+</Solution>

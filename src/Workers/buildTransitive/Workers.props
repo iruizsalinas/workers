@@ -1,0 +1,21 @@
+<Project>
+  <PropertyGroup>
+    <JsonSerializerIsReflectionEnabledByDefault Condition="'$(JsonSerializerIsReflectionEnabledByDefault)' == ''">true</JsonSerializerIsReflectionEnabledByDefault>
+    <BlazorWebAssemblyJiterpreter Condition="'$(BlazorWebAssemblyJiterpreter)' == ''">false</BlazorWebAssemblyJiterpreter>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
+    <OutputType>Exe</OutputType>
+    <InvariantGlobalization Condition="'$(InvariantGlobalization)' == '' and '$(WorkersInvariantGlobalization)' != 'false'">true</InvariantGlobalization>
+    <WasmMainJSPath Condition="'$(WasmMainJSPath)' == ''">$(MSBuildThisFileDirectory)Workers.main.js</WasmMainJSPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm' and '$(WorkersGenerateProgram)' != 'false'">
+    <Compile Include="$(MSBuildThisFileDirectory)Workers.Program.cs" Link="Workers.Program.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TrimmerRootAssembly Include="$(AssemblyName)" />
+    <TrimmerRootDescriptor Include="$(MSBuildThisFileDirectory)Workers.ILLink.Descriptors.xml" />
+  </ItemGroup>
+</Project>

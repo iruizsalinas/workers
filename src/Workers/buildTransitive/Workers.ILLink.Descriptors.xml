@@ -1,0 +1,25 @@
+<linker>
+  <assembly fullname="Workers">
+    <type fullname="Workers.Interop.Host">
+      <method name="PumpContinuations" />
+      <method name="FetchStart" />
+      <method name="FetchPoll" />
+      <method name="Poll" />
+      <method name="ScheduledStart" />
+      <method name="QueueStart" />
+      <method name="EmailStart" />
+      <method name="TailStart" />
+      <method name="DurableObjectFetchStart" />
+      <method name="DurableObjectAlarmStart" />
+      <method name="DurableObjectRpcStart" />
+      <method name="ManagedRpcTargetInvokeStart" />
+      <method name="ManagedRpcTargetDup" />
+      <method name="ManagedRpcTargetDisposeStart" />
+      <method name="DurableObjectWebSocketMessageStart" />
+      <method name="DurableObjectWebSocketCloseStart" />
+      <method name="DurableObjectWebSocketErrorStart" />
+      <method name="WaitUntilStart" />
+      <method name="DurableObjectStateCallbackStart" />
+    </type>
+  </assembly>
+</linker>

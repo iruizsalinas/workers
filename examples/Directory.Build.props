@@ -1,0 +1,15 @@
+<Project>
+  <Import Project="..\Directory.Build.props" />
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <WorkersUseProjectReference>true</WorkersUseProjectReference>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Workers\Workers.csproj" />
+  </ItemGroup>
+
+  <Import Project="..\src\Workers\buildTransitive\Workers.props" />
+</Project>
