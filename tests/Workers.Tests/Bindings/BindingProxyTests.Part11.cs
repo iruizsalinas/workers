@@ -30,6 +30,27 @@ public sealed partial class BindingProxyTests
     }
 
     [Fact]
+    public async Task WebSocketConnectRejectsInvalidSubprotocolsBeforeDispatch()
+    {
+        var dispatcher = new CapturingDispatcher("""{"handle":"ws:connected"}""");
+        using var _ = BindingDispatcher.Use(dispatcher);
+        var environment = EnvironmentWithInvocation("invocation-websocket-invalid-protocols");
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            environment.ConnectWebSocketAsync("wss://echo.example/socket", ["bad protocol"]));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            environment.ConnectWebSocketAsync("wss://echo.example/socket", ["bad,protocol"]));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            environment.ConnectWebSocketAsync("wss://echo.example/socket", ["bad\nprotocol"]));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            environment.ConnectWebSocketAsync("wss://echo.example/socket", ["é"]));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            environment.ConnectWebSocketAsync("wss://echo.example/socket", ["chat", "CHAT"]));
+
+        Assert.Empty(dispatcher.Invocations);
+    }
+
+    [Fact]
     public async Task WebSocketProxyDispatchesReceiveEvents()
     {
         var dispatcher = new CapturingDispatcher(
@@ -75,6 +96,24 @@ public sealed partial class BindingProxyTests
 
         using var receivePayload = JsonDocument.Parse(dispatcher.Invocations[1].PayloadJson);
         Assert.Equal("ws:2", receivePayload.RootElement.GetProperty("handle").GetString());
+    }
+
+    [Fact]
+    public async Task WebSocketCloseRejectsInvalidCodeAndReasonBeforeDispatch()
+    {
+        var dispatcher = new CapturingDispatcher("""{"client":"ws:client","server":"ws:server"}""");
+        using var _ = BindingDispatcher.Use(dispatcher);
+        var environment = EnvironmentWithInvocation("invocation-websocket-invalid-close");
+        var pair = await environment.WebSocketPairAsync();
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => pair.Server.CloseAsync(999));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => pair.Server.CloseAsync(1001));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => pair.Server.CloseAsync(2999));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => pair.Server.CloseAsync(5000));
+        await Assert.ThrowsAsync<ArgumentException>(() => pair.Server.CloseAsync(1000, new string('x', 124)));
+        await Assert.ThrowsAsync<ArgumentException>(() => pair.Server.CloseAsync(1000, new string('é', 62)));
+
+        Assert.Equal(["websocket.createPair"], dispatcher.Invocations.Select(static call => call.Operation));
     }
 
     [Fact]

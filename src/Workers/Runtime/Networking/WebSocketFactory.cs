@@ -37,7 +37,7 @@ internal static partial class WebSocketFactory
         ArgumentException.ThrowIfNullOrWhiteSpace(url);
         ArgumentNullException.ThrowIfNull(dispatcher);
 
-        var protocolList = protocols?.Select(RequireProtocol).ToArray() ?? [];
+        var protocolList = ValidateProtocols(protocols);
         var invocation = new BindingInvocation(
             invocationId,
             "$websocket",
@@ -53,11 +53,44 @@ internal static partial class WebSocketFactory
         return new WebSocket(invocationId, connected.Handle, dispatcher);
     }
 
-    private static string RequireProtocol(string value)
+    private static string[] ValidateProtocols(IEnumerable<string>? protocols)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value);
-        return value;
+        if (protocols is null)
+            return [];
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var values = new List<string>();
+        foreach (var protocol in protocols)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(protocol);
+            if (!IsHttpToken(protocol))
+                throw new ArgumentException($"'{protocol}' is not a valid WebSocket subprotocol.", nameof(protocols));
+
+            if (!seen.Add(protocol))
+                throw new ArgumentException($"Duplicate WebSocket subprotocol '{protocol}'.", nameof(protocols));
+
+            values.Add(protocol);
+        }
+
+        return values.ToArray();
     }
+
+    private static bool IsHttpToken(string value)
+    {
+        foreach (var character in value)
+        {
+            if (!IsHttpTokenCharacter(character))
+                return false;
+        }
+
+        return value.Length > 0;
+    }
+
+    private static bool IsHttpTokenCharacter(char character) =>
+        character is >= 'A' and <= 'Z' ||
+        character is >= 'a' and <= 'z' ||
+        character is >= '0' and <= '9' ||
+        character is '!' or '#' or '$' or '%' or '&' or '\'' or '*' or '+' or '-' or '.' or '^' or '_' or '`' or '|' or '~';
 
     private sealed class WebSocketPairPayload
     {

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -73,13 +74,16 @@ public sealed partial class WebSocket
             cancellationToken);
 
     /// <summary>Closes the socket.</summary>
-    public Task CloseAsync(ushort? code = null, string? reason = null, CancellationToken cancellationToken = default) =>
-        DispatchAsync(
+    public Task CloseAsync(ushort? code = null, string? reason = null, CancellationToken cancellationToken = default)
+    {
+        ValidateClose(code, reason);
+        return DispatchAsync(
             "websocket.close",
             JsonSerializer.Serialize(
                 new WebSocketCloseRequest { Handle = Handle, Code = code, Reason = reason },
                 JsonContext.WebSocketCloseRequest),
             cancellationToken);
+    }
 
     /// <summary>Creates an event stream for messages and close events received by this socket.</summary>
     public WebSocketEventStream Events() => new(this);
@@ -110,6 +114,15 @@ public sealed partial class WebSocket
             payloadJson);
 
         return _dispatcher.DispatchAsync(invocation, cancellationToken);
+    }
+
+    private static void ValidateClose(ushort? code, string? reason)
+    {
+        if (code is not null && code != 1000 && (code < 3000 || code > 4999))
+            throw new ArgumentOutOfRangeException(nameof(code), code, "WebSocket close codes must be 1000 or from 3000 through 4999.");
+
+        if (reason is not null && Encoding.UTF8.GetByteCount(reason) > 123)
+            throw new ArgumentException("WebSocket close reasons cannot exceed 123 UTF-8 bytes.", nameof(reason));
     }
 
     private sealed class WebSocketHandleRequest
