@@ -20,6 +20,7 @@ public sealed partial class RequestTests
     public void RequestBuilderPreservesExplicitContentType()
     {
         var request = Request.Builder("https://example.com/value")
+            .WithMethod("POST")
             .WithHeader("content-type", "application/merge-patch+json")
             .WithJson(new { ok = true })
             .Build();
@@ -33,6 +34,7 @@ public sealed partial class RequestTests
         var headers = new Headers().Set("x-test", "one");
 
         var request = Request.Builder("https://example.com/value")
+            .WithMethod("POST")
             .WithJson(new { ok = true })
             .WithHeaders(headers)
             .Build();
@@ -47,6 +49,7 @@ public sealed partial class RequestTests
     public void RequestBuilderUpdatesBodyContentTypeWhenBodyChanges()
     {
         var request = Request.Builder("https://example.com/value")
+            .WithMethod("POST")
             .WithText("hello")
             .WithBytes([1, 2, 3], "application/custom")
             .Build();
