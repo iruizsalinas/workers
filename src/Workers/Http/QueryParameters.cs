@@ -95,6 +95,10 @@ internal static class QueryObject
 {
     private static readonly JsonSerializerOptions DefaultJsonOptions = new(JsonSerializerDefaults.Web);
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Typed query binding intentionally uses reflection deserialization for user models; browser-wasm workers root the app assembly and keep reflection JSON enabled by default.")]
     public static T Deserialize<T>(
         IReadOnlyList<QueryParameter> entries,
         JsonSerializerOptions? options,
@@ -151,6 +155,10 @@ internal static class QueryObject
         return result;
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = "Typed query binding intentionally reflects over user models; browser-wasm workers root the app assembly by default.")]
     private static Dictionary<string, QueryTarget> GetTargets(Type type, JsonSerializerOptions options)
     {
         var comparer = options.PropertyNameCaseInsensitive ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -185,6 +193,10 @@ internal static class QueryObject
         return CreateScalar(values[0], targetType);
     }
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026",
+        Justification = "Typed query binding intentionally creates JSON nodes for user-model conversion; browser-wasm workers root the app assembly and keep reflection JSON enabled by default.")]
     private static JsonNode? CreateScalar(string value, Type targetType)
     {
         var nullableType = Nullable.GetUnderlyingType(targetType);
@@ -227,6 +239,10 @@ internal static class QueryObject
             _ => throw new FormatException($"'{value}' is not a valid boolean query value.")
         };
 
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2070",
+        Justification = "Typed query binding intentionally reflects over user collection shapes; browser-wasm workers root the app assembly by default.")]
     private static bool TryGetCollectionElementType(Type type, out Type elementType)
     {
         if (type == typeof(string))

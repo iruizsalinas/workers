@@ -1,9 +1,10 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Workers;
 
 /// <summary>Represents bindings supplied to a Worker deployment.</summary>
-public sealed class Env
+public sealed partial class Env
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -196,7 +197,9 @@ public sealed class Env
             RequireInvocationId(),
             "$runtime",
             "runtime.delay",
-            JsonSerializer.Serialize(new { milliseconds }, JsonOptions));
+            JsonSerializer.Serialize(
+                new RuntimeDelayRequest(milliseconds),
+                EnvJsonContext.Default.RuntimeDelayRequest));
 
         return _bindingDispatcher.DispatchAsync(invocation, cancellationToken);
     }
@@ -207,7 +210,7 @@ public sealed class Env
         var invocationId = RequireInvocationId();
         var invocation = new BindingInvocation(invocationId, "$abort", "abort.create", "{}");
         var result = await _bindingDispatcher.DispatchAsync(invocation, cancellationToken);
-        var envelope = JsonSerializer.Deserialize<AbortControllerEnvelope>(result, JsonOptions)
+        var envelope = JsonSerializer.Deserialize(result, EnvJsonContext.Default.AbortControllerEnvelope)
             ?? throw new WorkersException("Abort controller creation returned an empty result.");
 
         return new AbortController(invocationId, envelope.Handle, _bindingDispatcher);
@@ -264,5 +267,13 @@ public sealed class Env
         return (int)duration.TotalMilliseconds;
     }
 
+    private sealed record RuntimeDelayRequest(int Milliseconds);
+
     private sealed record AbortControllerEnvelope(string Handle);
+
+    [JsonSerializable(typeof(RuntimeDelayRequest))]
+    [JsonSerializable(typeof(AbortControllerEnvelope))]
+    private sealed partial class EnvJsonContext : JsonSerializerContext
+    {
+    }
 }
