@@ -210,7 +210,6 @@ internal static partial class Host
             ?? throw new WorkersException($"Queue batch '{batchParameterType.FullName}' could not be created.");
     }
 
-    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Queue message bodies are intentionally deserialized dynamically into the user's QueueMessageBatch<T> body type.")]
     private static QueueMessageBatch<T> CreateQueueBatchCore<T>(QueueBatchEnvelope envelope)
     {
         var messages = new List<QueueMessage<T>>(envelope.Messages.Count);
@@ -229,6 +228,7 @@ internal static partial class Host
         return new QueueMessageBatch<T>(envelope.Queue ?? "", messages);
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Queue message bodies are intentionally deserialized dynamically into the user's QueueMessageBatch<T> body type.")]
     private static T DeserializeQueueBody<T>(QueueMessageEnvelope message)
     {
         if (message.BodyBase64 is not null)

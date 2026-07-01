@@ -11,6 +11,8 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>cloudflare workers wasm webassembly edge serverless</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
     <!-- Required by the .NET JSExport/JSImport source generators used for Workers runtime interop. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
