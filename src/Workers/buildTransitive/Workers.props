@@ -1,7 +1,12 @@
 <Project>
+  <Import
+    Project="$(NuGetPackageRoot)\microsoft.net.illink.tasks\10.0.8\build\Microsoft.NET.ILLink.Tasks.props"
+    Condition="'$(ILLinkTargetsPath)' == '' and Exists('$(NuGetPackageRoot)\microsoft.net.illink.tasks\10.0.8\build\Microsoft.NET.ILLink.Tasks.props')" />
+
   <PropertyGroup>
     <JsonSerializerIsReflectionEnabledByDefault Condition="'$(JsonSerializerIsReflectionEnabledByDefault)' == ''">true</JsonSerializerIsReflectionEnabledByDefault>
     <BlazorWebAssemblyJiterpreter Condition="'$(BlazorWebAssemblyJiterpreter)' == ''">false</BlazorWebAssemblyJiterpreter>
+    <IsTrimmable Condition="'$(IsTrimmable)' == ''">true</IsTrimmable>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'browser-wasm'">
