@@ -12,6 +12,8 @@ public sealed partial class RequestTests
 
     private sealed record PagedQuery([property: JsonPropertyName("page_size")] int PageSize);
 
+    private sealed record TaggedQuery([property: JsonPropertyName("tag")] string[] Tags);
+
     private sealed class JsonPayload
     {
         public string ClientId { get; init; } = "";

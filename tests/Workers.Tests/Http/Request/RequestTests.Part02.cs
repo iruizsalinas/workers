@@ -129,6 +129,16 @@ public sealed partial class RequestTests
     }
 
     [Fact]
+    public void QueryParametersDeserializeRepeatedJsonPropertyNames()
+    {
+        var request = Request.Get("https://example.com/search?tag=math&tag=poetry");
+
+        var query = request.Query<TaggedQuery>();
+
+        Assert.Equal(["math", "poetry"], query.Tags);
+    }
+
+    [Fact]
     public void QueryParametersRejectInvalidTypedValues()
     {
         var request = Request.Get("https://example.com/search?page=nope");
@@ -171,12 +181,14 @@ public sealed partial class RequestTests
 
         var form = request.Form<SearchForm>();
         var paged = request.FormData().As<PagedQuery>();
+        var tagged = request.FormData().As<TaggedQuery>();
 
         Assert.Equal("Ada", form.Q);
         Assert.Equal(2, form.Page);
         Assert.True(form.Debug);
         Assert.Equal(["math", "poetry"], form.Tag);
         Assert.Equal(25, paged.PageSize);
+        Assert.Equal(["math", "poetry"], tagged.Tags);
     }
 
     [Fact]
