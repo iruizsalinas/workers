@@ -177,19 +177,17 @@ internal static partial class RuntimeAdapterWriter
               return '{}';
             }
             case 'native.request.text': {
-              return JSON.stringify({ value: await nativeRequest(invocation, payload.handle).text() });
+              return JSON.stringify({ value: await nativeRequest(invocation, payload.handle).clone().text() });
             }
             case 'native.request.bytes': {
-              const bytes = new Uint8Array(await nativeRequest(invocation, payload.handle).arrayBuffer());
+              const bytes = new Uint8Array(await nativeRequest(invocation, payload.handle).clone().arrayBuffer());
               return JSON.stringify({ bodyBase64: bytes.length === 0 ? null : toBase64(bytes) });
             }
             case 'native.response.text': {
-              const response = nativeResponse(invocation, payload.handle);
-              return JSON.stringify({ value: await new Response(response.body).text() });
+              return JSON.stringify({ value: await nativeResponse(invocation, payload.handle).clone().text() });
             }
             case 'native.response.bytes': {
-              const response = nativeResponse(invocation, payload.handle);
-              const bytes = new Uint8Array(await new Response(response.body).arrayBuffer());
+              const bytes = new Uint8Array(await nativeResponse(invocation, payload.handle).clone().arrayBuffer());
               return JSON.stringify({ bodyBase64: bytes.length === 0 ? null : toBase64(bytes) });
             }
             case 'stream.read': {

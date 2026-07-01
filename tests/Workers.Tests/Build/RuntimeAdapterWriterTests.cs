@@ -119,9 +119,9 @@ public sealed class RuntimeAdapterWriterTests
         Assert.Contains("function nativeRequest(invocation, handle)", adapter, StringComparison.Ordinal);
         Assert.Contains("if (envelope.nativeRequestHandle != null)", adapter, StringComparison.Ordinal);
         Assert.Contains("case 'native.request.text':", adapter, StringComparison.Ordinal);
-        Assert.Contains("await nativeRequest(invocation, payload.handle).text()", adapter, StringComparison.Ordinal);
+        Assert.Contains("await nativeRequest(invocation, payload.handle).clone().text()", adapter, StringComparison.Ordinal);
         Assert.Contains("case 'native.request.bytes':", adapter, StringComparison.Ordinal);
-        Assert.Contains("await nativeRequest(invocation, payload.handle).arrayBuffer()", adapter, StringComparison.Ordinal);
+        Assert.Contains("await nativeRequest(invocation, payload.handle).clone().arrayBuffer()", adapter, StringComparison.Ordinal);
         Assert.Contains("function toResponseEnvelope(invocation, value)", adapter, StringComparison.Ordinal);
         Assert.Contains("function isNullBodyStatus(status)", adapter, StringComparison.Ordinal);
         Assert.Contains("isNullBodyStatus(envelope.status) ? null : response.body", adapter, StringComparison.Ordinal);
@@ -138,9 +138,9 @@ public sealed class RuntimeAdapterWriterTests
         Assert.Contains("headers: headersEnvelope(response.headers)", adapter, StringComparison.Ordinal);
         Assert.Contains("nativeResponseHandle: retainNativeResponse(invocation, response)", adapter, StringComparison.Ordinal);
         Assert.Contains("case 'native.response.text':", adapter, StringComparison.Ordinal);
-        Assert.Contains("await new Response(response.body).text()", adapter, StringComparison.Ordinal);
+        Assert.Contains("await nativeResponse(invocation, payload.handle).clone().text()", adapter, StringComparison.Ordinal);
         Assert.Contains("case 'native.response.bytes':", adapter, StringComparison.Ordinal);
-        Assert.Contains("await new Response(response.body).arrayBuffer()", adapter, StringComparison.Ordinal);
+        Assert.Contains("await nativeResponse(invocation, payload.handle).clone().arrayBuffer()", adapter, StringComparison.Ordinal);
         Assert.Contains("nativeReaders: new Map()", adapter, StringComparison.Ordinal);
         Assert.Contains("case 'stream.read':", adapter, StringComparison.Ordinal);
         Assert.Contains("case 'stream.cancel':", adapter, StringComparison.Ordinal);
