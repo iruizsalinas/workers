@@ -59,6 +59,7 @@ internal sealed record FetchImageOptionsEnvelope(
         if (options is null)
             return null;
 
+        Validate(options);
         return new FetchImageOptionsEnvelope(
             options.Anim,
             options.Background,
@@ -84,6 +85,50 @@ internal sealed record FetchImageOptionsEnvelope(
             options.Sharpen,
             options.Trim,
             options.Width);
+    }
+
+    private static void Validate(FetchImageOptions options)
+    {
+        ValidateRange(options.Blur, 0, 250, nameof(options.Blur), "Image blur must be from 0 through 250.");
+        ValidatePositive(options.Height, nameof(options.Height), "Image height must be a positive integer.");
+        ValidatePositive(options.Width, nameof(options.Width), "Image width must be a positive integer.");
+        ValidateDoubleRange(options.Dpr, 0, 2, nameof(options.Dpr), "Image DPR must be greater than 0 and no more than 2.", excludeMinimum: true);
+        ValidateDoubleRange(options.Sharpen, 0, 10, nameof(options.Sharpen), "Image sharpen value must be from 0 through 10.");
+
+        if (options.Rotate is not null and not (90 or 180 or 270))
+            throw new ArgumentOutOfRangeException(nameof(options.Rotate), options.Rotate, "Image rotation must be 90, 180, or 270 degrees.");
+    }
+
+    private static void ValidatePositive(int? value, string parameterName, string message)
+    {
+        if (value is <= 0)
+            throw new ArgumentOutOfRangeException(parameterName, value, message);
+    }
+
+    private static void ValidateRange(int? value, int minimum, int maximum, string parameterName, string message)
+    {
+        if (value is null)
+            return;
+
+        if (value < minimum || value > maximum)
+            throw new ArgumentOutOfRangeException(parameterName, value, message);
+    }
+
+    private static void ValidateDoubleRange(
+        double? value,
+        double minimum,
+        double maximum,
+        string parameterName,
+        string message,
+        bool excludeMinimum = false)
+    {
+        if (value is null)
+            return;
+
+        if (!double.IsFinite(value.Value) ||
+            (excludeMinimum ? value <= minimum : value < minimum) ||
+            value > maximum)
+            throw new ArgumentOutOfRangeException(parameterName, value, message);
     }
 
     private static string? CompressionName(FetchImageCompression? compression) =>

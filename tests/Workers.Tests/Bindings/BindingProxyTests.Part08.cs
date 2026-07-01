@@ -177,6 +177,45 @@ public sealed partial class BindingProxyTests
     }
 
     [Fact]
+    public async Task FetchRejectsInvalidCloudflareImageOptions()
+    {
+        var dispatcher = new CapturingDispatcher("{}");
+        using var _ = BindingDispatcher.Use(dispatcher);
+        var environment = EnvironmentWithInvocation("invocation-fetch-image-invalid");
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            environment.FetchAsync(
+                "https://origin.example/image.jpg",
+                new FetchOptions { Cf = new FetchCfOptions { Image = new FetchImageOptions { Blur = 251 } } }));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            environment.FetchAsync(
+                "https://origin.example/image.jpg",
+                new FetchOptions { Cf = new FetchCfOptions { Image = new FetchImageOptions { Dpr = 0 } } }));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            environment.FetchAsync(
+                "https://origin.example/image.jpg",
+                new FetchOptions { Cf = new FetchCfOptions { Image = new FetchImageOptions { Height = 0 } } }));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            environment.FetchAsync(
+                "https://origin.example/image.jpg",
+                new FetchOptions { Cf = new FetchCfOptions { Image = new FetchImageOptions { Width = -1 } } }));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            environment.FetchAsync(
+                "https://origin.example/image.jpg",
+                new FetchOptions { Cf = new FetchCfOptions { Image = new FetchImageOptions { Rotate = 45 } } }));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            environment.FetchAsync(
+                "https://origin.example/image.jpg",
+                new FetchOptions { Cf = new FetchCfOptions { Image = new FetchImageOptions { Sharpen = 10.1 } } }));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => FetchImageQuality.FromValue(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => FetchImageQuality.FromValue(101));
+        Assert.Throws<ArgumentOutOfRangeException>(() => FetchImageGravity.FromCoordinates(-0.1, 0.5));
+        Assert.Throws<ArgumentOutOfRangeException>(() => FetchImageGravity.FromCoordinates(0.5, double.NaN));
+        Assert.Empty(dispatcher.Invocations);
+    }
+
+    [Fact]
     public async Task CryptoDispatchesDigest()
     {
         var expected = SHA256.HashData("Hello, World!"u8);

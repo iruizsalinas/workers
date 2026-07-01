@@ -34,6 +34,8 @@ internal sealed record FetchBindingOptions(
 
         ValidateCf(options.Cf);
         ValidateCacheMode(options);
+        ValidateMode(options);
+        ValidateReferrer(options.Referrer);
         var envelope = new FetchBindingOptions(
             options.Signal?.Handle,
             ModeName(options.Mode),
@@ -122,6 +124,21 @@ internal sealed record FetchBindingOptions(
     {
         if (options.Cache == RequestCache.OnlyIfCached && options.Mode != RequestMode.SameOrigin)
             throw new ArgumentException("The only-if-cached cache mode requires same-origin request mode.", nameof(options));
+    }
+
+    private static void ValidateMode(FetchOptions options)
+    {
+        if (options.Mode == RequestMode.Navigate)
+            throw new ArgumentException("The navigate request mode is not supported by Worker fetch requests.", nameof(options));
+    }
+
+    private static void ValidateReferrer(string? referrer)
+    {
+        if (referrer is null || referrer.Length == 0 || string.Equals(referrer, "about:client", StringComparison.Ordinal))
+            return;
+
+        if (!Uri.TryCreate(referrer, UriKind.Absolute, out _))
+            throw new ArgumentException("Fetch referrer must be an absolute URI, an empty string, or 'about:client'.", nameof(referrer));
     }
 
     private static void ValidateCf(FetchCfOptions? options)

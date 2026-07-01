@@ -14,7 +14,13 @@ public sealed class FetchImageQuality
     internal FetchImageQualityLevel? Level { get; }
 
     /// <summary>Creates a numeric quality value.</summary>
-    public static FetchImageQuality FromValue(int value) => new(value, level: null);
+    public static FetchImageQuality FromValue(int value)
+    {
+        if (value is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(value), value, "Image quality must be from 1 through 100.");
+
+        return new(value, level: null);
+    }
 
     /// <summary>Creates a named quality value.</summary>
     public static FetchImageQuality FromLevel(FetchImageQualityLevel level) => new(value: null, level);
@@ -40,7 +46,16 @@ public sealed class FetchImageGravity
     public static FetchImageGravity FromSide(FetchImageGravitySide side) => new(side, x: null, y: null);
 
     /// <summary>Creates coordinate-based gravity.</summary>
-    public static FetchImageGravity FromCoordinates(double x, double y) => new(side: null, x, y);
+    public static FetchImageGravity FromCoordinates(double x, double y)
+    {
+        if (!double.IsFinite(x) || x is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(x), x, "Image gravity X coordinate must be from 0.0 through 1.0.");
+
+        if (!double.IsFinite(y) || y is < 0 or > 1)
+            throw new ArgumentOutOfRangeException(nameof(y), y, "Image gravity Y coordinate must be from 0.0 through 1.0.");
+
+        return new(side: null, x, y);
+    }
 }
 
 /// <summary>Cloudflare image overlay repeat mode, either boolean or axis-based.</summary>

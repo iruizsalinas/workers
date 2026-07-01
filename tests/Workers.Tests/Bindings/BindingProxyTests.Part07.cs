@@ -263,4 +263,51 @@ public sealed partial class BindingProxyTests
 
         Assert.Empty(dispatcher.Invocations);
     }
+
+    [Fact]
+    public async Task FetchRejectsUnsupportedRequestInitOptions()
+    {
+        var dispatcher = new CapturingDispatcher("{}");
+        using var _ = BindingDispatcher.Use(dispatcher);
+        var environment = EnvironmentWithInvocation("invocation-fetch-init-invalid");
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            environment.FetchAsync(
+                "https://origin.example/value",
+                new FetchOptions { Mode = RequestMode.Navigate }));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            environment.FetchAsync(
+                "https://origin.example/value",
+                new FetchOptions { Referrer = "not a url" }));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            environment.FetchAsync(
+                "https://origin.example/value",
+                new FetchOptions { Referrer = "/relative" }));
+
+        Assert.Empty(dispatcher.Invocations);
+    }
+
+    [Fact]
+    public async Task GlobalFetchAllowsSupportedReferrerValues()
+    {
+        var response = ResponseEnvelope.FromResponse(Response.Text("referrer"));
+        var dispatcher = new CapturingDispatcher(
+            JsonSerializer.Serialize(response, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+            JsonSerializer.Serialize(response, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        using var _ = BindingDispatcher.Use(dispatcher);
+        var environment = EnvironmentWithInvocation("invocation-fetch-referrer");
+
+        await environment.FetchAsync(
+            "https://origin.example/value",
+            new FetchOptions { Referrer = "about:client" });
+        await environment.FetchAsync(
+            "https://origin.example/value",
+            new FetchOptions { Referrer = "data:text/plain,x" });
+
+        Assert.Equal(2, dispatcher.Invocations.Count);
+        using var aboutPayload = JsonDocument.Parse(dispatcher.Invocations[0].PayloadJson);
+        using var dataPayload = JsonDocument.Parse(dispatcher.Invocations[1].PayloadJson);
+        Assert.Equal("about:client", aboutPayload.RootElement.GetProperty("options").GetProperty("referrer").GetString());
+        Assert.Equal("data:text/plain,x", dataPayload.RootElement.GetProperty("options").GetProperty("referrer").GetString());
+    }
 }
