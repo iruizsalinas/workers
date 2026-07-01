@@ -34,6 +34,32 @@ public sealed class EntrypointScannerTests
     }
 
     [Fact]
+    public void DiscoversScheduledEntrypoint()
+    {
+        var manifest = EntrypointScanner.Scan(typeof(ValidWorker).Assembly);
+
+        var entrypoint = Assert.Single(
+            manifest.Entrypoints,
+            static entrypoint => entrypoint.ContainingType == typeof(ValidScheduledWorker).FullName);
+        Assert.Equal(EntrypointKind.Scheduled, entrypoint.Kind);
+        Assert.Equal(typeof(ValidScheduledWorker).FullName, entrypoint.ContainingType);
+        Assert.Equal(nameof(ValidScheduledWorker.ScheduledAsync), entrypoint.MethodName);
+    }
+
+    [Fact]
+    public void DiscoversQueueEntrypoint()
+    {
+        var manifest = EntrypointScanner.Scan(typeof(ValidWorker).Assembly);
+
+        var entrypoint = Assert.Single(
+            manifest.Entrypoints,
+            static entrypoint => entrypoint.ContainingType == typeof(ValidQueueWorker).FullName);
+        Assert.Equal(EntrypointKind.Queue, entrypoint.Kind);
+        Assert.Equal(typeof(ValidQueueWorker).FullName, entrypoint.ContainingType);
+        Assert.Equal(nameof(ValidQueueWorker.QueueAsync), entrypoint.MethodName);
+    }
+
+    [Fact]
     public void DiscoversTailEntrypoint()
     {
         var manifest = EntrypointScanner.Scan(typeof(ValidWorker).Assembly);
@@ -80,6 +106,24 @@ public sealed class EntrypointScannerTests
     {
         var ex = Assert.Throws<EntrypointException>(() =>
             InvokeValidateEmail(typeof(InvalidEmailWorker).GetMethod(nameof(InvalidEmailWorker.EmailAsync))!));
+
+        Assert.Contains("must accept", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsInvalidScheduledSignature()
+    {
+        var ex = Assert.Throws<EntrypointException>(() =>
+            InvokeValidateScheduled(typeof(InvalidScheduledWorker).GetMethod(nameof(InvalidScheduledWorker.ScheduledAsync))!));
+
+        Assert.Contains("must accept", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsInvalidQueueSignature()
+    {
+        var ex = Assert.Throws<EntrypointException>(() =>
+            InvokeValidateQueue(typeof(InvalidQueueWorker).GetMethod(nameof(InvalidQueueWorker.QueueAsync))!));
 
         Assert.Contains("must accept", ex.Message, StringComparison.Ordinal);
     }
@@ -165,6 +209,38 @@ public sealed class EntrypointScannerTests
     {
         var scanner = typeof(EntrypointScanner).GetMethod(
             "ValidateEmail",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        try
+        {
+            scanner.Invoke(null, [method]);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            throw ex.InnerException;
+        }
+    }
+
+    private static void InvokeValidateScheduled(MethodInfo method)
+    {
+        var scanner = typeof(EntrypointScanner).GetMethod(
+            "ValidateScheduled",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        try
+        {
+            scanner.Invoke(null, [method]);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is not null)
+        {
+            throw ex.InnerException;
+        }
+    }
+
+    private static void InvokeValidateQueue(MethodInfo method)
+    {
+        var scanner = typeof(EntrypointScanner).GetMethod(
+            "ValidateQueue",
             BindingFlags.NonPublic | BindingFlags.Static)!;
 
         try
@@ -268,6 +344,11 @@ public sealed class EntrypointScannerTests
         return assemblyBuilder;
     }
 
+    private sealed class QueuePayload
+    {
+        public required string Value { get; init; }
+    }
+
     private sealed class ValidWorker
     {
         [FetchEvent]
@@ -312,6 +393,54 @@ public sealed class EntrypointScannerTests
         public static Task EmailAsync(ForwardableEmailMessage message)
         {
             _ = message;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ValidScheduledWorker
+    {
+        [ScheduledEvent]
+        public static ValueTask ScheduledAsync(
+            ScheduledEvent scheduledEvent,
+            Env environment,
+            Context context)
+        {
+            _ = scheduledEvent;
+            _ = environment;
+            _ = context;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class InvalidScheduledWorker
+    {
+        public static Task ScheduledAsync(ScheduledEvent scheduledEvent)
+        {
+            _ = scheduledEvent;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ValidQueueWorker
+    {
+        [QueueEvent]
+        public static Task QueueAsync(
+            QueueMessageBatch<QueuePayload> batch,
+            Env environment,
+            Context context)
+        {
+            _ = batch;
+            _ = environment;
+            _ = context;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class InvalidQueueWorker
+    {
+        public static Task QueueAsync(QueueMessageBatch<QueuePayload> batch)
+        {
+            _ = batch;
             return Task.CompletedTask;
         }
     }

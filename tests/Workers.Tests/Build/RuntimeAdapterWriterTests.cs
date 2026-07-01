@@ -42,6 +42,49 @@ public sealed class RuntimeAdapterWriterTests
     }
 
     [Fact]
+    public void CanSpecializeAdapterFromNonFetchManifestEntrypoints()
+    {
+        var manifest = new BuildManifest(
+            "Example.dll",
+            "worker.js",
+            "Example.wasm",
+            [
+                new Entrypoint(EntrypointKind.Scheduled, "Example.Worker", "ScheduledAsync"),
+                new Entrypoint(EntrypointKind.Queue, "Example.Worker", "QueueAsync"),
+                new Entrypoint(EntrypointKind.Email, "Example.Worker", "EmailAsync"),
+                new Entrypoint(EntrypointKind.Tail, "Example.Worker", "TailAsync")
+            ])
+        {
+            DurableObjects =
+            [
+                new DurableObjectEntrypoint(
+                    "CounterObject",
+                    "Example.CounterObject",
+                    "FetchAsync",
+                    "AlarmAsync",
+                    WebSocketMessageMethodName: null,
+                    WebSocketCloseMethodName: null,
+                    WebSocketErrorMethodName: null)
+            ]
+        };
+
+        var adapter = RuntimeAdapterWriter.WriteAdapter(RuntimeAdapterOptions.FromManifest(manifest));
+
+        Assert.DoesNotContain("async fetch(request, env, ctx)", adapter, StringComparison.Ordinal);
+        Assert.Contains("async scheduled(event, env, ctx)", adapter, StringComparison.Ordinal);
+        Assert.Contains("async queue(batch, env, ctx)", adapter, StringComparison.Ordinal);
+        Assert.Contains("async email(message, env, ctx)", adapter, StringComparison.Ordinal);
+        Assert.Contains("async tail(events, env, ctx)", adapter, StringComparison.Ordinal);
+        Assert.Contains("async durableObjectFetch(exportName, state, request, env)", adapter, StringComparison.Ordinal);
+        Assert.Contains("async durableObjectAlarm(exportName, state, env, alarmInfo)", adapter, StringComparison.Ordinal);
+        Assert.Contains("function applyQueueDispositions(batch, value)", adapter, StringComparison.Ordinal);
+        Assert.Contains("function tailEventEnvelope(events)", adapter, StringComparison.Ordinal);
+        Assert.Contains("function toEmailMessageEnvelope(invocationId, message)", adapter, StringComparison.Ordinal);
+        Assert.Contains("function requiredDurableObjectState(invocation)", adapter, StringComparison.Ordinal);
+        Assert.DoesNotContain("{{WORKER_", adapter, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CanEmitCoreAdapterWithoutPlatformBindingApis()
     {
         var adapter = RuntimeAdapterWriter.WriteAdapter(RuntimeAdapterOptions.All with
