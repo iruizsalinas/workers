@@ -27,6 +27,9 @@ public sealed class Response
         if (webSocket is not null && status != 101)
             throw new ArgumentOutOfRangeException(nameof(status), status, "WebSocket responses must use status code 101.");
 
+        if (IsNullBodyStatus(status) && (!body.IsEmpty || nativeBodyStream is not null))
+            throw new ArgumentException($"Responses with status code {status} cannot have a body.", nameof(body));
+
         ValidateStatusText(statusText);
         Status = status;
         StatusText = statusText;
@@ -352,6 +355,9 @@ public sealed class Response
         if (statusText.Any(static c => c is '\0' or '\r' or '\n'))
             throw new ArgumentException("Status text cannot contain null, CR, or LF characters.", nameof(statusText));
     }
+
+    private static bool IsNullBodyStatus(int status) =>
+        status is 204 or 205 or 304;
 
     private async Task<string> DispatchNativeBodyAsync(string operation, CancellationToken cancellationToken)
     {

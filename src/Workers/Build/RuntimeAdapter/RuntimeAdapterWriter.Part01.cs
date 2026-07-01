@@ -476,7 +476,7 @@ internal static partial class RuntimeAdapterWriter
           if (envelope.nativeResponseHandle != null) {
             const response = nativeResponse(invocation, envelope.nativeResponseHandle);
             releaseNativeResponse(invocation, envelope.nativeResponseHandle);
-            return new Response(response.body, init);
+            return new Response(isNullBodyStatus(envelope.status) ? null : response.body, init);
           }
 
           if (envelope.nativeBodyStreamSource != null && envelope.nativeBodyStreamHandle != null) {
@@ -488,6 +488,10 @@ internal static partial class RuntimeAdapterWriter
           }
 
           return new Response(body, init);
+        }
+
+        function isNullBodyStatus(status) {
+          return status === 204 || status === 205 || status === 304;
         }
 
         function registerContextEffects(invocationId, ctx, value, host, runtime) {

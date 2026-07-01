@@ -204,7 +204,7 @@ public sealed partial class BindingProxyTests
     [Fact]
     public async Task DynamicDispatcherFetchesNamespacedWorker()
     {
-        var response = ResponseEnvelope.FromResponse(Response.Text("dynamic", 204));
+        var response = ResponseEnvelope.FromResponse(Response.Text("dynamic", 202));
         var dispatcher = new CapturingDispatcher(JsonSerializer.Serialize(response, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         using var _ = BindingDispatcher.Use(dispatcher);
         var environment = EnvironmentWithInvocation("invocation-dynamic-dispatcher");
@@ -213,7 +213,7 @@ public sealed partial class BindingProxyTests
             .Get("tenant-worker")
             .FetchAsync("https://tenant.example/path");
 
-        Assert.Equal(204, result.Status);
+        Assert.Equal(202, result.Status);
         Assert.Equal("dynamic", result.Body.AsText());
         var invocation = Assert.Single(dispatcher.Invocations);
         Assert.Equal("dynamicDispatcher.fetch", invocation.Operation);

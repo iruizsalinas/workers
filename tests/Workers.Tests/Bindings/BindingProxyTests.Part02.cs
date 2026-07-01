@@ -380,7 +380,7 @@ public sealed partial class BindingProxyTests
     [Fact]
     public async Task ServiceProxyDispatchesFetchOptions()
     {
-        var response = ResponseEnvelope.FromResponse(Response.Text("options", 204));
+        var response = ResponseEnvelope.FromResponse(Response.Empty(204));
         var dispatcher = new CapturingDispatcher(JsonSerializer.Serialize(response, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         using var _ = BindingDispatcher.Use(dispatcher);
         var environment = EnvironmentWithInvocation("invocation-service-options");

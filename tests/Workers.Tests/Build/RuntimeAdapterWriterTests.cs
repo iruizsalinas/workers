@@ -123,6 +123,8 @@ public sealed class RuntimeAdapterWriterTests
         Assert.Contains("case 'native.request.bytes':", adapter, StringComparison.Ordinal);
         Assert.Contains("await nativeRequest(invocation, payload.handle).arrayBuffer()", adapter, StringComparison.Ordinal);
         Assert.Contains("function toResponseEnvelope(invocation, value)", adapter, StringComparison.Ordinal);
+        Assert.Contains("function isNullBodyStatus(status)", adapter, StringComparison.Ordinal);
+        Assert.Contains("isNullBodyStatus(envelope.status) ? null : response.body", adapter, StringComparison.Ordinal);
         Assert.Contains("function toEnvironmentEnvelope(invocationId, env)", adapter, StringComparison.Ordinal);
         Assert.Contains("cf: request.cf ?? null", adapter, StringComparison.Ordinal);
         Assert.Contains("if (envelope.cf != null)", adapter, StringComparison.Ordinal);

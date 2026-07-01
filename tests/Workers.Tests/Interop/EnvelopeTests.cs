@@ -200,6 +200,31 @@ public sealed class EnvelopeTests
         Assert.Equal([31, 139], roundTripped.Body.Bytes.ToArray());
     }
 
+    [Theory]
+    [InlineData(204)]
+    [InlineData(205)]
+    [InlineData(304)]
+    public void ResponseEnvelopeRejectsBodiesForNullBodyStatusCodes(int status)
+    {
+        Assert.Throws<ArgumentException>(() => new ResponseEnvelope(
+            status,
+            [],
+            Convert.ToBase64String("body"u8)));
+
+        Assert.Throws<ArgumentException>(() => new ResponseEnvelope(
+            status,
+            [],
+            bodyBase64: null,
+            nativeBodyStreamSource: "response",
+            nativeBodyStreamHandle: "response:1"));
+
+        Assert.Throws<ArgumentException>(() => new ResponseEnvelope(
+            status,
+            [],
+            bodyBase64: null,
+            managedBodyStreamHandle: "stream:1"));
+    }
+
     [Fact]
     public void ResponseEnvelopePreservesNativeResponseHandle()
     {

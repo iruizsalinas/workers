@@ -43,6 +43,9 @@ internal sealed class ResponseEnvelope
         if (bodyHandleCount > 1)
             throw new ArgumentException("Response envelopes cannot contain more than one native or managed body handle.", nameof(nativeBodyStreamHandle));
 
+        if (IsNullBodyStatus(status) && (bodyBase64 is not null || nativeBodyStreamHandle is not null || managedBodyStreamHandle is not null))
+            throw new ArgumentException($"Response envelopes with status code {status} cannot have a body.", nameof(bodyBase64));
+
         NativeResponseHandle = nativeResponseHandle;
         NativeBodyStreamSource = NormalizeNativeBodyStreamSource(nativeBodyStreamSource, nativeBodyStreamHandle);
         NativeBodyStreamHandle = nativeBodyStreamHandle;
@@ -221,6 +224,9 @@ internal sealed class ResponseEnvelope
         if (statusText.Any(static c => c is '\0' or '\r' or '\n'))
             throw new ArgumentException("Status text cannot contain null, CR, or LF characters.", nameof(statusText));
     }
+
+    private static bool IsNullBodyStatus(int status) =>
+        status is 204 or 205 or 304;
 
     private static string? EncodeBodyName(ResponseEncodeBody encodeBody) =>
         encodeBody switch

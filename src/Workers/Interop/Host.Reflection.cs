@@ -132,6 +132,7 @@ internal static partial class Host
         return ResolveEntrypointMethod(type, entrypoint, kind);
     }
 
+    [UnconditionalSuppressMessage("Trimming", "IL2070", Justification = "Worker entrypoint methods come from the generated manifest; the app assembly is rooted by Workers.props.")]
     private static MethodInfo ResolveEntrypointMethod(
         Type type,
         RuntimeEntrypoint entrypoint,

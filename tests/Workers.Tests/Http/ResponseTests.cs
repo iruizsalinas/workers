@@ -21,6 +21,24 @@ public sealed class ResponseTests
         Assert.Throws<ArgumentOutOfRangeException>(() => Response.Error("nope", 200));
     }
 
+    [Theory]
+    [InlineData(204)]
+    [InlineData(205)]
+    [InlineData(304)]
+    public void NullBodyStatusCodesRejectBodies(int status)
+    {
+        Assert.Throws<ArgumentException>(() => Response.Text("no body allowed", status));
+        Assert.Throws<ArgumentException>(() => Response.Json(new { ok = true }, status));
+        Assert.Throws<ArgumentException>(() => Response.Bytes([1, 2, 3], status));
+        Assert.Throws<ArgumentException>(() => Response.Empty(status).WithText("no body allowed"));
+        Assert.Throws<ArgumentException>(() => Response.Builder(status).WithText("no body allowed").Build());
+
+        var empty = Response.Empty(status);
+
+        Assert.Equal(status, empty.Status);
+        Assert.True(empty.Body.IsEmpty);
+    }
+
     [Fact]
     public void RedirectRequiresRedirectStatusCode()
     {
