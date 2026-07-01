@@ -34,8 +34,8 @@ internal sealed partial class CacheBinding : ICache
 
     public Task PutAsync(string url, Response response, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(url);
         ArgumentNullException.ThrowIfNull(response);
+        ValidateKeyUrl(url);
         ValidatePut(response);
 
         return DispatchAsync(
@@ -71,7 +71,7 @@ internal sealed partial class CacheBinding : ICache
 
     public Task<Response?> MatchAsync(string url, CacheQueryOptions? options, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(url);
+        ValidateKeyUrl(url);
         return MatchAsync(new CacheKeyPayload { Url = url }, options, cancellationToken);
     }
 
@@ -83,6 +83,7 @@ internal sealed partial class CacheBinding : ICache
     public Task<Response?> MatchAsync(Request request, CacheQueryOptions? options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ValidateKeyUrl(request.Url);
         return MatchAsync(new CacheKeyPayload { Request = RequestEnvelope.FromRequest(request) }, options, cancellationToken);
     }
 
@@ -93,7 +94,7 @@ internal sealed partial class CacheBinding : ICache
 
     public Task<CacheDeleteResult> DeleteAsync(string url, CacheQueryOptions? options, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(url);
+        ValidateKeyUrl(url);
         return DeleteAsync(new CacheKeyPayload { Url = url }, options, cancellationToken);
     }
 
@@ -105,6 +106,7 @@ internal sealed partial class CacheBinding : ICache
     public Task<CacheDeleteResult> DeleteAsync(Request request, CacheQueryOptions? options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ValidateKeyUrl(request.Url);
         return DeleteAsync(new CacheKeyPayload { Request = RequestEnvelope.FromRequest(request) }, options, cancellationToken);
     }
 
@@ -158,10 +160,27 @@ internal sealed partial class CacheBinding : ICache
 
     private static void ValidatePut(Request request, Response response)
     {
+        ValidateKeyUrl(request.Url);
+
         if (!string.Equals(request.Method, "GET", StringComparison.Ordinal))
             throw new ArgumentException("The Workers Cache API only accepts GET request keys for cache.put.", nameof(request));
 
         ValidatePut(response);
+    }
+
+    private static void ValidateKeyUrl(string url)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(url);
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed))
+            throw new ArgumentException("The Workers Cache API only accepts absolute HTTP or HTTPS URL keys.", nameof(url));
+
+        ValidateKeyUrl(parsed);
+    }
+
+    private static void ValidateKeyUrl(Uri url)
+    {
+        if (url.Scheme is not ("http" or "https"))
+            throw new ArgumentException("The Workers Cache API only accepts absolute HTTP or HTTPS URL keys.", nameof(url));
     }
 
     private static void ValidatePut(Response response)

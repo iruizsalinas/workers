@@ -235,6 +235,29 @@ public sealed partial class BindingProxyTests
     }
 
     [Fact]
+    public async Task CacheRejectsInvalidUrlKeysBeforeDispatch()
+    {
+        var dispatcher = new CapturingDispatcher("{}");
+        using var _ = BindingDispatcher.Use(dispatcher);
+        var cache = EnvironmentWithInvocation("invocation-cache-invalid-urls").Cache();
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            cache.PutAsync("/relative", Response.Text("cached")));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            cache.MatchAsync("//origin.example/value"));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            cache.DeleteAsync("relative"));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            cache.PutAsync(Request.Get("ftp://origin.example/value"), Response.Text("cached")));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            cache.MatchAsync(Request.Get("data:text/plain,value")));
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            cache.DeleteAsync(Request.Get("file:///tmp/value")));
+
+        Assert.Empty(dispatcher.Invocations);
+    }
+
+    [Fact]
     public async Task DurableObjectNamespaceDispatchesIdsAndStubFetch()
     {
         var response = ResponseEnvelope.FromResponse(Response.Text("from durable object", 209));
