@@ -119,6 +119,23 @@ public sealed partial class HostTests
             return Task.FromResult(Response.Text($"{environment.Var("GREETING")} {request.Method} {request.Path}"));
         }
 
+        public static Task<Response> FetchWithSameNameHelperAsync(
+            Request request,
+            Env environment,
+            Context context)
+        {
+            _ = request;
+            _ = environment;
+            _ = context;
+            return FetchWithSameNameHelperAsync(request);
+        }
+
+        private static Task<Response> FetchWithSameNameHelperAsync(Request request)
+        {
+            _ = request;
+            return Task.FromResult(Response.Text("entrypoint"));
+        }
+
         public static async Task<Response> FetchKvAsync(
             Request request,
             Env environment,

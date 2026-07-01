@@ -33,6 +33,26 @@ public sealed partial class HostTests
     }
 
     [Fact]
+    public async Task FetchDispatchIgnoresSameNameHelperMethods()
+    {
+        var payload = new
+        {
+            manifest = Manifest("fetch", nameof(TestWorker.FetchWithSameNameHelperAsync)),
+            request = RequestEnvelope.FromRequest(Request.Get("https://example.com/helper")),
+            environment = new
+            {
+                bindings = new Dictionary<string, object?>()
+            }
+        };
+
+        var json = await Host.Fetch(JsonSerializer.Serialize(payload, JsonOptions));
+        var response = JsonSerializer.Deserialize<ResponseEnvelope>(json, JsonOptions)!.ToResponse();
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal("entrypoint", response.Body.AsText());
+    }
+
+    [Fact]
     public async Task FetchEntrypointCanUseKvBindingProxy()
     {
         var dispatcher = new CapturingDispatcher("""{"value":"from-kv"}""");

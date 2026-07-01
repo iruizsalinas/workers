@@ -129,8 +129,67 @@ internal static partial class Host
             .FirstOrDefault(static type => type is not null)
             ?? throw new WorkersException($"Entrypoint type '{entrypoint.ContainingType}' could not be found.");
 
-        return type.GetMethod(entrypoint.MethodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new WorkersException($"Entrypoint method '{entrypoint.ContainingType}.{entrypoint.MethodName}' could not be found.");
+        return ResolveEntrypointMethod(type, entrypoint, kind);
+    }
+
+    private static MethodInfo ResolveEntrypointMethod(
+        Type type,
+        RuntimeEntrypoint entrypoint,
+        RuntimeEntrypointKind kind)
+    {
+        var methods = type
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(method => method.Name == entrypoint.MethodName && EntrypointSignatureMatches(method, kind))
+            .ToArray();
+
+        return methods.Length switch
+        {
+            1 => methods[0],
+            0 => throw new WorkersException($"Entrypoint method '{entrypoint.ContainingType}.{entrypoint.MethodName}' could not be found."),
+            _ => throw new WorkersException($"Entrypoint method '{entrypoint.ContainingType}.{entrypoint.MethodName}' is ambiguous.")
+        };
+    }
+
+    private static bool EntrypointSignatureMatches(MethodInfo method, RuntimeEntrypointKind kind) =>
+        kind switch
+        {
+            RuntimeEntrypointKind.Fetch => HasReturn(method, typeof(Response))
+                && HasParameters(method, typeof(Request), typeof(Env), typeof(Context)),
+            RuntimeEntrypointKind.Scheduled => HasVoidLikeReturn(method)
+                && HasParameters(method, typeof(ScheduledEvent), typeof(Env), typeof(Context)),
+            RuntimeEntrypointKind.Queue => HasVoidLikeReturn(method) && HasQueueParameters(method),
+            RuntimeEntrypointKind.Email => HasVoidLikeReturn(method)
+                && HasParameters(method, typeof(ForwardableEmailMessage), typeof(Env), typeof(Context)),
+            RuntimeEntrypointKind.Tail => HasVoidLikeReturn(method)
+                && HasParameters(method, typeof(TailEvent), typeof(Env), typeof(Context)),
+            _ => false
+        };
+
+    private static bool HasReturn(MethodInfo method, Type resultType) =>
+        method.ReturnType == resultType
+        || method.ReturnType == typeof(Task<>).MakeGenericType(resultType)
+        || method.ReturnType == typeof(ValueTask<>).MakeGenericType(resultType);
+
+    private static bool HasVoidLikeReturn(MethodInfo method) =>
+        method.ReturnType == typeof(void)
+        || method.ReturnType == typeof(Task)
+        || method.ReturnType == typeof(ValueTask);
+
+    private static bool HasParameters(MethodInfo method, params Type[] expectedTypes)
+    {
+        var parameters = method.GetParameters();
+        return parameters.Length == expectedTypes.Length
+            && parameters.Select(static parameter => parameter.ParameterType).SequenceEqual(expectedTypes);
+    }
+
+    private static bool HasQueueParameters(MethodInfo method)
+    {
+        var parameters = method.GetParameters();
+        return parameters.Length == 3
+            && parameters[0].ParameterType.IsGenericType
+            && parameters[0].ParameterType.GetGenericTypeDefinition() == typeof(QueueMessageBatch<>)
+            && parameters[1].ParameterType == typeof(Env)
+            && parameters[2].ParameterType == typeof(Context);
     }
 
     private static RuntimeDurableObject ResolveDurableObject(RuntimeBuildManifest manifest, string exportName) =>
