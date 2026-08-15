@@ -4,7 +4,7 @@ namespace QueueProducer;
 
 public static class Worker
 {
-    [FetchEvent]
+    [Fetch]
     public static async Task<Response> FetchAsync(
         Request request,
         Env environment,

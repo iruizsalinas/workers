@@ -8,8 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Workers\Workers.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Workers.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Compiler\Compiler.csproj"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
   </ItemGroup>
 
-  <Import Project="..\src\Workers\buildTransitive\Workers.props" />
 </Project>

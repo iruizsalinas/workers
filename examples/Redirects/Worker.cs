@@ -4,7 +4,7 @@ namespace Redirects;
 
 public static class Worker
 {
-    [FetchEvent]
+    [Fetch]
     public static Task<Response> FetchAsync(
         Request request,
         Env environment,

@@ -4,13 +4,13 @@ namespace ProxyFetch;
 
 public static class Worker
 {
-    [FetchEvent]
+    [Fetch]
     public static async Task<Response> FetchAsync(
         Request request,
         Env environment,
         Context context)
     {
-        var response = await environment.FetchAsync("https://example.com");
+        var response = await Http.FetchAsync("https://example.com");
         return response.WithHeader("x-proxied-by", "Workers");
     }
 }

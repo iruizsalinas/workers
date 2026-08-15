@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: dotnet restore Workers.slnx
+      - run: dotnet test Workers.slnx -c Release --no-restore
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run test:runtime
+      - shell: pwsh
+        run: ./eng/verify-worker-artifacts.ps1 -SkipPublish
+      - run: dotnet pack src/Workers.csproj -c Release --no-restore -o .artifacts/package

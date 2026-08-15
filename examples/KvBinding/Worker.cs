@@ -4,7 +4,7 @@ namespace KvBinding;
 
 public static class Worker
 {
-    [FetchEvent]
+    [Fetch]
     public static async Task<Response> FetchAsync(
         Request request,
         Env environment,
@@ -14,7 +14,7 @@ public static class Worker
         var value = await environment.Kv("KV").GetTextAsync(key);
 
         return value is null
-            ? Response.Error("Not found", 404)
+            ? Response.Text("Not found", status: 404)
             : Response.Text(value);
     }
 }

@@ -1,0 +1,32 @@
+<Project>
+  <PropertyGroup>
+    <WorkerOutputPath Condition="'$(WorkerOutputPath)' == ''">$(MSBuildProjectDirectory)\dist\worker.js</WorkerOutputPath>
+    <_WorkersOutputDirectory>$([System.IO.Path]::GetDirectoryName('$(WorkerOutputPath)'))</_WorkersOutputDirectory>
+    <_WorkersApiAssembly Condition="Exists('$(MSBuildThisFileDirectory)..\lib\$(TargetFramework)\Workers.dll')">$(MSBuildThisFileDirectory)..\lib\$(TargetFramework)\Workers.dll</_WorkersApiAssembly>
+    <_WorkersApiAssembly Condition="'$(_WorkersApiAssembly)' == '' and Exists('$(MSBuildThisFileDirectory)..\bin\$(Configuration)\$(TargetFramework)\Workers.dll')">$(MSBuildThisFileDirectory)..\bin\$(Configuration)\$(TargetFramework)\Workers.dll</_WorkersApiAssembly>
+    <_WorkersCompilerPath Condition="Exists('$(MSBuildThisFileDirectory)..\tools\net10.0\Workers.Compiler.dll')">$(MSBuildThisFileDirectory)..\tools\net10.0\Workers.Compiler.dll</_WorkersCompilerPath>
+    <_WorkersCompilerPath Condition="'$(_WorkersCompilerPath)' == '' and Exists('$(MSBuildThisFileDirectory)..\Compiler\bin\$(Configuration)\net10.0\Workers.Compiler.dll')">$(MSBuildThisFileDirectory)..\Compiler\bin\$(Configuration)\net10.0\Workers.Compiler.dll</_WorkersCompilerPath>
+    <_WorkersDotNetHost Condition="'$(DotNetHostPath)' != ''">$(DotNetHostPath)</_WorkersDotNetHost>
+    <_WorkersDotNetHost Condition="'$(_WorkersDotNetHost)' == ''">dotnet</_WorkersDotNetHost>
+  </PropertyGroup>
+
+  <Target Name="CompileWorker"
+          AfterTargets="CoreCompile"
+          Condition="'$(IsCrossTargetingBuild)' != 'true'">
+    <PropertyGroup>
+      <_WorkersSourcesFile>$(IntermediateOutputPath)worker-sources.txt</_WorkersSourcesFile>
+    </PropertyGroup>
+    <Error Condition="'$(_WorkersCompilerPath)' == '' or !Exists('$(_WorkersCompilerPath)')"
+           Text="The Workers compiler was not found. Build or restore the Workers package before compiling this project." />
+    <Error Condition="'$(_WorkersApiAssembly)' == '' or !Exists('$(_WorkersApiAssembly)')"
+           Text="The Workers API reference assembly was not found." />
+
+    <MakeDir Directories="$(_WorkersOutputDirectory)" />
+    <WriteLinesToFile File="$(_WorkersSourcesFile)"
+                      Lines="@(Compile->'%(FullPath)')"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+    <Exec Command="&quot;$(_WorkersDotNetHost)&quot; &quot;$(_WorkersCompilerPath)&quot; --project &quot;$(MSBuildProjectDirectory)&quot; --sources-file &quot;$(_WorkersSourcesFile)&quot; --define &quot;$(DefineConstants)&quot; --workers-reference &quot;$(_WorkersApiAssembly)&quot; --output &quot;$(WorkerOutputPath)&quot;" />
+    <Message Importance="High" Text="Worker module written to '$(WorkerOutputPath)'." />
+  </Target>
+</Project>

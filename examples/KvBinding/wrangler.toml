@@ -1,33 +1,10 @@
 name = "workers-example-kv-binding"
 main = "dist/worker.js"
 compatibility_date = "2026-06-30"
-find_additional_modules = true
-no_bundle = true
 
 [build]
-command = "dotnet publish -c Release -r browser-wasm"
+command = "dotnet publish -c Release -p:NuGetAudit=false"
 
 [[kv_namespaces]]
 binding = "KV"
 id = "replace-with-kv-namespace-id"
-
-[[rules]]
-type = "ESModule"
-globs = [
-  "dotnet.js",
-  "_framework/dotnet.boot.js",
-  "_framework/dotnet.js",
-  "_framework/dotnet.native.js",
-  "_framework/dotnet.runtime.js"
-]
-fallthrough = true
-
-[[rules]]
-type = "CompiledWasm"
-globs = ["**/dotnet.native.wasm"]
-fallthrough = false
-
-[[rules]]
-type = "Data"
-globs = ["_framework/KvBinding.wasm", "_framework/System.*.wasm", "_framework/Workers.wasm", "_framework/*.dat"]
-fallthrough = true

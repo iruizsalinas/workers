@@ -4,13 +4,13 @@ namespace CacheApi;
 
 public static class Worker
 {
-    [FetchEvent]
+    [Fetch]
     public static async Task<Response> FetchAsync(
         Request request,
         Env environment,
         Context context)
     {
-        var cache = environment.Cache();
+        var cache = CacheStorage.Default;
         var cached = await cache.MatchAsync(request);
         if (cached is not null)
             return cached.WithHeader("x-cache", "hit");

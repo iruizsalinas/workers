@@ -1,61 +1,72 @@
 # Workers
 
-Write Cloudflare Workers in C# via WebAssembly.
+Write Cloudflare Workers in C# compiled to native JavaScript.
 
 ```csharp
 using Workers;
 
 public static class Worker
 {
-    [FetchEvent]
-    public static Task<Response> FetchAsync(
+    [Fetch]
+    public static Response Handle(
         Request request,
-        Env environment,
+        Env env,
         Context context)
     {
-        return Task.FromResult(
-            Response.Text("Hello from C# on Cloudflare Workers."));
+        return Response.Text("Hello from C#!");
     }
 }
 ```
 
-## Usage
+## Getting started
 
-Workers are plain static methods marked with event attributes:
-
-```csharp
-[FetchEvent]
-public static Task<Response> FetchAsync(
-    Request request,
-    Env environment,
-    Context context)
-```
-
-The package includes Worker-native APIs for requests, responses, routing, bindings, Durable Objects, queues, R2, D1, KV, caches, sockets, email, and other Workers platform features.
-
-## Publishing
-
-Publish with the `browser-wasm` runtime:
+Add the package to a .NET project:
 
 ```sh
-dotnet publish -c Release -r browser-wasm
+dotnet add package Workers
 ```
 
-Publishing writes a `dist/` folder with the Worker module, runtime adapter, and `_framework` files for deployment with Wrangler.
+Publish the Worker:
 
-Keep deployment settings like routes, bindings, migrations, vars, and observability in your Wrangler config.
+```sh
+dotnet publish -c Release
+```
 
-For HTTP-only Workers that do not call platform bindings or helper APIs, set `WorkersIncludePlatformApis` to `false` to emit a smaller adapter.
+The generated `dist/worker.js` is a native ES module ready for Wrangler. Configure bindings, routes, and other deployment settings in your Wrangler configuration.
 
-Workers defaults to invariant globalization for smaller bundles. If your Worker needs culture-specific formatting or comparisons, set `WorkersInvariantGlobalization` to `false`.
+## Workers API
+
+The package provides a focused C# API for Workers requests, responses, events, bindings, Durable Objects, queues, KV, R2, D1, Cache, WebSockets, TCP sockets, email, and other platform features.
+
+```csharp
+[Fetch]
+public static async Task<Response> Handle(
+    Request request,
+    Env env,
+    Context context)
+{
+    var users = env.Kv("USERS");
+    var user = await users.GetJsonAsync<User>("current");
+
+    if (user is null)
+        return Response.Text("User not found", status: 404);
+
+    return Response.Json(user);
+}
+```
+
+Familiar C# APIs such as `Task`, `Console`, `Guid`, and `DateTimeOffset` are supported where they map cleanly to the Workers runtime. Unsupported language or .NET features produce a compiler diagnostic instead of shipping a compatibility runtime.
+
+## Version 0.3
+
+Versions through `0.2.0` ran .NET on WebAssembly and supported managed assemblies and compatible NuGet packages. Every Worker also had to ship and initialize the .NET runtime, framework files, and a JavaScript interoperability adapter, resulting in large bundles, slow startup, and high CPU usage.
+
+Starting with `0.3.0`, Workers compiles a focused C# profile directly to native JavaScript. This removes the runtime and interoperability overhead and reduces generated output by up to 99%—from approximately 4.9 MB to about 200 bytes raw in a basic-response baseline. This is a breaking change: arbitrary NuGet packages and the complete .NET BCL are no longer supported.
 
 ## Examples
 
-Small standalone examples are in `examples/`. Each one has its own project file and `wrangler.toml`, so you can view or copy the shape you need.
-
 | Example | Shows |
 |---|---|
-| `BasicResponse` | Plain text response |
 | `JsonApi` | JSON response and request path |
 | `Redirects` | Redirects from query parameters |
 | `CorsHeaders` | CORS and response headers |
@@ -66,4 +77,4 @@ Small standalone examples are in `examples/`. Each one has its own project file 
 | `QueueProducer` | Sending queue messages |
 | `QueueConsumer` | Consuming queue messages |
 | `ScheduledTask` | Cron/scheduled events |
-| `HelloWorld` | Minimal router usage |
+| `HelloWorld` | Minimal path dispatch |

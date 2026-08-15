@@ -1,0 +1,63 @@
+using static BindingIntrinsicRegistry;
+
+internal static class
+PlatformIntrinsics
+{
+    public static IReadOnlyDictionary<(string Type, string Method), BindingIntrinsic> Methods { get; } =
+        new Dictionary<(string Type, string Method), BindingIntrinsic>
+        {
+            [Key("Workers.IDynamicDispatcherBinding", "Get")] = Direct("get"),
+            [Key("Workers.IRateLimiter", "LimitAsync")] = new("limit", BindingIntrinsicKind.RateLimit),
+            [Key("Workers.IAnalyticsEngineDataset", "WriteDataPoint")] = Direct("writeDataPoint"),
+            [Key("Workers.ISendEmailBinding", "SendAsync")] = Direct("send"),
+            [Key("Workers.ISendEmailBinding", "SendRawAsync")] = Direct("send"),
+            [Key("Workers.IVersionMetadataBinding", "GetAsync")] = new("", BindingIntrinsicKind.Identity),
+            [Key("Workers.IAiBinding", "RunAsync")] = Direct("run"),
+            [Key("Workers.IAiBinding", "RunBytesAsync")] = Direct("run"),
+            [Key("Workers.IWorkflowBinding", "CreateAsync")] = Direct("create"),
+            [Key("Workers.IWorkflowBinding", "GetAsync")] = Direct("get"),
+            [Key("Workers.IWorkflowBinding", "CreateBatchAsync")] = Direct("createBatch"),
+            [Key("Workers.WorkflowInstance", "StatusAsync")] = Direct("status"),
+            [Key("Workers.WorkflowInstance", "PauseAsync")] = Direct("pause"),
+            [Key("Workers.WorkflowInstance", "ResumeAsync")] = Direct("resume"),
+            [Key("Workers.WorkflowInstance", "TerminateAsync")] = Direct("terminate"),
+            [Key("Workers.WorkflowInstance", "RestartAsync")] = Direct("restart"),
+            [Key("Workers.WorkflowInstance", "SendEventAsync")] = Direct("sendEvent"),
+            [Key("Workers.IImagesBinding", "Input")] = Direct("input"),
+            [Key("Workers.IImagesBinding", "InfoAsync")] = Direct("info"),
+            [Key("Workers.ImagesPipeline", "Transform")] = Direct("transform"),
+            [Key("Workers.ImagesPipeline", "Draw")] = Direct("draw"),
+            [Key("Workers.ImagesPipeline", "OutputAsync")] = Direct("output"),
+            [Key("Workers.IMediaBinding", "Input")] = Direct("input"),
+            [Key("Workers.MediaPipeline", "Transform")] = Direct("transform"),
+            [Key("Workers.MediaPipeline", "Output")] = Direct("output"),
+            [Key("Workers.MediaOutput", "ResponseAsync")] = Direct("response"),
+            [Key("Workers.MediaOutput", "MediaAsync")] = Direct("media"),
+            [Key("Workers.MediaOutput", "ContentTypeAsync")] = Direct("contentType"),
+            [Key("Workers.IVectorizeIndex", "InsertAsync")] = Direct("insert"),
+            [Key("Workers.IVectorizeIndex", "UpsertAsync")] = Direct("upsert"),
+            [Key("Workers.IVectorizeIndex", "QueryAsync")] = Direct("query"),
+            [Key("Workers.IVectorizeIndex", "GetByIdsAsync")] = Direct("getByIds"),
+            [Key("Workers.IVectorizeIndex", "DeleteByIdsAsync")] = Direct("deleteByIds"),
+            [Key("Workers.IVectorizeIndex", "QueryByIdAsync")] = Direct("queryById"),
+            [Key("Workers.IVectorizeIndex", "DescribeAsync")] = Direct("describe"),
+            [Key("Workers.ISecretStoreBinding", "GetAsync")] = Direct("get"),
+            [Key("Workers.IHyperdriveBinding", "GetConnectionInfoAsync")] = new("", BindingIntrinsicKind.Identity),
+            [Key("Workers.RpcStub", "DisposeAsync")] = new("", BindingIntrinsicKind.Dispose),
+            [Key("Workers.ForwardableEmailMessage", "Reject")] = Direct("setReject"),
+            [Key("Workers.ForwardableEmailMessage", "ForwardAsync")] = Direct("forward"),
+            [Key("Workers.R2MultipartUpload", "UploadPartAsync")] = Direct("uploadPart"),
+            [Key("Workers.R2MultipartUpload", "CompleteAsync")] = Direct("complete"),
+            [Key("Workers.R2MultipartUpload", "AbortAsync")] = Direct("abort"),
+            [Key("Workers.D1DatabaseSession", "GetBookmarkAsync")] = Direct("getBookmark"),
+            [Key("Workers.RawBinding", "GetPropertyAsync")] = Direct("getProperty"),
+            [Key("Workers.RawBinding", "InvokeAsync")] = new("", BindingIntrinsicKind.ServiceRpc),
+            [Key("Workers.RawBinding", "InvokeVoidAsync")] = new("", BindingIntrinsicKind.ServiceRpc),
+            [Key("Workers.RpcStub", "InvokeAsync")] = new("", BindingIntrinsicKind.ServiceRpc),
+            [Key("Workers.RpcStub", "InvokeStubAsync")] = new("", BindingIntrinsicKind.ServiceRpc),
+            [Key("Workers.RpcStub", "CallAsync")] = new("", BindingIntrinsicKind.ServiceRpc),
+            [Key("Workers.RpcStub", "CallStubAsync")] = new("", BindingIntrinsicKind.ServiceRpc),
+            [Key("Workers.RpcStub", "DuplicateAsync")] = Direct("duplicate"),
+
+        };
+}

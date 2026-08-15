@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Workers</PackageId>
+    <Version>0.2.0</Version>
+    <Authors>Iñigo Ruiz-Salinas</Authors>
+    <Description>Compile a focused C# profile directly to minimal Cloudflare Workers JavaScript.</Description>
+    <PackageProjectUrl>https://github.com/iruizsalinas/workers</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/iruizsalinas/workers</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>cloudflare workers csharp javascript edge serverless</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);IncludeCompilerHost</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Api\**\*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="Compiler\Compiler.csproj"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="" />
+    <None Include="Build\Workers.targets" Pack="true" PackagePath="buildTransitive" />
+  </ItemGroup>
+  <Target Name="IncludeCompilerHost">
+    <PropertyGroup>
+      <_CompilerHostDirectory>$(MSBuildProjectDirectory)\Compiler\bin\$(Configuration)\net10.0</_CompilerHostDirectory>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_CompilerHostDirectory)\Workers.Compiler.dll')"
+           Text="The compiler host was not found in '$(_CompilerHostDirectory)'. Build the Workers project before packing." />
+    <Error Condition="!Exists('$(_CompilerHostDirectory)\Workers.Compiler.deps.json') or !Exists('$(_CompilerHostDirectory)\Workers.Compiler.runtimeconfig.json')"
+           Text="The compiler host runtime files were not found in '$(_CompilerHostDirectory)'." />
+    <ItemGroup>
+      <_CompilerHostFile Include="$(_CompilerHostDirectory)\*.dll" />
+      <_CompilerHostFile Include="$(_CompilerHostDirectory)\Workers.Compiler.deps.json" />
+      <_CompilerHostFile Include="$(_CompilerHostDirectory)\Workers.Compiler.runtimeconfig.json" />
+      <TfmSpecificPackageFile Include="@(_CompilerHostFile)">
+        <PackagePath>tools/net10.0/%(_CompilerHostFile.FileName)%(_CompilerHostFile.Extension)</PackagePath>
+      </TfmSpecificPackageFile>
+    </ItemGroup>
+  </Target>
+</Project>

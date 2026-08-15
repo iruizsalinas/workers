@@ -4,7 +4,7 @@ namespace QueueConsumer;
 
 public static class Worker
 {
-    [QueueEvent]
+    [Queue]
     public static async Task QueueAsync(
         QueueMessageBatch<Job> batch,
         Env environment,
@@ -12,7 +12,7 @@ public static class Worker
     {
         foreach (var message in batch)
         {
-            await environment.Log().LogAsync($"Processing {message.Body.Path}");
+            Console.WriteLine($"Processing {message.Body.Path}");
             message.Ack();
         }
     }

@@ -3,3 +3,4 @@ obj/
 dist/
 .wrangler/
 .artifacts/
+node_modules/

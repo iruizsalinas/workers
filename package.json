@@ -1,0 +1,14 @@
+{
+  "name": "workers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:examples": "node eng/build-examples.mjs",
+    "test:runtime": "npm run build:examples && node eng/run-runtime-tests.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.21.3",
+    "vitest": "4.1.10",
+    "wrangler": "4.123.0"
+  }
+}
