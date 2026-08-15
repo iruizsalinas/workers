@@ -7,12 +7,24 @@
     {
       "binding": "KV",
       "id": "00000000000000000000000000000000"
+    },
+    {
+      "binding": "USERS",
+      "id": "11111111111111111111111111111111"
+    },
+    {
+      "binding": "CONTENT",
+      "id": "22222222222222222222222222222222"
     }
   ],
   "r2_buckets": [
     {
       "binding": "BUCKET",
       "bucket_name": "workers-csharp-runtime-tests"
+    },
+    {
+      "binding": "FILES",
+      "bucket_name": "workers-csharp-file-gateway-tests"
     }
   ],
   "d1_databases": [
@@ -22,6 +34,14 @@
       "database_id": "00000000-0000-0000-0000-000000000000"
     }
   ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "JOBS",
+        "queue": "workers-csharp-job-processor-tests"
+      }
+    ]
+  },
   "durable_objects": {
     "bindings": [
       {
@@ -35,5 +55,8 @@
       "tag": "v1",
       "new_sqlite_classes": ["EchoObject"]
     }
-  ]
+  ],
+  "vars": {
+    "ORIGIN_BASE": "https://origin.test"
+  }
 }

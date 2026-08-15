@@ -9,7 +9,7 @@ public sealed class Request
     public Headers Headers => WorkerApi.NotExecutable<Headers>();
     public Body Body => WorkerApi.NotExecutable<Body>();
 
-    public ReadableStream BodyStream() => WorkerApi.NotExecutable<ReadableStream>();
+    public ReadableStream? BodyStream() => WorkerApi.NotExecutable<ReadableStream?>();
     public QueryParameters QueryParameters => WorkerApi.NotExecutable<QueryParameters>();
 
     public Task<string> TextAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<string>>();

@@ -2,6 +2,10 @@ namespace Workers;
 
 public sealed class ReadableStream
 {
+    public IReadOnlyList<ReadableStream> Tee() =>
+        WorkerApi.NotExecutable<IReadOnlyList<ReadableStream>>();
+    public Task PipeToAsync(DigestStream destination, CancellationToken cancellationToken = default) =>
+        WorkerApi.NotExecutable<Task>();
     public static ReadableStream FromAsyncEnumerable(
         IAsyncEnumerable<ReadOnlyMemory<byte>> chunks, CancellationToken cancellationToken = default) =>
         WorkerApi.NotExecutable<ReadableStream>();

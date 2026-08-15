@@ -5,6 +5,15 @@ import kvBinding from "../../../examples/KvBinding/dist/worker.js";
 import r2Binding from "../../../examples/R2Binding/dist/worker.js";
 
 describe("native storage bindings", () => {
+  const invokeNative = async (path) => {
+    const nativeBindings = await import("../fixtures/NativeBindings/dist/worker.js");
+    return nativeBindings.default.fetch(
+      new Request(`https://worker.test${path}`),
+      env,
+      createExecutionContext(),
+    );
+  };
+
   it("executes prepared statements against the local D1 simulator", async () => {
     const nativeBindings = await import("../fixtures/NativeBindings/dist/worker.js");
     const response = await nativeBindings.default.fetch(
@@ -14,6 +23,42 @@ describe("native storage bindings", () => {
     );
 
     await expect(response.json()).resolves.toEqual({ name: "Ada" });
+  });
+
+  it("round-trips KV metadata, listing, and deletion", async () => {
+    const response = await invokeNative("/kv-lifecycle");
+    const result = await response.json();
+
+    expect(result).toMatchObject({
+      value: "stored",
+      listComplete: true,
+      deleted: null,
+    });
+    expect(result.listed).toMatch(/^[-0-9a-f]{36}$/i);
+  });
+
+  it("round-trips R2 metadata, listing, and deletion", async () => {
+    const response = await invokeNative("/r2-lifecycle");
+    const result = await response.json();
+
+    expect(result.key).toBe(result.listed);
+    expect(result).toMatchObject({
+      size: 8,
+      contentType: "text/custom",
+      deleted: null,
+    });
+  });
+
+  it("executes D1 batches, raw rows, and sessions", async () => {
+    const response = await invokeNative("/d1-advanced");
+
+    await expect(response.json()).resolves.toEqual({
+      firstSuccess: true,
+      secondSuccess: true,
+      firstValue: 1,
+      secondValue: 2,
+      hasBookmark: true,
+    });
   });
   it("reads text from the local KV simulator and handles misses", async () => {
     const key = `key-${crypto.randomUUID()}`;

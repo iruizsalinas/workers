@@ -35,12 +35,51 @@ public static class Worker
             });
         }
 
+        if (request.Path == "/http-semantics")
+        {
+            var original = request.Headers;
+            var clone = original.Clone();
+            clone.Set("x-cloned", "yes");
+            clone.Delete("x-remove");
+            var responseHeaders = Response.Text("cookies").Headers;
+            responseHeaders.Append("set-cookie", "first=1");
+            responseHeaders.Append("set-cookie", "second=2");
+            return Response.Json(new
+            {
+                pathAndQuery = request.PathAndQuery,
+                values = request.QueryParameters.GetAll("value"),
+                originalCount = original.Count,
+                cloneCount = clone.Count,
+                originalCloned = original.Contains("x-cloned"),
+                cloneRemoved = clone.Contains("x-remove"),
+                cookies = responseHeaders.GetSetCookie()
+            });
+        }
+
+        if (request.Path == "/cache-lifecycle")
+        {
+            var cache = await CacheStorage.OpenAsync("runtime-intrinsics");
+            var key = $"https://cache.test/{Guid.NewGuid()}";
+            var cacheable = Response.Text("cached")
+                .WithHeader("cache-control", "public, max-age=60");
+            await cache.PutAsync(key, cacheable);
+            var found = await cache.MatchAsync(key);
+            var deleted = await cache.DeleteAsync(key);
+            var missing = await cache.MatchAsync(key);
+            return Response.Json(new
+            {
+                found = found is not null,
+                deleted,
+                missing = missing is null
+            });
+        }
+
         if (request.Path == "/body")
             return Response.FromBody(Body.Text("body-value"));
 
         if (request.Path == "/stream")
         {
-            var bytes = await request.BodyStream().ReadAllBytesAsync();
+            var bytes = await request.BodyStream()!.ReadAllBytesAsync();
             return Response.Json(new { length = bytes.Length });
         }
 

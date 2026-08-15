@@ -3,6 +3,23 @@ namespace Workers.Compiler.Tests;
 public sealed class ArithmeticTests
 {
     [Fact]
+    public void PreservesShortCircuitBooleanOperators()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) =>
+                    Response.Json(new { both = true && false, either = true || false });
+            }
+            """);
+
+        Assert.Contains("both: true && false", module);
+        Assert.Contains("either: true || false", module);
+    }
+
+    [Fact]
     public void PreservesInt32ArithmeticAndDivisionSemantics()
     {
         var module = Compile("""

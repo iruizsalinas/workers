@@ -3,6 +3,25 @@ namespace Workers.Compiler.Tests;
 public sealed class RuntimeValueTests
 {
     [Fact]
+    public void ErasesNullableSuppression()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    string? value = "present";
+                    return Response.Text(value!);
+                }
+            }
+            """);
+
+        Assert.Contains("return new Response(value);", module);
+    }
+
+    [Fact]
     public void LowersExplicitConsoleGuidAndRandomBclIntrinsics()
     {
         var module = Compile("""

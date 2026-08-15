@@ -3,6 +3,7 @@ namespace Workers;
 public sealed class Response
 {
     public int Status => WorkerApi.NotExecutable<int>();
+    public bool IsSuccessStatusCode => WorkerApi.NotExecutable<bool>();
     public string StatusText => WorkerApi.NotExecutable<string>();
     public Headers Headers => WorkerApi.NotExecutable<Headers>();
     public Body Body => WorkerApi.NotExecutable<Body>();
@@ -14,6 +15,9 @@ public sealed class Response
     public static Response Json<T>(T body, int status = 200, object? options = null, string? statusText = null) => WorkerApi.NotExecutable<Response>();
     public static Response Redirect(string location, int status = 302, string? statusText = null) => WorkerApi.NotExecutable<Response>();
     public static Response FromBody(Body body, int status = 200, string? statusText = null) => WorkerApi.NotExecutable<Response>();
+    public static Response FromStream(ReadableStream stream, int status = 200, string? statusText = null) => WorkerApi.NotExecutable<Response>();
+    public static Response FromStream(ReadableStream stream, Headers headers, int status = 200) => WorkerApi.NotExecutable<Response>();
+    public static Response WebSocket(WebSocket socket) => WorkerApi.NotExecutable<Response>();
     public Response WithHeader(string name, string value) => WorkerApi.NotExecutable<Response>();
     public Response AppendHeader(string name, string value) => WorkerApi.NotExecutable<Response>();
     public Response WithoutHeader(string name) => WorkerApi.NotExecutable<Response>();

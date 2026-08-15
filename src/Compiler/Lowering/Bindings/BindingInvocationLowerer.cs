@@ -16,11 +16,13 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.KvBytesGet => EmitKvGet(receiver, intrinsic.JavascriptName, arguments, "arrayBuffer"),
             BindingIntrinsicKind.KvJsonGet => EmitKvGet(receiver, intrinsic.JavascriptName, arguments, "json"),
             BindingIntrinsicKind.KvJsonPut => EmitKvJsonPut(receiver, intrinsic.JavascriptName, arguments),
+            BindingIntrinsicKind.DurableObjectGet => EmitDurableObjectGet(receiver, method, arguments),
             BindingIntrinsicKind.CacheQuery => EmitCacheQuery(receiver, intrinsic.JavascriptName, arguments),
             BindingIntrinsicKind.CacheMatch => $"{EmitCacheQuery(receiver, intrinsic.JavascriptName, arguments)}.then(value => value ?? null)",
             BindingIntrinsicKind.ServiceRpc => EmitServiceRpc(receiver, arguments),
             BindingIntrinsicKind.Property => $"{receiver}.{intrinsic.JavascriptName}",
             BindingIntrinsicKind.Identity => receiver,
+            BindingIntrinsicKind.HeadersClone => $"new Headers({receiver})",
             BindingIntrinsicKind.Fluent => $"(value => {{ value.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))}); return value; }})({receiver})",
             BindingIntrinsicKind.JsonParse => $"JSON.parse({receiver}.{intrinsic.JavascriptName})",
             BindingIntrinsicKind.Dispose => $"{receiver}[Symbol.asyncDispose]?.()",
@@ -44,6 +46,8 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.SocketCloseWritable => EmitSocketCloseWritable(receiver),
             BindingIntrinsicKind.BodyText => $"typeof {receiver} === \"string\" ? {receiver} : new TextDecoder().decode({receiver})",
             BindingIntrinsicKind.BodyJson => $"JSON.parse(typeof {receiver} === \"string\" ? {receiver} : new TextDecoder().decode({receiver}))",
+            BindingIntrinsicKind.WebSocketJson => $"{receiver}.send(JSON.stringify({arguments[0].Value}))",
+            BindingIntrinsicKind.WebSocketMessageText => $"typeof {receiver} === \"string\" ? {receiver} : new TextDecoder().decode({receiver})",
             BindingIntrinsicKind.Bytes => $"{receiver}.{intrinsic.JavascriptName}().then(value => new Uint8Array(value))",
             _ => throw new InvalidOperationException($"Unknown binding intrinsic kind '{intrinsic.Kind}'.")
         };
@@ -89,6 +93,17 @@ internal sealed partial class JavaScriptEmitter
         return $"{receiver}.{method}({key}, {nativeOptions})";
     }
 
+    private static string EmitDurableObjectGet(
+        string receiver,
+        IMethodSymbol method,
+        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
+    {
+        var invocation = $"{receiver}.get({string.Join(", ", arguments.Select(item => item.Value))})";
+        return method.Parameters[0].Type.SpecialType == SpecialType.System_String
+            ? $"{invocation}.then(value => value ?? null)"
+            : invocation;
+    }
+
     private static string EmitKvJsonPut(
         string receiver,
         string method,
@@ -123,4 +138,3 @@ internal sealed partial class JavaScriptEmitter
         return values is null ? $"{receiver}[{method}]()" : $"{receiver}[{method}](...({values} ?? []))";
     }
 }
-

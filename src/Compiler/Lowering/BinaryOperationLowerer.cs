@@ -58,6 +58,8 @@ internal sealed partial class JavaScriptEmitter
         SyntaxKind.EqualsExpression => "===",
         SyntaxKind.NotEqualsExpression => "!==",
         SyntaxKind.CoalesceExpression => "??",
+        SyntaxKind.LogicalAndExpression => "&&",
+        SyntaxKind.LogicalOrExpression => "||",
         SyntaxKind.AddExpression => "+",
         SyntaxKind.SubtractExpression => "-",
         SyntaxKind.MultiplyExpression => "*",
@@ -106,4 +108,3 @@ internal sealed partial class JavaScriptEmitter
     private static NotSupportedException UnsupportedSymbol(IMethodSymbol? symbol, SyntaxNode node) =>
         new($"WRK105: '{symbol?.ToDisplayString() ?? node.ToString()}' is outside the supported Workers C# profile.");
 }
-

@@ -3,21 +3,12 @@ import { spawnSync } from "node:child_process";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const vitest = resolve(repositoryRoot, "node_modules", "vitest", "vitest.mjs");
-const result = spawnSync(
-  process.execPath,
-  [vitest, "run", "--config", "tests/runtime/vitest.config.js"],
-  {
+for (const config of ["tests/runtime/vitest.config.js", "tests/runtime/vitest.chat.config.js"]) {
+  const result = spawnSync(process.execPath, [vitest, "run", "--config", config], {
     cwd: repositoryRoot,
     stdio: "inherit",
-    env: {
-      ...process.env,
-      // Keep Wrangler logs inside the test output instead of the host filesystem.
-      WRANGLER_WRITE_LOGS: "false",
-    },
-  },
-);
-
-if (result.error) {
-  throw result.error;
+    env: { ...process.env, WRANGLER_WRITE_LOGS: "false" },
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
 }
-process.exit(result.status ?? 1);

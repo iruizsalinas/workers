@@ -42,6 +42,25 @@ internal sealed partial class JavaScriptEmitter
                 EmitEmbedded(loop.Statement, depth + 1);
                 _output.Append(indent).AppendLine("}");
                 break;
+            case TryStatementSyntax value:
+                EmitTry(value, depth);
+                break;
+            case SwitchStatementSyntax value:
+                EmitSwitch(value, depth);
+                break;
+            case BreakStatementSyntax:
+                _output.Append(indent).AppendLine("break;");
+                break;
+            case ThrowStatementSyntax value:
+                _output.Append(indent).Append("throw");
+                if (value.Expression is not null) _output.Append(' ').Append(Expression(value.Expression));
+                _output.AppendLine(";");
+                break;
+            case DoStatementSyntax value:
+                _output.Append(indent).AppendLine("do {");
+                EmitEmbedded(value.Statement, depth + 1);
+                _output.Append(indent).Append("} while (").Append(Expression(value.Condition)).AppendLine(");");
+                break;
             default:
                 throw Unsupported("WRK100", statement);
         }

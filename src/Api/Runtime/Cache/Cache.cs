@@ -5,12 +5,6 @@ public sealed class CacheQueryOptions
     public bool IgnoreMethod { get; init; }
 }
 
-public enum CacheDeleteResult
-{
-    NotFound,
-    Deleted
-}
-
 public static class CacheStorage
 {
     public static ICache Default => WorkerApi.NotExecutable<ICache>();
@@ -29,6 +23,6 @@ public interface ICache
     Task<Response?> MatchAsync(Request request, CacheQueryOptions? options = null, CancellationToken cancellationToken = default);
     Task<Response?> MatchAsync(string url, bool ignoreMethod, CancellationToken cancellationToken = default);
     Task<Response?> MatchAsync(Request request, bool ignoreMethod, CancellationToken cancellationToken = default);
-    Task<CacheDeleteResult> DeleteAsync(string url, CacheQueryOptions? options = null, CancellationToken cancellationToken = default);
-    Task<CacheDeleteResult> DeleteAsync(Request request, CacheQueryOptions? options = null, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(string url, CacheQueryOptions? options = null, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(Request request, CacheQueryOptions? options = null, CancellationToken cancellationToken = default);
 }

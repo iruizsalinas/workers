@@ -25,7 +25,7 @@ public sealed class PlatformBindingTests
             }
             """);
 
-        Assert.Contains("env[\"FILES\"].get(\"key\", { range: { offset: 0, length: 10, suffix: null } })", module);
+        Assert.Contains("env[\"FILES\"].get(\"key\", { range: { offset: 0, length: 10, suffix: undefined } })", module);
         Assert.Contains("env[\"JOBS\"].send({ key: \"value\" }, { delaySeconds: 5 })", module);
         Assert.Contains("caches.default.match(request, { ignoreMethod: true }).then(value => value ?? null)", module);
         Assert.Contains("env[\"API\"].fetch(\"https://example.com\")", module);
@@ -64,15 +64,21 @@ public sealed class PlatformBindingTests
                 [Queue]
                 public static async Task Consume(QueueMessageBatch<Job> batch, Env env, Context ctx)
                 {
+                    var count = batch.Count;
+                    var first = batch[0];
                     foreach (var message in batch)
                     {
+                        message.Retry(new QueueRetryOptions { DelaySeconds = 30 });
                         message.Ack();
                     }
                 }
             }
             """);
 
+        Assert.Contains("let count = batch.messages.length", module);
+        Assert.Contains("let first = batch.messages[0]", module);
         Assert.Contains("for (const message of batch.messages)", module);
+        Assert.Contains("message.retry({ delaySeconds: 30 })", module);
         Assert.Contains("message.ack();", module);
     }
 

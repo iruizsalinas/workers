@@ -25,6 +25,14 @@ internal sealed partial class JavaScriptEmitter
                 "Sha512" => "\"SHA-512\"",
                 _ => throw Unsupported("WRK108", member)
             };
+        if (symbol is IFieldSymbol { ContainingType: { } d1SessionType } sessionMode
+            && d1SessionType.ToDisplayString() == "Workers.D1SessionMode")
+            return sessionMode.Name switch
+            {
+                "FirstPrimary" => "\"first-primary\"",
+                "FirstUnconstrained" => "\"first-unconstrained\"",
+                _ => throw Unsupported("WRK108", member)
+            };
         if (property is { Name: "CompletedTask", ContainingType: { } taskType }
             && taskType.ToDisplayString() is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask")
             return "undefined";
@@ -32,64 +40,54 @@ internal sealed partial class JavaScriptEmitter
         if (property?.ContainingType.ToDisplayString() == "Workers.Body" && property.Name == "Empty") return "null";
         if (property?.ContainingType.ToDisplayString() == "Workers.HtmlContentOptions") return property.Name == "Html" ? "{ html: true }" : "{ html: false }";
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Path") return $"new URL({Expression(member.Expression)}.url).pathname";
+        if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "PathAndQuery")
+            return $"(value => value.pathname + value.search)(new URL({Expression(member.Expression)}.url))";
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "QueryParameters") return $"new URL({Expression(member.Expression)}.url).searchParams";
+        if (property?.ContainingType.ToDisplayString() == "Workers.Headers" && property.Name == "Count")
+            return $"Array.from({Expression(member.Expression)}).length";
+        if (property?.ContainingType.ToDisplayString() == "Workers.Response" && property.Name == "IsSuccessStatusCode")
+            return $"{Expression(member.Expression)}.ok";
+        if (property?.ContainingType.ToDisplayString() == "Workers.KvListResult" && property.Name == "ListComplete")
+            return $"{Expression(member.Expression)}.list_complete";
+        if (property?.ContainingType.ToDisplayString() == "Workers.DurableObjectStorage" && property.Name == "Kv")
+            return Expression(member.Expression);
+        if (property?.ContainingType.ToDisplayString() == "System.Exception" && property.Name == "Message")
+            return $"{Expression(member.Expression)}.message";
+        if (property is { Name: "Count", ContainingType: { } queueBatch }
+            && BindingIntrinsicRegistry.IsQueueMessageBatch(queueBatch))
+            return $"{Expression(member.Expression)}.messages.length";
+        if (property is { Name: "Count", ContainingType: { } collection }
+            && (collection.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyCollection<T>"
+                || collection.AllInterfaces.Any(item => item.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyCollection<T>")))
+            return $"{Expression(member.Expression)}.length";
         return $"{Expression(member.Expression)}.{LowerFirst(member.Name.Identifier.Text)}";
     }
-
-    private string ObjectCreation(BaseObjectCreationExpressionSyntax value)
-    {
-        var constructor = _model.GetSymbolInfo(value).Symbol as IMethodSymbol;
-        var type = constructor?.ContainingType;
-        var arguments = value.ArgumentList?.Arguments.ToArray() ?? [];
-        if (type?.ToDisplayString() is "Workers.Request" or "Workers.Response")
-            return $"new {type.Name}({string.Join(", ", arguments.Select(argument => Expression(argument.Expression)))})";
-        if (type?.ToDisplayString() == "Workers.AbortController")
-            return "new AbortController()";
-        if (type?.ToDisplayString() == "Workers.HtmlRewriter")
-            return "new HTMLRewriter()";
-        if (type is not null && type.BaseType?.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler")
-        {
-            if (constructor?.Parameters.Length != 0)
-                throw UnsupportedSymbol(constructor, value);
-            if (type.DeclaringSyntaxReferences.Length != 1
-                || type.DeclaringSyntaxReferences[0].GetSyntax() is not ClassDeclarationSyntax handlerDeclaration
-                || handlerDeclaration.Members.Any(member => member is FieldDeclarationSyntax or ConstructorDeclarationSyntax))
-                throw UnsupportedSymbol(constructor, value);
-            return $"new {UserIdentifier(type, type.Name)}()";
-        }
-
-        if (type is not null && BindingIntrinsicRegistry.IsStructuralType(type))
-        {
-            var properties = new List<string>();
-            for (var index = 0; index < arguments.Length; index++)
-            {
-                var parameterName = arguments[index].NameColon?.Name.Identifier.Text
-                    ?? (index < (constructor?.Parameters.Length ?? 0) ? constructor!.Parameters[index].Name : $"value{index}");
-                properties.Add($"{LowerFirst(parameterName)}: {Expression(arguments[index].Expression)}");
-            }
-            if (value.Initializer is not null)
-                properties.AddRange(value.Initializer.Expressions.Select(InitializerProperty));
-            return "{ " + string.Join(", ", properties) + " }";
-        }
-
-        throw UnsupportedSymbol(constructor, value);
-    }
-
-    private string InitializerProperty(ExpressionSyntax expression) => expression switch
-    {
-        AssignmentExpressionSyntax assignment when assignment.Left is IdentifierNameSyntax name =>
-            $"{LowerFirst(name.Identifier.Text)}: {Expression(assignment.Right)}",
-        _ => throw Unsupported("WRK106", expression)
-    };
 
     private static string Response(string[] arguments, string _) => $"new Response({arguments[0]}{ResponseInit(arguments, 1)})";
     private string Identifier(IdentifierNameSyntax value) => _model.GetSymbolInfo(value).Symbol switch
     {
         IFieldSymbol { IsStatic: false } field => $"this.{UserIdentifier(field, field.Name)}",
+        IFieldSymbol { IsStatic: true, HasConstantValue: true } field => LiteralConstant(field.ConstantValue, value),
         IFieldSymbol { IsStatic: true } => throw Unsupported("WRK110", value),
         ISymbol symbol => UserIdentifier(symbol, value.Identifier),
         _ => value.Identifier.ValueText
     };
+
+    private string LiteralConstant(object? value, SyntaxNode source) => value switch
+    {
+        null => "null",
+        string text => JsonSerializer.Serialize(text),
+        char character => JsonSerializer.Serialize(character.ToString()),
+        bool boolean => boolean ? "true" : "false",
+        byte or sbyte or short or ushort or int or uint or float or double =>
+            Convert.ToString(value, CultureInfo.InvariantCulture)!,
+        long signed when Math.Abs((double)signed) <= 9_007_199_254_740_991d =>
+            signed.ToString(CultureInfo.InvariantCulture),
+        ulong unsigned when unsigned <= 9_007_199_254_740_991UL =>
+            unsigned.ToString(CultureInfo.InvariantCulture),
+        _ => throw Unsupported("WRK108", source)
+    };
+
     private static string ResponseInit(string[] arguments, int statusIndex) => arguments.Length > statusIndex ? $", {{ status: {arguments[statusIndex]} }}" : "";
     private string AnonymousMember(AnonymousObjectMemberDeclaratorSyntax value)
     {

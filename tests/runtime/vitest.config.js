@@ -11,5 +11,6 @@ export default defineConfig({
   ],
   test: {
     include: ["tests/runtime/**/*.test.js"],
+    exclude: ["tests/runtime/scenarios/chat.test.js"],
   },
 });

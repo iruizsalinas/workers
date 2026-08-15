@@ -9,7 +9,7 @@ internal static class BindingClassification
         "Workers.R2MultipartUploadOptions", "Workers.R2Conditional", "Workers.R2Range",
         "Workers.R2HttpMetadata", "Workers.R2Checksums", "Workers.QueueSendOptions",
         "Workers.QueueRetryOptions", "Workers.CacheQueryOptions", "Workers.FetchOptions",
-        "Workers.FetchCfOptions", "Workers.D1SessionOptions", "Workers.D1RawOptions",
+        "Workers.FetchCfOptions", "Workers.D1RawOptions",
         "Workers.DurableObjectIdOptions", "Workers.DurableObjectGetOptions", "Workers.WebSocketAutoResponse",
         "Workers.AnalyticsEngineDataPoint", "Workers.SendEmailMessage", "Workers.WorkflowInstanceCreateOptions",
         "Workers.WorkflowInstanceRestartOptions", "Workers.WorkflowInstanceEventOptions", "Workers.WorkflowRestartFromStep",
@@ -36,13 +36,15 @@ internal static class BindingClassification
         Key("Workers.Response", "Empty"), Key("Workers.Response", "Text"), Key("Workers.Response", "Html"),
         Key("Workers.Response", "Json"), Key("Workers.Response", "Redirect"),
         Key("Workers.Response", "FromBody"), Key("Workers.Response", "WithHeader"), Key("Workers.Response", "AppendHeader"),
+        Key("Workers.Response", "FromStream"),
+        Key("Workers.Response", "WebSocket"),
         Key("Workers.Response", "WithoutHeader")
     ];
 
     private static readonly HashSet<(string Type, string Method)> UnsupportedMethods =
     [
-        Key("Workers.Env", "TryGet"), Key("Workers.QueryParameters", "As"), Key("Workers.Headers", "Delete"),
-        Key("Workers.HtmlElement", "OnEndTag"), Key("Workers.D1SessionOptions", "FromBookmark"),
+        Key("Workers.Env", "TryGet"), Key("Workers.QueryParameters", "As"),
+        Key("Workers.HtmlElement", "OnEndTag"),
         Key("Workers.QueueMessageBatch<T>", "GetEnumerator"), Key("Workers.TailEvent", "GetEnumerator"),
         Key("Workers.Headers", "GetEnumerator"), Key("Workers.QueryParameters", "GetEnumerator")
     ];

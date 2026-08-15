@@ -16,6 +16,70 @@ public static class Worker
             return await stub.FetchAsync("https://worker.test/from-csharp");
         }
 
+        if (request.Path == "/kv-lifecycle")
+        {
+            var key = Guid.NewGuid().ToString();
+            var kv = environment.Kv("KV");
+            await kv.PutTextAsync(key, "stored", new KvPutOptions
+            {
+                Metadata = new { source = "csharp" }
+            });
+            var stored = await kv.GetTextWithMetadataAsync(key);
+            var listed = await kv.ListAsync(new KvListOptions { Prefix = key });
+            await kv.DeleteAsync(key);
+            var deleted = await kv.GetTextAsync(key);
+            return Response.Json(new
+            {
+                value = stored.Value,
+                listed = listed.Keys[0].Name,
+                listComplete = listed.ListComplete,
+                deleted
+            });
+        }
+
+        if (request.Path == "/r2-lifecycle")
+        {
+            var key = $"object-{Guid.NewGuid()}.txt";
+            var bucket = environment.R2("BUCKET");
+            await bucket.PutAsync(key, Body.Text("r2-value"), new R2PutOptions
+            {
+                HttpMetadata = new R2HttpMetadata(ContentType: "text/custom")
+            });
+            var head = await bucket.HeadAsync(key);
+            var listed = await bucket.ListAsync(new R2ListOptions { Prefix = key });
+            await bucket.DeleteAsync(key);
+            var deleted = await bucket.HeadAsync(key);
+            return Response.Json(new
+            {
+                key = head!.Key,
+                size = head.Size,
+                contentType = head.HttpMetadata.ContentType,
+                listed = listed.Objects[0].Key,
+                deleted
+            });
+        }
+
+        if (request.Path == "/d1-advanced")
+        {
+            var advancedDatabase = environment.D1("DB");
+            await advancedDatabase.ExecAsync("CREATE TABLE IF NOT EXISTS numbers (value INTEGER NOT NULL); DELETE FROM numbers;");
+            var first = advancedDatabase.Prepare("INSERT INTO numbers (value) VALUES (?)").Bind(1);
+            var second = advancedDatabase.Prepare("INSERT INTO numbers (value) VALUES (?)").Bind(2);
+            var batch = await advancedDatabase.BatchAsync<object>([first, second]);
+            var raw = await advancedDatabase.Prepare("SELECT value FROM numbers ORDER BY value").RawAsync();
+            var session = advancedDatabase.WithSession(D1SessionMode.FirstPrimary);
+            await session.Prepare("SELECT value FROM numbers LIMIT 1").FirstAsync<int>("value");
+            var bookmark = await session.GetBookmarkAsync();
+            return Response.Json(new
+            {
+                firstSuccess = batch[0].Success,
+                secondSuccess = batch[1].Success,
+                firstValue = raw[0][0],
+                secondValue = raw[1][0],
+                hasBookmark = bookmark is not null
+            });
+        }
+
         var database = environment.D1("DB");
         await database.ExecAsync("CREATE TABLE IF NOT EXISTS people (name TEXT NOT NULL); DELETE FROM people;");
         await database.Prepare("INSERT INTO people (name) VALUES (?)").Bind("Ada").RunAsync();
@@ -54,7 +118,21 @@ public sealed class EchoObject
         return next;
     }
 
+    public async Task<bool> StorageLifecycleAsync()
+    {
+        await _state.Storage.PutAsync("temporary", "value");
+        var deleted = await _state.Storage.DeleteAsync("temporary");
+        var value = await _state.Storage.GetAsync<string>("temporary");
+        await _state.Storage.Kv.PutJsonAsync("typed", new { value = 42 });
+        var typed = await _state.Storage.Kv.GetJsonAsync<StoredValue>("typed");
+        await _state.Storage.Kv.DeleteAsync("typed");
+        var typedMissing = await _state.Storage.Kv.GetJsonAsync<StoredValue>("typed");
+        return deleted && value is null && typed!.Value == 42 && typedMissing is null;
+    }
+
     public void AlarmAsync(AlarmInfo info)
     {
     }
 }
+
+public sealed record StoredValue(int Value);

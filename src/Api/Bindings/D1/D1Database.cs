@@ -3,7 +3,8 @@ namespace Workers;
 public interface ID1Database : IBinding
 {
     D1PreparedStatement Prepare(string query);
-    D1DatabaseSession WithSession(D1SessionOptions? options = null);
+    D1DatabaseSession WithSession(D1SessionMode mode = D1SessionMode.FirstUnconstrained);
+    D1DatabaseSession WithSession(string bookmark);
     Task<D1ExecResult> ExecAsync(string query, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<D1Result<T>>> BatchAsync<T>(IEnumerable<D1PreparedStatement> statements, CancellationToken cancellationToken = default);
     Task<Body> DumpAsync(CancellationToken cancellationToken = default);
@@ -50,17 +51,6 @@ public enum D1SessionMode
 {
     FirstPrimary,
     FirstUnconstrained
-}
-
-public sealed record D1SessionOptions
-{
-    public D1SessionMode? Mode { get; init; }
-    public string? Bookmark { get; init; }
-
-    public static D1SessionOptions FromBookmark(string bookmark) => new()
-    {
-        Bookmark = bookmark
-    };
 }
 
 public sealed class D1DatabaseSession

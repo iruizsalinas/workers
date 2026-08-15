@@ -10,15 +10,23 @@ internal sealed partial class JavaScriptEmitter
         IdentifierNameSyntax value => Identifier(value),
         ThisExpressionSyntax => "this",
         ParenthesizedExpressionSyntax value => $"({Expression(value.Expression)})",
+        PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.LogicalNotExpression) =>
+            $"!{Expression(value.Operand)}",
+        PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.UnaryMinusExpression) =>
+            $"-{Expression(value.Operand)}",
+        PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.UnaryPlusExpression) =>
+            $"+{Expression(value.Operand)}",
+        PostfixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.SuppressNullableWarningExpression) =>
+            Expression(value.Operand),
         AwaitExpressionSyntax value => $"await {Expression(value.Expression)}",
         BinaryExpressionSyntax value => Binary(value),
         ConditionalExpressionSyntax value => $"{Expression(value.Condition)} ? {Expression(value.WhenTrue)} : {Expression(value.WhenFalse)}",
+        ConditionalAccessExpressionSyntax value => ConditionalAccess(value),
         AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.SimpleAssignmentExpression) => $"{Expression(value.Left)} = {Expression(value.Right)}",
         IsPatternExpressionSyntax value => IsPattern(value),
         MemberAccessExpressionSyntax value => Member(value),
         InvocationExpressionSyntax value => Invocation(value),
-        ElementAccessExpressionSyntax value =>
-            $"{Expression(value.Expression)}[{string.Join(", ", value.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))}]",
+        ElementAccessExpressionSyntax value => ElementAccess(value),
         AnonymousObjectCreationExpressionSyntax value => "{ " + string.Join(", ", value.Initializers.Select(AnonymousMember)) + " }",
         InterpolatedStringExpressionSyntax value => "`" + string.Concat(value.Contents.Select(InterpolatedPart)) + "`",
         CollectionExpressionSyntax value => "[" + string.Join(", ", value.Elements.Select(Element)) + "]",
@@ -45,6 +53,9 @@ internal sealed partial class JavaScriptEmitter
         if (containingType == "System.Console" && methodName == "WriteLine")
             return arguments.Length == 1 ? $"console.log({arguments[0]})" : throw UnsupportedSymbol(method, invocation);
         if (containingType == "System.Guid" && methodName == "NewGuid") return "globalThis.crypto.randomUUID()";
+        if (containingType == "System.Uri" && methodName == "UnescapeDataString") return $"decodeURIComponent({arguments[0]})";
+        if (containingType == "System.Convert" && methodName == "ToHexString")
+            return $"Array.from({arguments[0]}, byte => byte.toString(16).padStart(2, \"0\")).join(\"\")";
         if (containingType == "Workers.Body" && methodName == "Text") return arguments[0];
         if (containingType == "Workers.Body" && methodName == "Json") return $"JSON.stringify({arguments[0]})";
         if (containingType == "Workers.Body" && methodName == "FromBytes") return arguments[0];
@@ -58,6 +69,11 @@ internal sealed partial class JavaScriptEmitter
         if (containingType == "Workers.Response" && methodName == "Empty") return $"new Response(null{ResponseInit(arguments, 0)})";
         if (containingType == "Workers.Response" && methodName == "Redirect") return $"Response.redirect({arguments[0]}, {(arguments.Length > 1 ? arguments[1] : "302")})";
         if (containingType == "Workers.Response" && methodName == "FromBody") return $"new Response({arguments[0]}.body ?? {arguments[0]})";
+        if (containingType == "Workers.Response" && methodName == "FromStream")
+            return method?.Parameters.Length >= 2 && method.Parameters[1].Type.ToDisplayString() == "Workers.Headers"
+                ? $"new Response({arguments[0]}, {{ status: {(arguments.Length > 2 ? arguments[2] : "200")}, headers: {arguments[1]} }})"
+                : $"new Response({arguments[0]}{ResponseInit(arguments, 1)})";
+        if (containingType == "Workers.Response" && methodName == "WebSocket") return $"new Response(null, {{ status: 101, webSocket: {arguments[0]} }})";
         if (containingType == "Workers.Response" && methodName == "WithHeader")
         {
             var helper = _helpers.Require(JavaScriptHelper.WithHeader);
@@ -82,17 +98,8 @@ internal sealed partial class JavaScriptEmitter
                 && _model.GetSymbolInfo(member.Expression).Symbol is IPropertySymbol { ContainingType: { } consoleType, Name: "Error" }
                 && consoleType.ToDisplayString() == "System.Console")
                 return arguments.Length == 1 ? $"console.error({arguments[0]})" : throw UnsupportedSymbol(method, invocation);
-            if (containingType == "System.Random")
-            {
-                if (name == "NextDouble") return "Math.random()";
-                if (name == "Next") return arguments.Length switch
-                {
-                    0 => "Math.floor(Math.random() * 2147483647)",
-                    1 => $"Math.floor(Math.random() * {arguments[0]})",
-                    2 => $"Math.floor(Math.random() * ({arguments[1]} - {arguments[0]})) + {arguments[0]}",
-                    _ => throw UnsupportedSymbol(method, invocation)
-                };
-            }
+            if (TryEmitFrameworkInvocation(invocation, method, receiver, name, arguments, out var framework))
+                return framework;
             if (containingType == "Workers.Env" && EnvironmentBindings.Contains(name))
                 return $"{receiver}[{arguments[0]}]";
             if (containingType == "Workers.CacheStorage" && name == "OpenAsync")
@@ -115,23 +122,17 @@ internal sealed partial class JavaScriptEmitter
             }
             if (containingType == "Workers.Crypto")
                 receiver = "globalThis.crypto";
-            if (containingType == "System.DateTimeOffset" && name == "ToString")
-            {
-                if (method?.Parameters.Length != 1
-                    || invocation.ArgumentList.Arguments[0].Expression is not LiteralExpressionSyntax format
-                    || format.Token.ValueText is not ("O" or "o"))
-                    throw UnsupportedSymbol(method, invocation);
-                return $"new Date({receiver}).toISOString()";
-            }
-            if (containingType == "System.Guid" && name == "ToString")
-                return arguments.Length == 0 ? receiver : throw UnsupportedSymbol(method, invocation);
             if (method is not null && BindingIntrinsicRegistry.TryGet(method, out var intrinsic))
                 return EmitBindingIntrinsic(receiver, invocation, method, intrinsic);
+            if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
+                return $"{receiver}.{LowerFirst(method.Name.Replace("Async", "", StringComparison.Ordinal))}({string.Join(", ", arguments)})";
             if (method is not null && method.DeclaringSyntaxReferences.Length != 0)
                 return EmitUserInvocation(method, invocation, arguments);
             throw UnsupportedSymbol(method, invocation);
         }
 
+        if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
+            return $"this.{LowerFirst(method.Name.Replace("Async", "", StringComparison.Ordinal))}({string.Join(", ", arguments)})";
         if (method is not null && method.DeclaringSyntaxReferences.Length != 0)
             return EmitUserInvocation(method, invocation, arguments);
         if (method is not null)
@@ -146,4 +147,3 @@ internal sealed partial class JavaScriptEmitter
         "Ai", "Workflow", "Images", "Media", "Vectorize", "SecretStore", "Hyperdrive"
     ];
 }
-

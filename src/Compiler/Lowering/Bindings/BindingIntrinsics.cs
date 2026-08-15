@@ -6,11 +6,13 @@ internal enum BindingIntrinsicKind
     KvBytesGet,
     KvJsonGet,
     KvJsonPut,
+    DurableObjectGet,
     CacheQuery,
     CacheMatch,
     ServiceRpc,
     Property,
     Identity,
+    HeadersClone,
     Fluent,
     JsonParse,
     Dispose,
@@ -34,6 +36,8 @@ internal enum BindingIntrinsicKind
     SocketCloseWritable,
     BodyText,
     BodyJson,
+    WebSocketJson,
+    WebSocketMessageText,
     Bytes
 }
 

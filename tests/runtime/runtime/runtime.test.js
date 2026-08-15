@@ -92,4 +92,30 @@ describe("runtime intrinsics", () => {
     expect(log).toHaveBeenCalledWith("generated-console");
     expect(error).toHaveBeenCalledWith("generated-error");
   });
+
+  it("preserves native URL, query, and independent Headers semantics", async () => {
+    const response = await invoke("/http-semantics?value=one&value=two", {
+      headers: { "x-original": "yes", "x-remove": "yes" },
+    });
+
+    await expect(response.json()).resolves.toEqual({
+      pathAndQuery: "/http-semantics?value=one&value=two",
+      values: ["one", "two"],
+      originalCount: 2,
+      cloneCount: 2,
+      originalCloned: false,
+      cloneRemoved: false,
+      cookies: ["first=1", "second=2"],
+    });
+  });
+
+  it("opens a named native Cache and completes its full lifecycle", async () => {
+    const response = await invoke("/cache-lifecycle");
+
+    await expect(response.json()).resolves.toEqual({
+      found: true,
+      deleted: true,
+      missing: true,
+    });
+  });
 });

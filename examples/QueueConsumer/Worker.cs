@@ -10,6 +10,7 @@ public static class Worker
         Env environment,
         Context context)
     {
+        Console.WriteLine($"Batch {batch.Count}: {batch[0].Id}");
         foreach (var message in batch)
         {
             Console.WriteLine($"Processing {message.Body.Path}");

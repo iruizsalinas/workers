@@ -28,6 +28,7 @@ describe("Durable Object bindings", () => {
     await expect(stub.store("persisted through storage")).resolves.toBe("persisted through storage");
     await expect(stub.increment()).resolves.toBe(1);
     await expect(stub.increment()).resolves.toBe(2);
+    await expect(stub.storageLifecycle()).resolves.toBe(true);
   });
 
   it("runs a generated C# Durable Object alarm handler", async () => {

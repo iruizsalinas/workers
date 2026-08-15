@@ -16,6 +16,9 @@ public sealed class WebSocket
     public void Accept() => WorkerApi.NotExecutable();
     public void SendText(string message) => WorkerApi.NotExecutable();
     public void SendBytes(ReadOnlyMemory<byte> message) => WorkerApi.NotExecutable();
+    public void SendJson<T>(T message) => WorkerApi.NotExecutable();
+    public void SerializeAttachment<T>(T value) => WorkerApi.NotExecutable();
+    public T? DeserializeAttachment<T>() => WorkerApi.NotExecutable<T?>();
     public void Close(ushort? code = null, string? reason = null) => WorkerApi.NotExecutable();
     public Task<WebSocketEvent?> ReceiveAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<WebSocketEvent?>>();
     public WebSocketEventStream Events() => WorkerApi.NotExecutable<WebSocketEventStream>();
@@ -29,6 +32,7 @@ public sealed class WebSocketMessage
     public bool IsBinary => WorkerApi.NotExecutable<bool>();
 
     public T? Json<T>() => WorkerApi.NotExecutable<T?>();
+    public string AsText() => WorkerApi.NotExecutable<string>();
 }
 
 public sealed record WebSocketError(string Message);

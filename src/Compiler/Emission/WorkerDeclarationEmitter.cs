@@ -11,6 +11,15 @@ internal sealed partial class JavaScriptEmitter
         _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
         var type = _model.GetDeclaredSymbol(declaration)!;
         _output.Append("class ").Append(UserIdentifier(type, declaration.Identifier)).AppendLine(" {");
+        var constructor = declaration.Members.OfType<ConstructorDeclarationSyntax>().SingleOrDefault();
+        if (constructor is not null)
+        {
+            _output.Append("  constructor(")
+                .Append(string.Join(", ", constructor.ParameterList.Parameters.Select(ParameterName)))
+                .AppendLine(") {");
+            foreach (var statement in constructor.Body?.Statements ?? []) EmitStatement(statement, 2);
+            _output.AppendLine("  }");
+        }
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>().Where(item => item.Modifiers.Any(SyntaxKind.PublicKeyword)))
         {
             var name = LowerFirst(method.Identifier.Text.Replace("Async", "", StringComparison.Ordinal));
@@ -62,8 +71,7 @@ internal sealed partial class JavaScriptEmitter
         else
             foreach (var statement in constructor?.Body?.Statements ?? []) EmitStatement(statement, 2);
         _output.AppendLine("  }");
-        foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>()
-                     .Where(method => method.Modifiers.Any(SyntaxKind.PublicKeyword)))
+        foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())
         {
             _model = model;
             var name = method.Identifier.Text switch
@@ -86,6 +94,10 @@ internal sealed partial class JavaScriptEmitter
         }
         _output.AppendLine("}").AppendLine();
     }
+
+    private static bool IsGeneratedInstanceType(INamedTypeSymbol type) =>
+        type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.DurableObjectAttribute")
+        || type.BaseType?.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler";
 
     private void EmitHandler(string eventName, MethodDeclarationSyntax method)
     {
@@ -144,4 +156,3 @@ internal sealed partial class JavaScriptEmitter
     }
 
 }
-
