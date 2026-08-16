@@ -61,20 +61,8 @@ Familiar C# APIs such as `Task`, `Console`, `Guid`, and `DateTimeOffset` are sup
 
 Versions through `0.2.0` ran .NET on WebAssembly and supported managed assemblies and compatible NuGet packages. Every Worker also had to ship and initialize the .NET runtime, framework files, and a JavaScript interoperability adapter, resulting in large bundles, slow startup, and high CPU usage.
 
-Starting with `0.3.0`, Workers compiles a focused C# profile directly to native JavaScript. This removes the runtime and interoperability overhead and reduces generated output by up to 99%—from approximately 4.9 MB to about 200 bytes raw in a basic-response baseline. This is a breaking change: arbitrary NuGet packages and the complete .NET BCL are no longer supported.
+Starting with `0.3.0`, Workers compiles a focused C# profile directly to native JavaScript. Removing the runtime and interoperability layer reduces generated output by up to 99%. In a basic-response baseline, output falls from approximately 4.9 MB to about 200 bytes raw. This is a breaking change: arbitrary NuGet packages and the complete .NET BCL are no longer supported.
 
 ## Examples
 
-| Example | Shows |
-|---|---|
-| `JsonApi` | JSON response and request path |
-| `Redirects` | Redirects from query parameters |
-| `CorsHeaders` | CORS and response headers |
-| `ProxyFetch` | Fetching another origin |
-| `CacheApi` | Workers Cache API |
-| `KvBinding` | KV namespace binding |
-| `R2Binding` | R2 bucket binding |
-| `QueueProducer` | Sending queue messages |
-| `QueueConsumer` | Consuming queue messages |
-| `ScheduledTask` | Cron/scheduled events |
-| `HelloWorld` | Minimal path dispatch |
+See the [examples](./examples) directory for complete Workers covering HTTP, storage, queues, scheduled events, and other platform APIs.
