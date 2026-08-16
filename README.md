@@ -34,6 +34,22 @@ dotnet publish -c Release
 
 The generated `dist/worker.js` is a native ES module ready for Wrangler. Configure bindings, routes, and other deployment settings in your Wrangler configuration.
 
+## ASP.NET Minimal APIs
+
+The same package can compile familiar ASP.NET Minimal API projects directly to native Worker routing:
+
+```csharp
+var builder = WebApplication.CreateSlimBuilder(args);
+var app = builder.Build();
+
+app.MapGet("/users/{id:int}", (int id) => Results.Ok(new { id }));
+app.MapPost("/users", (CreateUser user) => Results.Created("/users/1", user));
+
+app.Run();
+```
+
+Use the `Microsoft.NET.Sdk.Web` SDK or reference `Microsoft.AspNetCore.App`. Routing, parameter binding, JSON bodies, common results, and source-declared handlers are compiled away; ASP.NET and Kestrel are not included in the Worker. Unsupported middleware or dependency-injection features produce a compiler diagnostic.
+
 ## Workers API
 
 The package provides a focused C# API for Workers requests, responses, events, bindings, Durable Objects, queues, KV, R2, D1, Cache, WebSockets, TCP sockets, email, and other platform features.

@@ -5,24 +5,35 @@ internal static class WorkerCompiler
 {
     public static int Run(string[] args) => CompilerCommand.Run(args);
 
-    internal static string Compile(IEnumerable<SyntaxTree> trees, IEnumerable<string>? additionalReferences = null)
+    internal static string Compile(
+        IEnumerable<SyntaxTree> trees,
+        IEnumerable<string>? additionalReferences = null,
+        bool useTrustedPlatformAssemblies = true)
     {
         var inputTrees = trees.ToArray();
         var parseOptions = inputTrees.OfType<CSharpSyntaxTree>().FirstOrDefault()?.Options
             ?? new CSharpParseOptions(LanguageVersion.Preview);
         var syntaxTrees = inputTrees.Prepend(CSharpSyntaxTree.ParseText(GlobalUsings, parseOptions, "Workers.Compiler.GlobalUsings.g.cs"));
-        var references = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))!
-            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Concat(additionalReferences ?? [])
+        var platformReferences = useTrustedPlatformAssemblies
+            ? ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))!
+                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            : [];
+        var references = platformReferences.Concat(additionalReferences ?? [])
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(path => MetadataReference.CreateFromFile(path));
+        var hasTopLevelStatements = inputTrees.Any(tree =>
+            tree.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.GlobalStatementSyntax>().Any());
         var compilation = CSharpCompilation.Create(
             "Workers.UserCode",
             syntaxTrees,
             references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            new CSharpCompilationOptions(hasTopLevelStatements
+                ? OutputKind.ConsoleApplication
+                : OutputKind.DynamicallyLinkedLibrary));
 
         CompilationGuard.ThrowIfInvalid(compilation);
+        if (AspNetApplicationDiscovery.TryDiscover(compilation, out var application))
+            return AspNetJavaScriptEmitter.Emit(application);
         return JavaScriptEmitter.Emit(compilation);
     }
 

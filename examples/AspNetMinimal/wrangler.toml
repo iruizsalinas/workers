@@ -1,0 +1,6 @@
+name = "aspnet-minimal"
+main = "dist/worker.js"
+compatibility_date = "2026-08-16"
+
+[build]
+command = "dotnet build -c Release"

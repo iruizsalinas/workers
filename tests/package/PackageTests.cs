@@ -37,6 +37,18 @@ public sealed class PackageTests
         var module = Path.Combine(consumer, "dist", "worker.js");
         Assert.True(File.Exists(module));
         Assert.Contains("Hello from package", File.ReadAllText(module), StringComparison.Ordinal);
+
+        var aspNetConsumer = Directory.CreateDirectory(Path.Combine(workspace.Path, "aspnet-consumer")).FullName;
+        File.WriteAllText(Path.Combine(aspNetConsumer, "Consumer.csproj"), AspNetProject(package, workspace.Path));
+        File.WriteAllText(Path.Combine(aspNetConsumer, "Program.cs"), AspNetSource);
+
+        RunDotNet(aspNetConsumer, "build", "-c", "Release", "--packages", Path.Combine(workspace.Path, "packages"));
+
+        var aspNetModule = Path.Combine(aspNetConsumer, "dist", "worker.js");
+        Assert.True(File.Exists(aspNetModule));
+        var aspNetScript = File.ReadAllText(aspNetModule);
+        Assert.Contains("request.method === \"GET\"", aspNetScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("WebApplication", aspNetScript, StringComparison.Ordinal);
     }
 
     private static string Project(string package, string source) => $$"""
@@ -53,6 +65,9 @@ public sealed class PackageTests
         </Project>
         """;
 
+    private static string AspNetProject(string package, string source) =>
+        Project(package, source).Replace("Microsoft.NET.Sdk\"", "Microsoft.NET.Sdk.Web\"", StringComparison.Ordinal);
+
     private const string Source = """
         using Workers;
 
@@ -62,6 +77,13 @@ public sealed class PackageTests
             public static Task<Response> FetchAsync(Request request, Env environment, Context context) =>
                 Task.FromResult(Response.Text("Hello from package"));
         }
+        """;
+
+    private const string AspNetSource = """
+        var builder = WebApplication.CreateSlimBuilder(args);
+        var app = builder.Build();
+        app.MapGet("/items/{id:int}", (int id) => Results.Ok(new { id }));
+        app.Run();
         """;
 
     private static string FindRepository()
