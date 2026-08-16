@@ -97,6 +97,7 @@ internal sealed partial class JavaScriptEmitter
 
     private static bool IsGeneratedInstanceType(INamedTypeSymbol type) =>
         type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.DurableObjectAttribute")
+        || type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.WorkerEntrypointAttribute")
         || type.BaseType?.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler";
 
     private void EmitHandler(string eventName, MethodDeclarationSyntax method)
@@ -146,7 +147,9 @@ internal sealed partial class JavaScriptEmitter
             _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
             var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(ParameterName));
             var isAsync = declaration.Modifiers.Any(SyntaxKind.AsyncKeyword);
-            _output.Append(isAsync ? "async " : "").Append("function ").Append(_userMethods[symbol]).Append('(').Append(parameters).AppendLine(") {");
+            var isIterator = symbol.ReturnType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IAsyncEnumerable<T>";
+            _output.Append(isAsync ? "async " : "").Append(isIterator ? "function* " : "function ")
+                .Append(_userMethods[symbol]).Append('(').Append(parameters).AppendLine(") {");
             if (declaration.ExpressionBody is not null)
                 _output.Append("  return ").Append(Expression(declaration.ExpressionBody.Expression)).AppendLine(";");
             else

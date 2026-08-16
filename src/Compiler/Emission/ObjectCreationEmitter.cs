@@ -19,7 +19,7 @@ internal sealed partial class JavaScriptEmitter
             return $"new WebSocketRequestResponsePair({Expression(arguments[0].Expression)}, {Expression(arguments[1].Expression)})";
         if (IsException(type))
             return $"new Error({(arguments.Length == 0 ? "undefined" : Expression(arguments[0].Expression))})";
-        if (typeName == "System.Uri") return CreateUrl(value, constructor, arguments);
+        if (typeName is "System.Uri" or "Workers.Url") return CreateUrl(value, constructor, arguments);
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" && arguments.Length == 0)
             return "[]";
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Dictionary<TKey, TValue>"

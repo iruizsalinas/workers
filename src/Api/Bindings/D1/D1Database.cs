@@ -27,6 +27,7 @@ public sealed class D1Result
 {
     public bool Success { get; init; }
     public string? Error { get; init; }
+    public D1ResultMetadata Meta { get; init; } = new();
 }
 
 public sealed class D1Result<T>
@@ -62,5 +63,8 @@ public sealed class D1DatabaseSession
     public Task<string?> GetBookmarkAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<string?>>();
 }
 
-public sealed class D1ResultMetadata;
+public sealed class D1ResultMetadata
+{
+    public int Changes { get; init; }
+}
 public readonly record struct D1Value(object? Value);

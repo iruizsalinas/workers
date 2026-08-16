@@ -31,6 +31,8 @@ internal sealed partial class JavaScriptEmitter
             emitter.EmitHtmlHandler(htmlHandler);
         foreach (var durableObject in program.DurableObjects)
             emitter.EmitDurableObject(durableObject);
+        foreach (var workerEntrypoint in program.WorkerEntrypoints)
+            emitter.EmitWorkerEntrypoint(workerEntrypoint);
         foreach (var handler in program.Events)
             emitter.EmitHandler(handler.Name, handler.Method);
         emitter.EmitUserMethods();

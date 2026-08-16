@@ -6,6 +6,8 @@ public sealed class FetchOptions
     public Headers? Headers { get; init; }
     public Body? Body { get; init; }
     public object? Cf { get; init; }
+    public AbortSignal? Signal { get; init; }
+    public RequestRedirect? Redirect { get; init; }
 }
 
 public readonly record struct RequestPriority(int Weight, bool Exclusive, int Group, int GroupWeight);

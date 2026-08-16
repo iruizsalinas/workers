@@ -24,6 +24,9 @@ public static class Crypto
     public static Task<byte[]> DigestBytesAsync(
         DigestAlgorithm algorithm, ReadOnlyMemory<byte> value, CancellationToken cancellationToken = default) =>
         WorkerApi.NotExecutable<Task<byte[]>>();
+    public static Task<bool> VerifyHmacSha256Async(
+        string secret, ReadOnlyMemory<byte> signature, ReadOnlyMemory<byte> payload,
+        CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<bool>>();
 }
 
 public sealed class DigestStream

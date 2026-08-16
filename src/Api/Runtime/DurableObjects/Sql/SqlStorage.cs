@@ -4,6 +4,8 @@ public sealed class DurableObjectSqlStorage
 {
     public DurableObjectSqlStatement Prepare(string query) => WorkerApi.NotExecutable<DurableObjectSqlStatement>();
     public long DatabaseSize => WorkerApi.NotExecutable<long>();
+    public DurableObjectSqlCursor<T> Exec<T>(string query, params object?[] values) =>
+        WorkerApi.NotExecutable<DurableObjectSqlCursor<T>>();
 
     public Task<IReadOnlyList<DurableObjectSqlRawResult>> TransactionSyncRawAsync(
         IEnumerable<DurableObjectSqlStatement> statements, CancellationToken cancellationToken = default) =>
@@ -49,5 +51,7 @@ public sealed class DurableObjectSqlCursor<T> : IAsyncDisposable
 
     public Task<T?> NextAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<T?>>();
     public IAsyncEnumerable<T> ReadAllAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<IAsyncEnumerable<T>>();
+    public T One() => WorkerApi.NotExecutable<T>();
+    public IReadOnlyList<T> ToArray() => WorkerApi.NotExecutable<IReadOnlyList<T>>();
     public ValueTask DisposeAsync() => WorkerApi.NotExecutable<ValueTask>();
 }

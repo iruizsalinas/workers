@@ -1,0 +1,8 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "workers-csharp-accumulator-tests",
+  "main": "fixtures/BatchAccumulator/dist/worker.js",
+  "compatibility_date": "2026-08-15",
+  "durable_objects": { "bindings": [{ "name": "ACCUMULATORS", "class_name": "BatchAccumulator" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BatchAccumulator"] }]
+}

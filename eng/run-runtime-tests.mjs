@@ -3,7 +3,12 @@ import { spawnSync } from "node:child_process";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const vitest = resolve(repositoryRoot, "node_modules", "vitest", "vitest.mjs");
-for (const config of ["tests/runtime/vitest.config.js", "tests/runtime/vitest.chat.config.js"]) {
+for (const config of [
+  "tests/runtime/vitest.config.js",
+  "tests/runtime/vitest.chat.config.js",
+  "tests/runtime/vitest.accumulator.config.js",
+  "tests/runtime/vitest.services.config.js",
+]) {
   const result = spawnSync(process.execPath, [vitest, "run", "--config", config], {
     cwd: repositoryRoot,
     stdio: "inherit",

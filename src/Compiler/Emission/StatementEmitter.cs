@@ -61,6 +61,29 @@ internal sealed partial class JavaScriptEmitter
                 EmitEmbedded(value.Statement, depth + 1);
                 _output.Append(indent).Append("} while (").Append(Expression(value.Condition)).AppendLine(");");
                 break;
+            case WhileStatementSyntax value:
+                _output.Append(indent).Append("while (").Append(Expression(value.Condition)).AppendLine(") {");
+                EmitEmbedded(value.Statement, depth + 1);
+                _output.Append(indent).AppendLine("}");
+                break;
+            case ForStatementSyntax value:
+                var declaration = value.Declaration is null ? "" : string.Join(", ", value.Declaration.Variables.Select(variable =>
+                    $"{UserIdentifier(_model.GetDeclaredSymbol(variable)!, variable.Identifier)} = {Expression(variable.Initializer!.Value)}"));
+                var initializers = value.Declaration is null
+                    ? string.Join(", ", value.Initializers.Select(Expression))
+                    : $"let {declaration}";
+                _output.Append(indent).Append("for (").Append(initializers).Append("; ")
+                    .Append(value.Condition is null ? "" : Expression(value.Condition)).Append("; ")
+                    .Append(string.Join(", ", value.Incrementors.Select(Expression))).AppendLine(") {");
+                EmitEmbedded(value.Statement, depth + 1);
+                _output.Append(indent).AppendLine("}");
+                break;
+            case ContinueStatementSyntax:
+                _output.Append(indent).AppendLine("continue;");
+                break;
+            case YieldStatementSyntax value when value.IsKind(SyntaxKind.YieldReturnStatement):
+                _output.Append(indent).Append("yield ").Append(Expression(value.Expression!)).AppendLine(";");
+                break;
             default:
                 throw Unsupported("WRK100", statement);
         }

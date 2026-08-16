@@ -30,12 +30,16 @@ internal static class WorkerDiscovery
             compilation,
             declaration,
             "Workers.DurableObjectAttribute")).ToArray();
+        var workerEntrypoints = classes.Where(declaration => HasAttribute(
+            compilation,
+            declaration,
+            "Workers.WorkerEntrypointAttribute")).ToArray();
         var htmlHandlers = classes.Where(declaration => IsHtmlHandler(compilation, declaration)).ToArray();
 
-        if (events.Length == 0 && durableObjects.Length == 0)
+        if (events.Length == 0 && durableObjects.Length == 0 && workerEntrypoints.Length == 0)
             throw new InvalidOperationException("WRK001: No Worker event entrypoint was found.");
 
-        return new WorkerProgram(events, durableObjects, htmlHandlers);
+        return new WorkerProgram(events, durableObjects, workerEntrypoints, htmlHandlers);
     }
 
     private static WorkerEvent? FindEvent(

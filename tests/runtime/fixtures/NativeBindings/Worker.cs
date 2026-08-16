@@ -123,10 +123,10 @@ public sealed class EchoObject
         await _state.Storage.PutAsync("temporary", "value");
         var deleted = await _state.Storage.DeleteAsync("temporary");
         var value = await _state.Storage.GetAsync<string>("temporary");
-        await _state.Storage.Kv.PutJsonAsync("typed", new { value = 42 });
-        var typed = await _state.Storage.Kv.GetJsonAsync<StoredValue>("typed");
-        await _state.Storage.Kv.DeleteAsync("typed");
-        var typedMissing = await _state.Storage.Kv.GetJsonAsync<StoredValue>("typed");
+        await _state.Storage.PutAsync("typed", new { value = 42 });
+        var typed = await _state.Storage.GetAsync<StoredValue>("typed");
+        await _state.Storage.DeleteAsync("typed");
+        var typedMissing = await _state.Storage.GetAsync<StoredValue>("typed");
         return deleted && value is null && typed!.Value == 42 && typedMissing is null;
     }
 

@@ -32,6 +32,7 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.CryptoDigestStream => $"new {receiver}.DigestStream({arguments[0].Value})",
             BindingIntrinsicKind.CryptoDigestText => $"{receiver}.subtle.digest({arguments[0].Value}, new TextEncoder().encode({arguments[1].Value})).then(value => new Uint8Array(value))",
             BindingIntrinsicKind.CryptoDigest => $"{receiver}.subtle.digest({arguments[0].Value}, {arguments[1].Value}.body ?? {arguments[1].Value}).then(value => new Uint8Array(value))",
+            BindingIntrinsicKind.CryptoDigestBody => $"new Response({arguments[1].Value}.body ?? {arguments[1].Value}).arrayBuffer().then(value => {receiver}.subtle.digest({arguments[0].Value}, value)).then(value => new Uint8Array(value))",
             BindingIntrinsicKind.DigestWrite => EmitDigestWrite(receiver, arguments[0].Value),
             BindingIntrinsicKind.DigestWriteText => EmitDigestWrite(receiver, $"new TextEncoder().encode({arguments[0].Value})"),
             BindingIntrinsicKind.DigestClose => EmitDigestClose(receiver),
@@ -49,6 +50,11 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.WebSocketJson => $"{receiver}.send(JSON.stringify({arguments[0].Value}))",
             BindingIntrinsicKind.WebSocketMessageText => $"typeof {receiver} === \"string\" ? {receiver} : new TextDecoder().decode({receiver})",
             BindingIntrinsicKind.Bytes => $"{receiver}.{intrinsic.JavascriptName}().then(value => new Uint8Array(value))",
+            BindingIntrinsicKind.CryptoVerifyHmac => $"(async () => {{ const key = await {receiver}.subtle.importKey(\"raw\", new TextEncoder().encode({arguments[0].Value}), {{ name: \"HMAC\", hash: \"SHA-256\" }}, false, [\"verify\"]); return {receiver}.subtle.verify(\"HMAC\", key, {arguments[1].Value}, {arguments[2].Value}); }})()",
+            BindingIntrinsicKind.BlobSliceBytes => $"{receiver}.slice({arguments[0].Value}, {arguments[1].Value}).arrayBuffer().then(value => new Uint8Array(value))",
+            BindingIntrinsicKind.QueryNames => $"Array.from({receiver}.{intrinsic.JavascriptName}())",
+            BindingIntrinsicKind.CompressStream => $"{receiver}.pipeThrough(new CompressionStream({arguments[0].Value}))",
+            BindingIntrinsicKind.DecompressStream => $"{receiver}.pipeThrough(new DecompressionStream({arguments[0].Value}))",
             _ => throw new InvalidOperationException($"Unknown binding intrinsic kind '{intrinsic.Kind}'.")
         };
     }

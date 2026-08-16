@@ -41,6 +41,7 @@ public sealed class DurableObjectStorage
         DurableObjectStorageListOptions? options = null, CancellationToken cancellationToken = default) =>
         WorkerApi.NotExecutable<Task<IReadOnlyDictionary<string, T>>>();
     public Task TransactionAsync(Func<DurableObjectTransaction, Task> callback) => WorkerApi.NotExecutable<Task>();
+    public void TransactionSync(Action callback) => WorkerApi.NotExecutable();
     public Task<DateTimeOffset?> GetAlarmAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<DateTimeOffset?>>();
     public Task SetAlarmAsync(DateTimeOffset scheduledTime, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
     public Task DeleteAlarmAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();

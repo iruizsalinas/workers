@@ -21,6 +21,7 @@ internal enum BindingIntrinsicKind
     CryptoTimingSafeEqual,
     CryptoDigestText,
     CryptoDigest,
+    CryptoDigestBody,
     CryptoDigestStream,
     DigestWrite,
     DigestWriteText,
@@ -38,7 +39,12 @@ internal enum BindingIntrinsicKind
     BodyJson,
     WebSocketJson,
     WebSocketMessageText,
-    Bytes
+    Bytes,
+    CryptoVerifyHmac,
+    BlobSliceBytes,
+    QueryNames,
+    CompressStream,
+    DecompressStream
 }
 
 internal sealed record BindingIntrinsic(string JavascriptName, BindingIntrinsicKind Kind = BindingIntrinsicKind.Direct);

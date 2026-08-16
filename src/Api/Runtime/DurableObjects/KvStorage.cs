@@ -2,12 +2,11 @@ namespace Workers;
 
 public sealed class DurableObjectKvStorage
 {
-    public Task<T?> GetJsonAsync<T>(string key, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<T?>>();
-    public Task PutJsonAsync<T>(string key, T value, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<bool>>();
-    public Task<IReadOnlyDictionary<string, T?>> ListJsonAsync<T>(
-        DurableObjectKvListOptions? options = null, CancellationToken cancellationToken = default) =>
-        WorkerApi.NotExecutable<Task<IReadOnlyDictionary<string, T?>>>();
+    public T? Get<T>(string key) => WorkerApi.NotExecutable<T?>();
+    public void Put<T>(string key, T value) => WorkerApi.NotExecutable();
+    public bool Delete(string key) => WorkerApi.NotExecutable<bool>();
+    public IReadOnlyDictionary<string, T?> List<T>(DurableObjectKvListOptions? options = null) =>
+        WorkerApi.NotExecutable<IReadOnlyDictionary<string, T?>>();
 }
 
 public sealed record DurableObjectKvListOptions

@@ -6,6 +6,8 @@ public sealed class ReadableStream
         WorkerApi.NotExecutable<IReadOnlyList<ReadableStream>>();
     public Task PipeToAsync(DigestStream destination, CancellationToken cancellationToken = default) =>
         WorkerApi.NotExecutable<Task>();
+    public ReadableStream Compress(CompressionFormat format) => WorkerApi.NotExecutable<ReadableStream>();
+    public ReadableStream Decompress(CompressionFormat format) => WorkerApi.NotExecutable<ReadableStream>();
     public static ReadableStream FromAsyncEnumerable(
         IAsyncEnumerable<ReadOnlyMemory<byte>> chunks, CancellationToken cancellationToken = default) =>
         WorkerApi.NotExecutable<ReadableStream>();
@@ -15,3 +17,10 @@ public sealed class ReadableStream
 }
 
 public sealed record ReadableStreamReadResult(bool Done, ReadOnlyMemory<byte> Bytes);
+
+public enum CompressionFormat
+{
+    Gzip,
+    Deflate,
+    DeflateRaw
+}

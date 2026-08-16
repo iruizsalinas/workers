@@ -31,7 +31,8 @@ public sealed class ModuleTests
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context ctx)
                 {
-                    while (true) { }
+                    lock (request) { }
+                    return Response.Empty();
                 }
             }
             """));

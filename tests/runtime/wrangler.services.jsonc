@@ -1,0 +1,13 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "workers-csharp-service-tests",
+  "main": "fixtures/ServiceGateway/dist/worker.js",
+  "compatibility_date": "2026-08-15",
+  "services": [
+    { "binding": "CORE", "service": "workers-csharp-service-tests", "entrypoint": "CoreService" },
+    { "binding": "USERS", "service": "workers-csharp-service-tests", "entrypoint": "UserApi" },
+    { "binding": "ADMIN", "service": "workers-csharp-service-tests", "entrypoint": "AdminApi" },
+    { "binding": "ASSETS", "service": "workers-csharp-service-tests" }
+  ],
+  "d1_databases": [{ "binding": "DB", "database_name": "workers-csharp-service-tests", "database_id": "33333333-3333-3333-3333-333333333333" }]
+}

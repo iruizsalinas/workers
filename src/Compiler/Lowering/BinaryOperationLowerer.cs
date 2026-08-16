@@ -64,6 +64,7 @@ internal sealed partial class JavaScriptEmitter
         SyntaxKind.SubtractExpression => "-",
         SyntaxKind.MultiplyExpression => "*",
         SyntaxKind.DivideExpression => "/",
+        SyntaxKind.ModuloExpression => "%",
         SyntaxKind.LessThanExpression => "<",
         SyntaxKind.LessThanOrEqualExpression => "<=",
         SyntaxKind.GreaterThanExpression => ">",

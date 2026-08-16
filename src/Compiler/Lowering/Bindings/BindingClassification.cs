@@ -31,6 +31,8 @@ internal static class BindingClassification
         Key("Workers.Env", "Images"), Key("Workers.Env", "Media"), Key("Workers.Env", "Vectorize"),
         Key("Workers.Env", "SecretStore"), Key("Workers.Env", "Hyperdrive"),
         Key("Workers.CacheStorage", "OpenAsync"), Key("Workers.Http", "FetchAsync"),
+        Key("Workers.Performance", "Now"),
+        Key("Workers.Timers", "SetTimeout"), Key("Workers.Timers", "ClearTimeout"),
         Key("Workers.TcpSocket", "Connect"), Key("Workers.WebSocketPair", "Create"),
         Key("Workers.Body", "Text"), Key("Workers.Body", "Json"), Key("Workers.Body", "FromBytes"),
         Key("Workers.Response", "Empty"), Key("Workers.Response", "Text"), Key("Workers.Response", "Html"),
@@ -46,7 +48,8 @@ internal static class BindingClassification
         Key("Workers.Env", "TryGet"), Key("Workers.QueryParameters", "As"),
         Key("Workers.HtmlElement", "OnEndTag"),
         Key("Workers.QueueMessageBatch<T>", "GetEnumerator"), Key("Workers.TailEvent", "GetEnumerator"),
-        Key("Workers.Headers", "GetEnumerator"), Key("Workers.QueryParameters", "GetEnumerator")
+        Key("Workers.Headers", "GetEnumerator"), Key("Workers.QueryParameters", "GetEnumerator"),
+        Key("Workers.FormData", "GetEnumerator")
     ];
 
     private static readonly HashSet<string> UnsupportedTypes =
