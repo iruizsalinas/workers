@@ -7,7 +7,6 @@ import helloWorld from "../../../examples/HelloWorld/dist/worker.js";
 import jsonApi from "../../../examples/JsonApi/dist/worker.js";
 import proxyFetch from "../../../examples/ProxyFetch/dist/worker.js";
 import redirects from "../../../examples/Redirects/dist/worker.js";
-import aspNet from "../../../examples/AspNetMinimal/dist/worker.js";
 
 describe("HTTP workers", () => {
   it("reads the native request URL and returns JSON", async () => {
@@ -93,79 +92,5 @@ describe("HTTP workers", () => {
     expect(fetchMock).toHaveBeenCalledWith("https://example.com");
     expect(response.headers.get("x-proxied-by")).toBe("Workers");
     expect(await response.text()).toBe("upstream");
-  });
-
-  it("runs ASP.NET Minimal API routing in workerd", async () => {
-    const root = await aspNet.fetch(new Request("https://worker.test/"), env, createExecutionContext());
-    const user = await aspNet.fetch(
-      new Request("https://worker.test/users/42?detail=full"), env, createExecutionContext(),
-    );
-
-    expect(await root.text()).toBe("Hello from ASP.NET");
-    expect(await user.json()).toEqual({ id: 42, detail: "full" });
-  });
-
-  it("binds ASP.NET JSON bodies and emits Created responses", async () => {
-    const response = await aspNet.fetch(new Request("https://worker.test/users", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Ada" }),
-    }), env, createExecutionContext());
-
-    expect(response.status).toBe(201);
-    expect(response.headers.get("location")).toBe("/users/Ada");
-    await expect(response.json()).resolves.toEqual({ name: "Ada" });
-  });
-
-  it("returns ASP.NET 404, 405, and conditional results", async () => {
-    const removed = await aspNet.fetch(
-      new Request("https://worker.test/users/1", { method: "DELETE" }), env, createExecutionContext(),
-    );
-    const missing = await aspNet.fetch(
-      new Request("https://worker.test/users/2", { method: "DELETE" }), env, createExecutionContext(),
-    );
-    const wrongMethod = await aspNet.fetch(
-      new Request("https://worker.test/users/2", { method: "POST" }), env, createExecutionContext(),
-    );
-    const unknown = await aspNet.fetch(
-      new Request("https://worker.test/unknown"), env, createExecutionContext(),
-    );
-
-    expect(removed.status).toBe(204);
-    expect(missing.status).toBe(404);
-    await expect(missing.json()).resolves.toEqual({ id: 2 });
-    expect(wrongMethod.status).toBe(405);
-    expect(wrongMethod.headers.get("allow")).toBe("GET, DELETE");
-    expect(unknown.status).toBe(404);
-  });
-
-  it("binds ASP.NET headers and request metadata", async () => {
-    const response = await aspNet.fetch(new Request("https://worker.test/inspect/7", {
-      headers: { "x-token": "secret" },
-    }), env, createExecutionContext());
-
-    await expect(response.json()).resolves.toEqual({
-      id: 7,
-      token: "secret",
-      method: "GET",
-      path: "/inspect/7",
-    });
-  });
-
-  it("returns a native 400 for missing required ASP.NET values", async () => {
-    const missing = await aspNet.fetch(
-      new Request("https://worker.test/pages"), env, createExecutionContext(),
-    );
-    const present = await aspNet.fetch(
-      new Request("https://worker.test/pages?page=3"), env, createExecutionContext(),
-    );
-    const health = await aspNet.fetch(
-      new Request("https://worker.test/health"), env, createExecutionContext(),
-    );
-
-    expect(missing.status).toBe(400);
-    await expect(missing.json()).resolves.toMatchObject({ title: "Bad Request", status: 400 });
-    await expect(present.json()).resolves.toBe(3);
-    await expect(health.json()).resolves.toEqual({ status: "healthy" });
   });
 });

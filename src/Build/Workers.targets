@@ -15,7 +15,6 @@
           Condition="'$(IsCrossTargetingBuild)' != 'true'">
     <PropertyGroup>
       <_WorkersSourcesFile>$(IntermediateOutputPath)worker-sources.txt</_WorkersSourcesFile>
-      <_WorkersReferencesFile>$(IntermediateOutputPath)worker-references.txt</_WorkersReferencesFile>
     </PropertyGroup>
     <Error Condition="'$(_WorkersCompilerPath)' == '' or !Exists('$(_WorkersCompilerPath)')"
            Text="The Workers compiler was not found. Build or restore the Workers package before compiling this project." />
@@ -27,11 +26,7 @@
                       Lines="@(Compile->'%(FullPath)')"
                       Overwrite="true"
                       WriteOnlyWhenDifferent="true" />
-    <WriteLinesToFile File="$(_WorkersReferencesFile)"
-                      Lines="@(ReferencePath->'%(FullPath)')"
-                      Overwrite="true"
-                      WriteOnlyWhenDifferent="true" />
-    <Exec Command="&quot;$(_WorkersDotNetHost)&quot; &quot;$(_WorkersCompilerPath)&quot; --project &quot;$(MSBuildProjectDirectory)&quot; --sources-file &quot;$(_WorkersSourcesFile)&quot; --references-file &quot;$(_WorkersReferencesFile)&quot; --define &quot;$(DefineConstants)&quot; --workers-reference &quot;$(_WorkersApiAssembly)&quot; --output &quot;$(WorkerOutputPath)&quot;" />
+    <Exec Command="&quot;$(_WorkersDotNetHost)&quot; &quot;$(_WorkersCompilerPath)&quot; --project &quot;$(MSBuildProjectDirectory)&quot; --sources-file &quot;$(_WorkersSourcesFile)&quot; --define &quot;$(DefineConstants)&quot; --workers-reference &quot;$(_WorkersApiAssembly)&quot; --output &quot;$(WorkerOutputPath)&quot;" />
     <Message Importance="High" Text="Worker module written to '$(WorkerOutputPath)'." />
   </Target>
 </Project>

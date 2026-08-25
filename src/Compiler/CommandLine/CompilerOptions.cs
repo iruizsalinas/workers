@@ -2,7 +2,6 @@ internal sealed record CompilerOptions(
     string Project,
     string Output,
     string? Reference,
-    IReadOnlyList<string> References,
     IReadOnlyList<string> SourcePaths,
     IReadOnlyList<string> Symbols)
 {
@@ -21,7 +20,6 @@ internal sealed record CompilerOptions(
             project,
             RequiredPath(args, "--output"),
             OptionalPath(args, "--workers-reference"),
-            ReadPaths(args, "--references-file", project),
             sources.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
             (Value(args, "--define") ?? "").Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
@@ -35,15 +33,6 @@ internal sealed record CompilerOptions(
 
     private static string? OptionalPath(string[] args, string name) =>
         Value(args, name) is { } value ? Path.GetFullPath(value) : null;
-
-    private static string[] ReadPaths(string[] args, string name, string project) =>
-        OptionalPath(args, name) is { } path && File.Exists(path)
-            ? File.ReadLines(path)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value => Path.GetFullPath(value, project))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray()
-            : [];
 
     private static string? Value(string[] args, string name)
     {
