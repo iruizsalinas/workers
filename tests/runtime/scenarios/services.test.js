@@ -16,7 +16,7 @@ describe("named WorkerEntrypoint service bindings", () => {
     expect(result.http).toMatchObject({ ok: true, service: "core" });
   });
 
-  it("propagates RPC values, defaults, D1 work, and exceptions", async () => {
+  it("propagates RPC values, defaults, D1 work, and validation results", async () => {
     const created = await invoke("/users", { method: "POST", body: JSON.stringify({ username: "ada_1" }) });
     expect(created.status).toBe(201);
     const user = await created.json();

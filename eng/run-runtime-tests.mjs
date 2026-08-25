@@ -9,7 +9,7 @@ for (const config of [
   "tests/runtime/vitest.accumulator.config.js",
   "tests/runtime/vitest.services.config.js",
 ]) {
-  const result = spawnSync(process.execPath, [vitest, "run", "--config", config], {
+  const result = spawnSync(process.execPath, [vitest, "run", "--reporter", "minimal", "--config", config], {
     cwd: repositoryRoot,
     stdio: "inherit",
     env: { ...process.env, WRANGLER_WRITE_LOGS: "false" },

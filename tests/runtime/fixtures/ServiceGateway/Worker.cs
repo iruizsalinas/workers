@@ -16,16 +16,11 @@ public static class Gateway
         }
         if (request.Method == "POST" && request.Path == "/users")
         {
-            try
-            {
-                var input = await request.JsonAsync<CreateUserInput>();
-                var user = await environment.Service("ADMIN").InvokeAsync<User>("createUser", [input]);
-                return Response.Json(user, 201);
-            }
-            catch (Exception exception)
-            {
-                return Response.Json(new { error = exception.Message }, 400);
-            }
+            var input = await request.JsonAsync<CreateUserInput>();
+            var result = await environment.Service("ADMIN").InvokeAsync<CreateUserResult>("createUser", [input]);
+            return result!.Error is null
+                ? Response.Json(result.User, 201)
+                : Response.Json(new { error = result.Error }, 400);
         }
         if (request.Method == "GET" && request.Path == "/users")
         {
@@ -74,15 +69,15 @@ public sealed class UserApi : WorkerEntrypoint
 [WorkerEntrypoint("AdminApi")]
 public sealed class AdminApi : WorkerEntrypoint
 {
-    public async Task<User> CreateUserAsync(CreateUserInput input)
+    public async Task<CreateUserResult> CreateUserAsync(CreateUserInput input)
     {
         if (!ValidateUsername(input.Username))
-            throw new ArgumentException("Invalid username");
+            return new(null, "Invalid username");
         var user = new User(Guid.NewGuid().ToString(), input.Username, DateTimeOffset.UtcNow.ToString("O"));
         await Environment.D1("DB").Prepare("INSERT INTO users (id, username, created_at) VALUES (?, ?, ?)")
             .Bind(user.Id, user.Username, user.CreatedAt).RunAsync();
         Context.WaitUntil(Task.CompletedTask);
-        return user;
+        return new(user, null);
     }
 
     public async Task<bool> DeleteUserAsync(string id)
@@ -91,7 +86,7 @@ public sealed class AdminApi : WorkerEntrypoint
         return result.Meta.Changes > 0;
     }
 
-    private static bool ValidateUsername(string value) =>
+    private bool ValidateUsername(string value) =>
         value.Length >= 3 && value.Length <= 32 && Regex.IsMatch(value, "^[a-zA-Z0-9_-]+$");
 }
 
@@ -105,5 +100,6 @@ public sealed class CoreService : WorkerEntrypoint
 }
 
 public sealed record CreateUserInput(string Username);
+public sealed record CreateUserResult(User? User, string? Error);
 public sealed record User(string Id, string Username, string CreatedAt);
 public sealed record Health(bool Ok, string Service, string Timestamp);
