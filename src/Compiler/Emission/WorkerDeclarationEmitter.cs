@@ -42,6 +42,7 @@ internal sealed partial class JavaScriptEmitter
     {
         var model = _compilation.GetSemanticModel(declaration.SyntaxTree);
         var symbol = model.GetDeclaredSymbol(declaration)!;
+        ThrowIfDuplicateGeneratedMethods(declaration, model, symbol.Name);
         var attribute = symbol.GetAttributes().Single(item => item.AttributeClass?.ToDisplayString() == "Workers.DurableObjectAttribute");
         var exportName = attribute.ConstructorArguments.Length == 1
             ? attribute.ConstructorArguments[0].Value?.ToString() ?? symbol.Name
@@ -66,10 +67,12 @@ internal sealed partial class JavaScriptEmitter
         _output.Append("  constructor(").Append(stateName).Append(", ").Append(envName).Append(") { super(")
             .Append(stateName).Append(", ").Append(envName).AppendLine(");");
         _output.Append("    this.state = ").Append(stateName).Append("; this.env = ").Append(envName).AppendLine(";");
-        foreach (var field in declaration.Members.OfType<FieldDeclarationSyntax>())
-            foreach (var variable in field.Declaration.Variables.Where(variable => variable.Initializer is not null))
+        foreach (var field in declaration.Members.OfType<FieldDeclarationSyntax>().Where(field => !field.Modifiers.Any(SyntaxKind.StaticKeyword)))
+            foreach (var variable in field.Declaration.Variables)
                 _output.Append("    this.").Append(UserIdentifier(model.GetDeclaredSymbol(variable)!, variable.Identifier)).Append(" = ")
-                    .Append(Expression(variable.Initializer!.Value)).AppendLine(";");
+                    .Append(variable.Initializer is null
+                        ? DefaultFieldValue(model.GetTypeInfo(field.Declaration.Type).Type!, variable)
+                        : Expression(variable.Initializer.Value)).AppendLine(";");
         if (constructor?.ExpressionBody is not null)
             _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
         else
@@ -78,15 +81,7 @@ internal sealed partial class JavaScriptEmitter
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())
         {
             _model = model;
-            var name = method.Identifier.Text switch
-            {
-                "FetchAsync" => "fetch",
-                "AlarmAsync" => "alarm",
-                "WebSocketMessageAsync" => "webSocketMessage",
-                "WebSocketCloseAsync" => "webSocketClose",
-                "WebSocketErrorAsync" => "webSocketError",
-                var value => LowerNativeMethodName(value)
-            };
+            var name = GeneratedInstanceMethodName(model.GetDeclaredSymbol(method)!);
             var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterName));
             var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);
             _output.Append("  ").Append(isAsync ? "async " : "").Append(name).Append('(').Append(parameters).AppendLine(") {");
@@ -103,6 +98,43 @@ internal sealed partial class JavaScriptEmitter
         type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.DurableObjectAttribute")
         || type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.WorkerEntrypointAttribute")
         || type.BaseType?.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler";
+
+    private static string GeneratedInstanceMethodName(IMethodSymbol method)
+    {
+        var name = method.Name switch
+        {
+            "FetchAsync" => "fetch",
+            "AlarmAsync" => "alarm",
+            "WebSocketMessageAsync" => "webSocketMessage",
+            "WebSocketCloseAsync" => "webSocketClose",
+            "WebSocketErrorAsync" => "webSocketError",
+            var value => LowerNativeMethodName(value)
+        };
+        return method.DeclaredAccessibility == Accessibility.Public ? name : "#" + name;
+    }
+
+    private static void ThrowIfDuplicateGeneratedMethods(
+        ClassDeclarationSyntax declaration,
+        SemanticModel model,
+        string typeName)
+    {
+        var duplicate = declaration.Members.OfType<MethodDeclarationSyntax>()
+            .Select(method => GeneratedInstanceMethodName(model.GetDeclaredSymbol(method)!))
+            .GroupBy(name => name, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Skip(1).Any());
+        if (duplicate is not null)
+            throw new NotSupportedException($"WRK115: Multiple methods on '{typeName}' compile to '{duplicate.Key.TrimStart('#')}'.");
+    }
+
+    private static string DefaultFieldValue(ITypeSymbol type, SyntaxNode source)
+    {
+        if (type.IsReferenceType || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) return "null";
+        if (type.SpecialType == SpecialType.System_Boolean) return "false";
+        if (type.SpecialType == SpecialType.System_Char) return "\"\\u0000\"";
+        if (type.TypeKind == TypeKind.Enum || type.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Decimal)
+            return "0";
+        throw Unsupported("WRK108", source);
+    }
 
     private void EmitHandler(string eventName, MethodDeclarationSyntax method)
     {

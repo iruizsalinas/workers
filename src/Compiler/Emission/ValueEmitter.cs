@@ -61,6 +61,17 @@ internal sealed partial class JavaScriptEmitter
         if (property?.ContainingType.ToDisplayString() == "Workers.Body" && property.Name == "Empty") return "null";
         if (property?.ContainingType.ToDisplayString() == "Workers.Body" && property.Name == "IsEmpty")
             return $"{Expression(member.Expression)} === null";
+        if (property?.ContainingType.ToDisplayString() == "Workers.TailEvent" && property.Name == "Events")
+            return Expression(member.Expression);
+        if (property?.ContainingType.ToDisplayString() == "Workers.TailRequest" && property.Name == "Headers")
+            return $"new Headers({Expression(member.Expression)}.headers)";
+        if (property?.ContainingType.ToDisplayString() == "Workers.ScheduledEvent")
+            return property.Name switch
+            {
+                "Type" => "\"scheduled\"",
+                "Schedule" => $"{Expression(member.Expression)}.scheduledTime",
+                _ => $"{Expression(member.Expression)}.{LowerFirst(property.Name)}"
+            };
         if (property?.ContainingType.ToDisplayString() == "Workers.FormEntry")
             return property.Name == "File"
                 ? $"({Expression(member.Expression)} instanceof File ? {Expression(member.Expression)} : null)"
@@ -123,7 +134,7 @@ internal sealed partial class JavaScriptEmitter
             throw UnsupportedSymbol(symbol, source);
     }
 
-    private static string Response(string[] arguments, string _) => $"new Response({arguments[0]}{ResponseInit(arguments, 1)})";
+    private static string Response(string[] arguments, string _) => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})";
     private string Identifier(IdentifierNameSyntax value) => _model.GetSymbolInfo(value).Symbol switch
     {
         IPropertySymbol { ContainingType: { } type, Name: var name }
@@ -150,7 +161,30 @@ internal sealed partial class JavaScriptEmitter
         _ => throw Unsupported("WRK108", source)
     };
 
-    private static string ResponseInit(string[] arguments, int statusIndex) => arguments.Length > statusIndex ? $", {{ status: {arguments[statusIndex]} }}" : "";
+    private static string ResponseInit(
+        string[] arguments,
+        int statusIndex,
+        int? statusTextIndex = null,
+        string? headers = null)
+    {
+        if (arguments.Length <= statusIndex && headers is null) return "";
+        var properties = new List<string>();
+        if (arguments.Length > statusIndex) properties.Add($"status: {arguments[statusIndex]}");
+        if (statusTextIndex is { } textIndex && arguments.Length > textIndex)
+            properties.Add($"statusText: {arguments[textIndex]} ?? undefined");
+        if (headers is not null) properties.Add($"headers: {headers}");
+        return $", {{ {string.Join(", ", properties)} }}";
+    }
+
+    private static string JsonResponseInit(string[] arguments)
+    {
+        if (arguments.Length == 1) return "";
+        var properties = new List<string>();
+        if (arguments.Length > 2) properties.Add($"...({arguments[2]} ?? {{}})");
+        properties.Add($"status: {arguments[1]}");
+        if (arguments.Length > 3) properties.Add($"statusText: {arguments[3]} ?? undefined");
+        return $", {{ {string.Join(", ", properties)} }}";
+    }
     private string AnonymousMember(AnonymousObjectMemberDeclaratorSyntax value)
     {
         var name = value.NameEquals?.Name.Identifier.Text ?? value.Expression switch

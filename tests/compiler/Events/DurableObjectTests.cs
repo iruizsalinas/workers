@@ -28,4 +28,22 @@ public sealed class DurableObjectTests
         Assert.DoesNotContain("registry", module, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void InitializesFieldsToTheirCSharpDefaults()
+    {
+        var module = Compile("""
+            using Workers;
+            [DurableObject("Counter")]
+            public sealed class Counter
+            {
+                private int _count;
+                private string? _label;
+                public int Value() => _count;
+            }
+            """);
+
+        Assert.Contains("this._count = 0;", module);
+        Assert.Contains("this._label = null;", module);
+    }
+
 }

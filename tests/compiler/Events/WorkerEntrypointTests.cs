@@ -42,4 +42,38 @@ public sealed class WorkerEntrypointTests
         Assert.Contains("this.ctx.waitUntil(Promise.resolve())", module);
         Assert.Contains("this.env[\"DATA\"]", module);
     }
+
+    [Fact]
+    public void EmitsNonPublicHelpersWithoutExposingThemOverRpc()
+    {
+        var module = Compile("""
+            using Workers;
+            [WorkerEntrypoint("Users")]
+            public sealed class Users : WorkerEntrypoint
+            {
+                public string Find(string value) => Normalize(value);
+                private string Normalize(string value) => value.Trim();
+            }
+            """);
+
+        Assert.Contains("#normalize(value)", module);
+        Assert.Contains("return this.#normalize(value);", module);
+    }
+
+    [Fact]
+    public void InitializesEntrypointInstanceState()
+    {
+        var module = Compile("""
+            using Workers;
+            [WorkerEntrypoint("Counter")]
+            public sealed class Counter : WorkerEntrypoint
+            {
+                private int _count;
+                public int Value() => _count;
+            }
+            """);
+
+        Assert.Contains("constructor(ctx, env) { super(ctx, env);", module);
+        Assert.Contains("this._count = 0;", module);
+    }
 }

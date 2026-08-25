@@ -20,7 +20,7 @@ internal sealed partial class JavaScriptEmitter
         if (invocation.Expression is MemberAccessExpressionSyntax member)
             return MemberInvocation(invocation, member, method, containingType, arguments);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
-            return $"this.{LowerNativeMethodName(method.Name)}({string.Join(", ", arguments)})";
+            return $"this.{GeneratedInstanceMethodName(method)}({string.Join(", ", arguments)})";
         if (method is not null && method.DeclaringSyntaxReferences.Length != 0) return EmitUserInvocation(method, invocation, arguments);
         if (method is not null) throw UnsupportedSymbol(method, invocation);
         return $"{Expression(invocation.Expression)}({string.Join(", ", arguments)})";
@@ -45,7 +45,7 @@ internal sealed partial class JavaScriptEmitter
             ("Workers.Timers", "ClearTimeout") => $"clearTimeout({arguments[0]})",
             ("Workers.Body", "Text" or "FromBytes") => arguments[0],
             ("Workers.Body", "Json") => $"JSON.stringify({arguments[0]})",
-            ("Workers.Response", _) => ResponseInvocation(invocation, method, name!, arguments),
+            ("Workers.Response", _) => EmitResponseInvocation(invocation, method!, name!, arguments),
             _ => ""
         };
         return result.Length != 0;
@@ -68,27 +68,59 @@ internal sealed partial class JavaScriptEmitter
         if (type == "Workers.Crypto") receiver = "globalThis.crypto";
         if (method is not null && BindingIntrinsicRegistry.TryGet(method, out var intrinsic)) return EmitBindingIntrinsic(receiver, invocation, method, intrinsic);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
-            return $"{receiver}.{LowerNativeMethodName(method.Name)}({string.Join(", ", arguments)})";
+            return $"{receiver}.{GeneratedInstanceMethodName(method)}({string.Join(", ", arguments)})";
         if (method is not null && method.DeclaringSyntaxReferences.Length != 0) return EmitUserInvocation(method, invocation, arguments);
         throw UnsupportedSymbol(method, invocation);
+    }
+
+    private string EmitResponseInvocation(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method,
+        string name,
+        string[] sourceArguments)
+    {
+        if (!invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null))
+            return ResponseInvocation(invocation, method, name, sourceArguments);
+
+        var temporaries = sourceArguments.Select((_, index) =>
+            _names.Get($"argument:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}:{index}", $"arg{index + 1}")).ToArray();
+        var parameterOrdinals = invocation.ArgumentList.Arguments.Select((syntax, index) => syntax.NameColon is null
+            ? index
+            : method.Parameters.Single(candidate => candidate.Name == syntax.NameColon.Name.Identifier.ValueText).Ordinal).ToArray();
+        var arguments = new string[parameterOrdinals.Max() + 1];
+        for (var index = 0; index < temporaries.Length; index++)
+            arguments[parameterOrdinals[index]] = temporaries[index];
+        for (var index = 0; index < arguments.Length; index++)
+            if (arguments[index] is null)
+                arguments[index] = LiteralConstant(method.Parameters[index].ExplicitDefaultValue, invocation);
+
+        var body = ResponseInvocation(invocation, method, name, arguments);
+        return $"(({string.Join(", ", temporaries)}) => {body})({string.Join(", ", sourceArguments)})";
     }
 
     private string ResponseInvocation(InvocationExpressionSyntax invocation, IMethodSymbol? method, string name, string[] arguments) => name switch
     {
         "Text" => Response(arguments, "text"),
-        "Html" => $"new Response({arguments[0]}, {{ status: {(arguments.Length > 1 ? arguments[1] : "200")}, headers: {{ \"content-type\": \"text/html; charset=utf-8\" }} }})",
-        "Json" => $"Response.json({arguments[0]}{ResponseInit(arguments, 1)})",
-        "Empty" => $"new Response(null{ResponseInit(arguments, 0)})",
+        "Html" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2, "{ \"content-type\": \"text/html; charset=utf-8\" }")})",
+        "Json" => $"Response.json({arguments[0]}{JsonResponseInit(arguments)})",
+        "Empty" => $"new Response(null{ResponseInit(arguments, 0, 1)})",
+        "Redirect" when arguments.Length > 2 => $"new Response(null{ResponseInit(arguments, 1, 2, $"{{ location: {arguments[0]} }}")})",
         "Redirect" => $"Response.redirect({arguments[0]}, {(arguments.Length > 1 ? arguments[1] : "302")})",
-        "FromBody" => $"new Response({arguments[0]}.body ?? {arguments[0]})",
+        "FromBody" => ResponseFromBody(invocation, arguments),
         "FromStream" when method?.Parameters.Length >= 2 && method.Parameters[1].Type.ToDisplayString() == "Workers.Headers" => $"new Response({arguments[0]}, {{ status: {(arguments.Length > 2 ? arguments[2] : "200")}, headers: {arguments[1]} }})",
-        "FromStream" => $"new Response({arguments[0]}{ResponseInit(arguments, 1)})",
+        "FromStream" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})",
         "WebSocket" => $"new Response(null, {{ status: 101, webSocket: {arguments[0]} }})",
         "WithHeader" => HeaderMutation(invocation, arguments, "set"),
         "AppendHeader" => HeaderMutation(invocation, arguments, "append"),
         "WithoutHeader" => HeaderMutation(invocation, arguments, "delete"),
         _ => ""
     };
+
+    private string ResponseFromBody(InvocationExpressionSyntax invocation, string[] arguments)
+    {
+        var body = _names.Get($"response-body:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}", "body");
+        return $"(({body}) => new Response({body}.body ?? {body}{ResponseInit(arguments, 1, 2)}))({arguments[0]})";
+    }
 
     private string HeaderMutation(InvocationExpressionSyntax invocation, string[] arguments, string operation)
     {
