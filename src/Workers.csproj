@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <PackageId>Workers</PackageId>
-    <Version>0.2.0</Version>
+    <Version>$(WorkersVersion)</Version>
     <Authors>Iñigo Ruiz-Salinas</Authors>
     <Description>Compile a focused C# profile directly to minimal Cloudflare Workers JavaScript.</Description>
     <PackageProjectUrl>https://github.com/iruizsalinas/workers</PackageProjectUrl>

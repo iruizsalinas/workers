@@ -1,5 +1,6 @@
 <Project>
   <PropertyGroup>
+    <WorkersVersion>0.2.0</WorkersVersion>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

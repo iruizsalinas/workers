@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>Workers.Compiler</AssemblyName>
     <RootNamespace>Workers.Compiler</RootNamespace>
+    <Version>$(WorkersVersion)</Version>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

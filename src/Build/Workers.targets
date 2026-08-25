@@ -26,7 +26,7 @@
                       Lines="@(Compile->'%(FullPath)')"
                       Overwrite="true"
                       WriteOnlyWhenDifferent="true" />
-    <Exec Command="&quot;$(_WorkersDotNetHost)&quot; &quot;$(_WorkersCompilerPath)&quot; --project &quot;$(MSBuildProjectDirectory)&quot; --sources-file &quot;$(_WorkersSourcesFile)&quot; --define &quot;$(DefineConstants)&quot; --workers-reference &quot;$(_WorkersApiAssembly)&quot; --output &quot;$(WorkerOutputPath)&quot;" />
+    <Exec Command="&quot;$(_WorkersDotNetHost)&quot; &quot;$(_WorkersCompilerPath)&quot; --project &quot;$(MSBuildProjectDirectory)&quot; --sources &quot;$(_WorkersSourcesFile)&quot; --define &quot;$(DefineConstants)&quot; --reference &quot;$(_WorkersApiAssembly)&quot; --output &quot;$(WorkerOutputPath)&quot;" />
     <Message Importance="High" Text="Worker module written to '$(WorkerOutputPath)'." />
   </Target>
 </Project>
