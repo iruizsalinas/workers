@@ -43,9 +43,10 @@ internal sealed partial class JavaScriptEmitter
         {
             "NextDouble" when arguments.Length == 0 => "Math.random()",
             "Next" when arguments.Length == 0 => "Math.floor(Math.random() * 2147483647)",
-            "Next" when arguments.Length == 1 => $"Math.floor(Math.random() * {arguments[0]})",
+            "Next" when arguments.Length == 1 =>
+                $"{_helpers.Require(JavaScriptHelper.RandomNext)}(0, {arguments[0]})",
             "Next" when arguments.Length == 2 =>
-                $"Math.floor(Math.random() * ({arguments[1]} - {arguments[0]})) + {arguments[0]}",
+                $"{_helpers.Require(JavaScriptHelper.RandomNext)}({arguments[0]}, {arguments[1]})",
             _ => throw UnsupportedSymbol(method, source)
         };
 
@@ -78,7 +79,8 @@ internal sealed partial class JavaScriptEmitter
         {
             "ToString" when arguments.Length == 1
                             && source.ArgumentList.Arguments[0].Expression is LiteralExpressionSyntax format
-                            && format.Token.ValueText is "O" or "o" => $"new Date({receiver}).toISOString()",
+                            && format.Token.ValueText is "O" or "o" =>
+                $"new Date({receiver}).toISOString().replace(/(\\.\\d{{3}})Z$/, \"$1\" + \"0000+00:00\")",
             "AddDays" when arguments.Length == 1 =>
                 $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 86400000)",
             "AddSeconds" when arguments.Length == 1 =>

@@ -18,7 +18,7 @@ internal sealed partial class JavaScriptEmitter
             var parameters = string.Join(", ", method.ParameterList.Parameters.Select(parameter =>
                 parameter.Default is null ? ParameterName(parameter) : $"{ParameterName(parameter)} = {Expression(parameter.Default.Value)}"));
             _output.Append("  ").Append(method.Modifiers.Any(SyntaxKind.AsyncKeyword) ? "async " : "")
-                .Append(LowerFirst(method.Identifier.Text.Replace("Async", "", StringComparison.Ordinal)))
+                .Append(LowerNativeMethodName(method.Identifier.Text))
                 .Append('(').Append(parameters).AppendLine(") {");
             if (method.ExpressionBody is not null)
                 _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");

@@ -8,22 +8,35 @@ internal sealed partial class JavaScriptEmitter
     private string Binary(BinaryExpressionSyntax expression)
     {
         var operation = _model.GetOperation(expression) as IBinaryOperation;
+        if (operation?.OperatorMethod is not null)
+            throw UnsupportedSymbol(operation.OperatorMethod, expression);
         var type = operation?.Type?.SpecialType ?? SpecialType.None;
         var left = Expression(expression.Left);
         var right = Expression(expression.Right);
         var integral32 = type is SpecialType.System_Int32 or SpecialType.System_UInt32;
+
+        if (expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression
+            && (expression.Left.IsKind(SyntaxKind.NullLiteralExpression)
+                || expression.Right.IsKind(SyntaxKind.NullLiteralExpression)))
+            return $"{left} {(expression.IsKind(SyntaxKind.EqualsExpression) ? "==" : "!=")} {right}";
 
         if (operation?.IsChecked == true && integral32
             && expression.Kind() is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression)
             throw Unsupported("WRK108", expression);
 
         if (type is SpecialType.System_Int64 or SpecialType.System_UInt64
-            && expression.Kind() is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression)
+            && expression.Kind() is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression or SyntaxKind.ModuloExpression)
             throw Unsupported("WRK108", expression);
 
         if (expression.IsKind(SyntaxKind.DivideExpression) && integral32)
         {
             var helper = _helpers.Require(JavaScriptHelper.IntegerDivide);
+            return $"{helper}({left}, {right}, {(type == SpecialType.System_UInt32 ? "true" : "false")})";
+        }
+
+        if (expression.IsKind(SyntaxKind.ModuloExpression) && integral32)
+        {
+            var helper = _helpers.Require(JavaScriptHelper.IntegerRemainder);
             return $"{helper}({left}, {right}, {(type == SpecialType.System_UInt32 ? "true" : "false")})";
         }
 
@@ -95,17 +108,19 @@ internal sealed partial class JavaScriptEmitter
         "static", "super", "switch", "this", "throw", "true", "try", "typeof", "var", "void", "while", "with", "yield"
     };
     private static string LowerFirst(string value) => value.Length == 0 ? value : char.ToLowerInvariant(value[0]) + value[1..];
+    private static string LowerNativeMethodName(string value) => LowerFirst(
+        value.EndsWith("Async", StringComparison.Ordinal) ? value[..^"Async".Length] : value);
     private string IsPattern(IsPatternExpressionSyntax value) => value.Pattern switch
     {
-        ConstantPatternSyntax constant when constant.Expression.IsKind(SyntaxKind.NullLiteralExpression) => $"{Expression(value.Expression)} === null",
+        ConstantPatternSyntax constant when constant.Expression.IsKind(SyntaxKind.NullLiteralExpression) => $"{Expression(value.Expression)} == null",
         UnaryPatternSyntax unary
             when unary.IsKind(SyntaxKind.NotPattern)
                 && unary.Pattern is ConstantPatternSyntax constant
                 && constant.Expression.IsKind(SyntaxKind.NullLiteralExpression) =>
-            $"{Expression(value.Expression)} !== null",
+            $"{Expression(value.Expression)} != null",
         _ => throw Unsupported("WRK104", value)
     };
     private static NotSupportedException Unsupported(string code, SyntaxNode node) => new($"{code}: '{node.Kind()}' is not supported yet: {node}");
-    private static NotSupportedException UnsupportedSymbol(IMethodSymbol? symbol, SyntaxNode node) =>
+    private static NotSupportedException UnsupportedSymbol(ISymbol? symbol, SyntaxNode node) =>
         new($"WRK105: '{symbol?.ToDisplayString() ?? node.ToString()}' is outside the supported Workers C# profile.");
 }

@@ -11,7 +11,10 @@ internal sealed partial class JavaScriptEmitter
         _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
         var type = _model.GetDeclaredSymbol(declaration)!;
         _output.Append("class ").Append(UserIdentifier(type, declaration.Identifier)).AppendLine(" {");
-        var constructor = declaration.Members.OfType<ConstructorDeclarationSyntax>().SingleOrDefault();
+        var constructors = declaration.Members.OfType<ConstructorDeclarationSyntax>().ToArray();
+        if (constructors.Length > 1)
+            throw Unsupported("WRK109", constructors[1]);
+        var constructor = constructors.SingleOrDefault();
         if (constructor is not null)
         {
             _output.Append("  constructor(")
@@ -22,9 +25,10 @@ internal sealed partial class JavaScriptEmitter
         }
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>().Where(item => item.Modifiers.Any(SyntaxKind.PublicKeyword)))
         {
-            var name = LowerFirst(method.Identifier.Text.Replace("Async", "", StringComparison.Ordinal));
+            var name = LowerNativeMethodName(method.Identifier.Text);
             var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterName));
-            _output.Append("  async ").Append(name).Append('(').Append(parameters).AppendLine(") {");
+            var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);
+            _output.Append("  ").Append(isAsync ? "async " : "").Append(name).Append('(').Append(parameters).AppendLine(") {");
             if (method.ExpressionBody is not null)
                 _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
             else
@@ -81,7 +85,7 @@ internal sealed partial class JavaScriptEmitter
                 "WebSocketMessageAsync" => "webSocketMessage",
                 "WebSocketCloseAsync" => "webSocketClose",
                 "WebSocketErrorAsync" => "webSocketError",
-                var value => LowerFirst(value.Replace("Async", "", StringComparison.Ordinal))
+                var value => LowerNativeMethodName(value)
             };
             var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterName));
             var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);

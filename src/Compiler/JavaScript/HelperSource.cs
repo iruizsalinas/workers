@@ -9,6 +9,8 @@ internal static class HelperSource
         JavaScriptHelper.Digest => Digest(name),
         JavaScriptHelper.WebSocketEvents => WebSocketEvents(name),
         JavaScriptHelper.IntegerDivide => IntegerDivide(name),
+        JavaScriptHelper.IntegerRemainder => IntegerRemainder(name),
+        JavaScriptHelper.RandomNext => RandomNext(name),
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 
@@ -135,6 +137,24 @@ internal static class HelperSource
           }
           const value = Math.trunc(left / right);
           return unsigned ? value >>> 0 : value | 0;
+        }
+
+        """;
+
+    private static string IntegerRemainder(Func<string, string> name) => $$"""
+        function {{name("integerRemainder")}}(left, right, unsigned) {
+          if (right === 0) throw new RangeError("Integer division by zero.");
+          const value = left % right;
+          return unsigned ? value >>> 0 : value | 0;
+        }
+
+        """;
+
+    private static string RandomNext(Func<string, string> name) => $$"""
+        function {{name("randomNext")}}(minimum, maximum) {
+          if (minimum > maximum) throw new RangeError("Minimum cannot exceed maximum.");
+          if (minimum === maximum) return minimum;
+          return Math.floor(Math.random() * (maximum - minimum)) + minimum;
         }
 
         """;

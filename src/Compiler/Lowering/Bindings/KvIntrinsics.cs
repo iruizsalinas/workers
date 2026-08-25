@@ -8,7 +8,7 @@ KvIntrinsics
         {
             [Key("Workers.IKvNamespace", "GetTextAsync")] = Direct("get"),
             [Key("Workers.IKvNamespace", "GetTextWithMetadataAsync")] = Direct("getWithMetadata"),
-            [Key("Workers.IKvNamespace", "GetTextBulkAsync")] = Direct("get"),
+            [Key("Workers.IKvNamespace", "GetTextBulkAsync")] = new("get", BindingIntrinsicKind.DictionaryObject),
             [Key("Workers.IKvNamespace", "GetTextBulkWithMetadataAsync")] = Direct("getWithMetadata"),
             [Key("Workers.IKvNamespace", "GetBytesAsync")] = new("get", BindingIntrinsicKind.KvBytesGet),
             [Key("Workers.IKvNamespace", "GetBytesWithMetadataAsync")] = new("getWithMetadata", BindingIntrinsicKind.KvBytesGet),

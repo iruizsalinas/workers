@@ -9,7 +9,8 @@ internal sealed partial class JavaScriptEmitter
         var method = _model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
         var containingType = method?.ContainingType.ToDisplayString();
         var methodName = method?.Name;
-        if (containingType is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask" && methodName == "FromResult") return arguments[0];
+        if (containingType is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask" && methodName == "FromResult")
+            return $"Promise.resolve({arguments[0]})";
         if (containingType == "System.Threading.Tasks.Task" && methodName == "Delay")
         {
             if (arguments.Length != 1) throw UnsupportedSymbol(method, invocation);
@@ -19,7 +20,7 @@ internal sealed partial class JavaScriptEmitter
         if (invocation.Expression is MemberAccessExpressionSyntax member)
             return MemberInvocation(invocation, member, method, containingType, arguments);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
-            return $"this.{LowerFirst(method.Name.Replace("Async", "", StringComparison.Ordinal))}({string.Join(", ", arguments)})";
+            return $"this.{LowerNativeMethodName(method.Name)}({string.Join(", ", arguments)})";
         if (method is not null && method.DeclaringSyntaxReferences.Length != 0) return EmitUserInvocation(method, invocation, arguments);
         if (method is not null) throw UnsupportedSymbol(method, invocation);
         return $"{Expression(invocation.Expression)}({string.Join(", ", arguments)})";
@@ -52,12 +53,12 @@ internal sealed partial class JavaScriptEmitter
 
     private string MemberInvocation(InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax member, IMethodSymbol? method, string? type, string[] arguments)
     {
-        var receiver = Expression(member.Expression);
         var name = member.Name.Identifier.Text;
         if (type == "System.IO.TextWriter" && name == "WriteLine"
             && _model.GetSymbolInfo(member.Expression).Symbol is IPropertySymbol { ContainingType: { } consoleType, Name: "Error" }
             && consoleType.ToDisplayString() == "System.Console")
             return arguments.Length == 1 ? $"console.error({arguments[0]})" : throw UnsupportedSymbol(method, invocation);
+        var receiver = Expression(member.Expression);
         if (TryEmitFrameworkInvocation(invocation, method, receiver, name, arguments, out var framework)) return framework;
         if (type == "Workers.Env" && EnvironmentBindings.Contains(name)) return $"{receiver}[{arguments[0]}]";
         if (type == "Workers.CacheStorage" && name == "OpenAsync") return $"caches.open({arguments[0]})";
@@ -67,7 +68,7 @@ internal sealed partial class JavaScriptEmitter
         if (type == "Workers.Crypto") receiver = "globalThis.crypto";
         if (method is not null && BindingIntrinsicRegistry.TryGet(method, out var intrinsic)) return EmitBindingIntrinsic(receiver, invocation, method, intrinsic);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
-            return $"{receiver}.{LowerFirst(method.Name.Replace("Async", "", StringComparison.Ordinal))}({string.Join(", ", arguments)})";
+            return $"{receiver}.{LowerNativeMethodName(method.Name)}({string.Join(", ", arguments)})";
         if (method is not null && method.DeclaringSyntaxReferences.Length != 0) return EmitUserInvocation(method, invocation, arguments);
         throw UnsupportedSymbol(method, invocation);
     }

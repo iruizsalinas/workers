@@ -3,6 +3,60 @@ namespace Workers.Compiler.Tests;
 public sealed class ControlFlowTests
 {
     [Fact]
+    public void RethrowsTheActiveJavaScriptException()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    try { throw new Exception("failure"); }
+                    catch { throw; }
+                }
+            }
+            """);
+
+        Assert.Contains("catch ($workers$exception)", module);
+        Assert.Contains("throw $workers$exception;", module);
+        Assert.DoesNotContain("throw;", module);
+    }
+
+    [Fact]
+    public void RejectsMultipleOrSpecificCatchClauses()
+    {
+        var multiple = Assert.Throws<NotSupportedException>(() => Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    try { throw new InvalidOperationException(); }
+                    catch (InvalidOperationException) { return Response.Text("specific"); }
+                    catch (Exception) { return Response.Text("general"); }
+                }
+            }
+            """));
+        var specific = Assert.Throws<NotSupportedException>(() => Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    try { throw new InvalidOperationException(); }
+                    catch (InvalidOperationException) { return Response.Text("specific"); }
+                }
+            }
+            """));
+
+        Assert.StartsWith("WRK108:", multiple.Message);
+        Assert.StartsWith("WRK108:", specific.Message);
+    }
+
+    [Fact]
     public void LowersTryCatchSwitchThrowAndDoWhile()
     {
         var module = Compile("""

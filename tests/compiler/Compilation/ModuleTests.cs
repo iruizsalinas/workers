@@ -15,7 +15,7 @@ public sealed class ModuleTests
             }
             """);
 
-        Assert.Contains("return new Response(\"Hello\");", module);
+        Assert.Contains("return Promise.resolve(new Response(\"Hello\"));", module);
         Assert.Contains("export default { fetch: $workers$fetch };", module);
         Assert.DoesNotContain("dotnet", module, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("wasm", module, StringComparison.OrdinalIgnoreCase);

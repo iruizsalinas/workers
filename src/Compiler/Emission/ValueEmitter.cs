@@ -45,9 +45,18 @@ internal sealed partial class JavaScriptEmitter
                 "DeflateRaw" => "deflate-raw",
                 _ => throw Unsupported("WRK108", member)
             });
+        if (symbol is IFieldSymbol { ContainingType: { } splitOptionsType } splitOptions
+            && splitOptionsType.ToDisplayString() == "System.StringSplitOptions")
+            return splitOptions.Name switch
+            {
+                "None" => "0",
+                "RemoveEmptyEntries" => "1",
+                "TrimEntries" => "2",
+                _ => throw Unsupported("WRK108", member)
+            };
         if (property is { Name: "CompletedTask", ContainingType: { } taskType }
             && taskType.ToDisplayString() is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask")
-            return "undefined";
+            return "Promise.resolve()";
         if (property?.ContainingType.ToDisplayString() == "Workers.WebSocketPair") return $"{Expression(member.Expression)}[{(property.Name == "Client" ? 0 : 1)}]";
         if (property?.ContainingType.ToDisplayString() == "Workers.Body" && property.Name == "Empty") return "null";
         if (property?.ContainingType.ToDisplayString() == "Workers.Body" && property.Name == "IsEmpty")
@@ -67,6 +76,12 @@ internal sealed partial class JavaScriptEmitter
             return $"{Expression(member.Expression)}.{property.Name switch { "Path" => "pathname", "Query" => "search", "QueryParameters" => "searchParams", _ => LowerFirst(property.Name) }}";
         if (property?.ContainingType.ToDisplayString() == "Workers.Headers" && property.Name == "Count")
             return $"Array.from({Expression(member.Expression)}).length";
+        if (property is { Name: "Length" }
+            && (_model.GetTypeInfo(member.Expression).Type?.SpecialType == SpecialType.System_String
+                || _model.GetTypeInfo(member.Expression).Type is IArrayTypeSymbol
+                || property.ContainingType.OriginalDefinition.ToDisplayString() is
+                    "System.Memory<T>" or "System.ReadOnlyMemory<T>"))
+            return $"{Expression(member.Expression)}.length";
         if (property?.ContainingType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
             return $"{Expression(member.Expression)}[{(property.Name == "Key" ? 0 : 1)}]";
         if (property?.ContainingType.ToDisplayString() == "Workers.Response" && property.Name == "IsSuccessStatusCode")
@@ -82,17 +97,30 @@ internal sealed partial class JavaScriptEmitter
         if (property is { Name: "Count", ContainingType: { } queueBatch }
             && BindingIntrinsicRegistry.IsQueueMessageBatch(queueBatch))
             return $"{Expression(member.Expression)}.messages.length";
-        if (property is { Name: "Count", ContainingType: { } dictionaryType }
-            && (_model.GetTypeInfo(member.Expression).Type is INamedTypeSymbol receiverType
-                && receiverType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>"
-                || dictionaryType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>"
-                || dictionaryType.AllInterfaces.Any(item => item.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>")))
-            return $"{Expression(member.Expression)}.size";
+        if (property is { Name: "Count" } && IsDictionary(_model.GetTypeInfo(member.Expression).Type))
+            return $"Object.keys({Expression(member.Expression)}).length";
         if (property is { Name: "Count", ContainingType: { } collection }
             && (collection.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyCollection<T>"
                 || collection.AllInterfaces.Any(item => item.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyCollection<T>")))
             return $"{Expression(member.Expression)}.length";
+        ThrowIfUnsupportedFrameworkMember(symbol, member);
         return $"{Expression(member.Expression)}.{LowerFirst(member.Name.Identifier.Text)}";
+    }
+
+    private static bool IsDictionary(ITypeSymbol? type) => type is INamedTypeSymbol named
+        && (named.OriginalDefinition.ToDisplayString() is
+                "System.Collections.Generic.Dictionary<TKey, TValue>" or
+                "System.Collections.Generic.IDictionary<TKey, TValue>" or
+                "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>"
+            || named.AllInterfaces.Any(item => item.OriginalDefinition.ToDisplayString() is
+                "System.Collections.Generic.IDictionary<TKey, TValue>" or
+                "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>"));
+
+    private static void ThrowIfUnsupportedFrameworkMember(ISymbol? symbol, SyntaxNode source)
+    {
+        if (symbol?.ContainingNamespace.ToDisplayString() is { } @namespace
+            && (@namespace == "System" || @namespace.StartsWith("System.", StringComparison.Ordinal)))
+            throw UnsupportedSymbol(symbol, source);
     }
 
     private static string Response(string[] arguments, string _) => $"new Response({arguments[0]}{ResponseInit(arguments, 1)})";

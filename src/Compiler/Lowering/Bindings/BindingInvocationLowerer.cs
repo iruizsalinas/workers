@@ -55,6 +55,7 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.QueryNames => $"Array.from({receiver}.{intrinsic.JavascriptName}())",
             BindingIntrinsicKind.CompressStream => $"{receiver}.pipeThrough(new CompressionStream({arguments[0].Value}))",
             BindingIntrinsicKind.DecompressStream => $"{receiver}.pipeThrough(new DecompressionStream({arguments[0].Value}))",
+            BindingIntrinsicKind.DictionaryObject => EmitDictionaryObject(receiver, method, intrinsic.JavascriptName, arguments),
             _ => throw new InvalidOperationException($"Unknown binding intrinsic kind '{intrinsic.Kind}'.")
         };
     }
@@ -96,7 +97,10 @@ internal sealed partial class JavaScriptEmitter
         var key = arguments.Single(item => item.Parameter.Name is "key" or "keys").Value;
         var options = arguments.FirstOrDefault(item => item.Parameter.Name == "options").Value;
         var nativeOptions = options is null ? $"{{ type: \"{type}\" }}" : $"{{ ...{options}, type: \"{type}\" }}";
-        return $"{receiver}.{method}({key}, {nativeOptions})";
+        var invocation = $"{receiver}.{method}({key}, {nativeOptions})";
+        return arguments.Any(item => item.Parameter.Name == "keys")
+            ? $"{invocation}.then(value => Object.fromEntries(value))"
+            : invocation;
     }
 
     private static string EmitDurableObjectGet(
@@ -107,7 +111,19 @@ internal sealed partial class JavaScriptEmitter
         var invocation = $"{receiver}.get({string.Join(", ", arguments.Select(item => item.Value))})";
         return method.Parameters[0].Type.SpecialType == SpecialType.System_String
             ? $"{invocation}.then(value => value ?? null)"
-            : invocation;
+            : $"{invocation}.then(value => Object.fromEntries(value))";
+    }
+
+    private static string EmitDictionaryObject(
+        string receiver,
+        IMethodSymbol method,
+        string name,
+        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
+    {
+        var invocation = $"{receiver}.{name}({string.Join(", ", arguments.Select(item => item.Value))})";
+        return method.ReturnType.OriginalDefinition.ToDisplayString() == "System.Threading.Tasks.Task<TResult>"
+            ? $"{invocation}.then(value => Object.fromEntries(value))"
+            : $"Object.fromEntries({invocation})";
     }
 
     private static string EmitKvJsonPut(

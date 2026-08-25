@@ -5,6 +5,9 @@ internal sealed partial class JavaScriptEmitter
 {
     private void EmitTry(TryStatementSyntax statement, int depth)
     {
+        if (statement.Catches.Count > 1)
+            throw Unsupported("WRK108", statement.Catches[1]);
+
         var indent = new string(' ', depth * 2);
         _output.Append(indent).AppendLine("try {");
         EmitEmbedded(statement.Block, depth + 1);
@@ -14,13 +17,22 @@ internal sealed partial class JavaScriptEmitter
         {
             if (clause.Filter is not null)
                 throw Unsupported("WRK100", clause.Filter);
+            if (clause.Declaration is not null
+                && _model.GetTypeInfo(clause.Declaration.Type).Type?.ToDisplayString() != "System.Exception")
+                throw Unsupported("WRK108", clause.Declaration);
             var variable = clause.Declaration?.Identifier is { RawKind: not 0 } identifier
                 ? UserIdentifier(_model.GetDeclaredSymbol(clause.Declaration!)!, identifier)
-                : null;
-            _output.Append(" catch");
-            if (variable is not null) _output.Append(" (").Append(variable).Append(')');
-            _output.AppendLine(" {");
-            EmitEmbedded(clause.Block, depth + 1);
+                : _names.Get($"catch:{clause.SyntaxTree.FilePath}:{clause.SpanStart}", "exception");
+            _output.Append(" catch (").Append(variable).AppendLine(") {");
+            _caughtExceptions.Push(variable);
+            try
+            {
+                EmitEmbedded(clause.Block, depth + 1);
+            }
+            finally
+            {
+                _caughtExceptions.Pop();
+            }
             _output.Append(indent).Append('}');
         }
 

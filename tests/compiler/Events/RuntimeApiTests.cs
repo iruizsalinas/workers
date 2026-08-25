@@ -3,7 +3,7 @@ namespace Workers.Compiler.Tests;
 public sealed class RuntimeApiTests
 {
     [Fact]
-    public void ErasesCompletedTasks()
+    public void RepresentsCompletedTasksAsPromises()
     {
         var module = Compile("""
             using Workers;
@@ -15,7 +15,7 @@ public sealed class RuntimeApiTests
             }
             """);
 
-        Assert.Contains("return undefined;", module);
+        Assert.Contains("return Promise.resolve();", module);
         Assert.DoesNotContain("Task.completedTask", module);
     }
 
@@ -107,7 +107,8 @@ public sealed class RuntimeApiTests
             """);
 
         Assert.Contains("class Handler", module);
-        Assert.Contains("async element(element)", module);
+        Assert.Contains("  element(element)", module);
+        Assert.DoesNotContain("async element(element)", module);
         Assert.Contains("value.setAttribute(\"data-worker\", \"csharp\")", module);
         Assert.Contains("new HTMLRewriter()).transform", module);
     }

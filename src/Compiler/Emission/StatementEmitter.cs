@@ -33,6 +33,8 @@ internal sealed partial class JavaScriptEmitter
                 var enumerable = Expression(loop.Expression);
                 if (BindingIntrinsicRegistry.IsQueueMessageBatch(_model.GetTypeInfo(loop.Expression).Type))
                     enumerable += ".messages";
+                else if (IsDictionary(_model.GetTypeInfo(loop.Expression).Type))
+                    enumerable = $"Object.entries({enumerable})";
                 _output.Append(indent)
                     .Append("for (const ")
                     .Append(UserIdentifier(_model.GetDeclaredSymbol(loop)!, loop.Identifier))
@@ -53,7 +55,12 @@ internal sealed partial class JavaScriptEmitter
                 break;
             case ThrowStatementSyntax value:
                 _output.Append(indent).Append("throw");
-                if (value.Expression is not null) _output.Append(' ').Append(Expression(value.Expression));
+                if (value.Expression is not null)
+                    _output.Append(' ').Append(Expression(value.Expression));
+                else if (_caughtExceptions.TryPeek(out var exception))
+                    _output.Append(' ').Append(exception);
+                else
+                    throw Unsupported("WRK108", value);
                 _output.AppendLine(";");
                 break;
             case DoStatementSyntax value:
@@ -68,7 +75,9 @@ internal sealed partial class JavaScriptEmitter
                 break;
             case ForStatementSyntax value:
                 var declaration = value.Declaration is null ? "" : string.Join(", ", value.Declaration.Variables.Select(variable =>
-                    $"{UserIdentifier(_model.GetDeclaredSymbol(variable)!, variable.Identifier)} = {Expression(variable.Initializer!.Value)}"));
+                    variable.Initializer is null
+                        ? UserIdentifier(_model.GetDeclaredSymbol(variable)!, variable.Identifier)
+                        : $"{UserIdentifier(_model.GetDeclaredSymbol(variable)!, variable.Identifier)} = {Expression(variable.Initializer.Value)}"));
                 var initializers = value.Declaration is null
                     ? string.Join(", ", value.Initializers.Select(Expression))
                     : $"let {declaration}";

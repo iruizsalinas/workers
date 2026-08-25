@@ -8,11 +8,25 @@ internal sealed partial class JavaScriptEmitter
         var receiver = Expression(value.Expression);
         return value.WhenNotNull switch
         {
-            MemberBindingExpressionSyntax member => $"{receiver}?.{LowerFirst(member.Name.Identifier.Text)}",
+            MemberBindingExpressionSyntax member => ConditionalMember(value, member, receiver),
             ElementBindingExpressionSyntax element =>
                 $"{receiver}?.[{string.Join(", ", element.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))}]",
             _ => throw Unsupported("WRK101", value.WhenNotNull)
         };
+    }
+
+    private string ConditionalMember(
+        ConditionalAccessExpressionSyntax access,
+        MemberBindingExpressionSyntax member,
+        string receiver)
+    {
+        var symbol = _model.GetSymbolInfo(member).Symbol;
+        var receiverType = _model.GetTypeInfo(access.Expression).Type;
+        if (member.Name.Identifier.Text == "Length"
+            && (receiverType?.SpecialType == SpecialType.System_String || receiverType is IArrayTypeSymbol))
+            return $"{receiver}?.length";
+        ThrowIfUnsupportedFrameworkMember(symbol, member);
+        return $"{receiver}?.{LowerFirst(member.Name.Identifier.Text)}";
     }
 
     private string ElementAccess(ElementAccessExpressionSyntax value)

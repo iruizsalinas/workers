@@ -49,7 +49,7 @@ public sealed class PlatformBindingTests
             """);
 
         Assert.Contains("await caches.default.match(request).then(value => value ?? null)", module);
-        Assert.Contains("cached !== null", module);
+        Assert.Contains("cached != null", module);
     }
 
     [Fact]

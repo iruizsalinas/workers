@@ -3,6 +3,44 @@ namespace Workers.Compiler.Tests;
 public sealed class ArithmeticTests
 {
     [Fact]
+    public void ChecksIntegerRemainderByZero()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx) =>
+                    Response.Text($"{Remainder(7, 2)}");
+
+                private static int Remainder(int left, int right) => left % right;
+            }
+            """);
+
+        Assert.Contains("function $workers$integerRemainder(left, right, unsigned)", module);
+        Assert.Contains("if (right === 0) throw new RangeError", module);
+        Assert.Contains("$workers$integerRemainder(left, right, false)", module);
+    }
+
+    [Fact]
+    public void RejectsUserDefinedOperators()
+    {
+        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx) =>
+                    Response.Json(new { equal = new Key(1) == new Key(1) });
+            }
+            public sealed record Key(int Value);
+            """));
+
+        Assert.StartsWith("WRK105:", error.Message);
+        Assert.Contains("Key.operator ==", error.Message);
+    }
+
+    [Fact]
     public void PreservesShortCircuitBooleanOperators()
     {
         var module = Compile("""

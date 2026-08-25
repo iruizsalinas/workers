@@ -21,6 +21,7 @@ public sealed class DateTimeTests
 
         Assert.Contains("let captured = new Date();", module);
         Assert.Contains("new Date(captured).toISOString()", module);
+        Assert.Contains("\"$1\" + \"0000+00:00\"", module);
         Assert.DoesNotContain("new Date().toISOString()", module);
     }
 

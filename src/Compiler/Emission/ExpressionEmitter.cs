@@ -39,10 +39,11 @@ internal sealed partial class JavaScriptEmitter
         ObjectCreationExpressionSyntax value => ObjectCreation(value),
         ImplicitObjectCreationExpressionSyntax value => ObjectCreation(value),
         ParenthesizedLambdaExpressionSyntax value when value.ExpressionBody is not null =>
-            $"({string.Join(", ", value.ParameterList.Parameters.Select(ParameterName))}) => {Expression(value.ExpressionBody)}",
+            $"{AsyncPrefix(value.AsyncKeyword)}({string.Join(", ", value.ParameterList.Parameters.Select(ParameterName))}) => {Expression(value.ExpressionBody)}",
         ParenthesizedLambdaExpressionSyntax value when value.Block is not null => Lambda(value),
         SimpleLambdaExpressionSyntax value when value.ExpressionBody is not null =>
-            $"{ParameterName(value.Parameter)} => {Expression(value.ExpressionBody)}",
+            $"{AsyncPrefix(value.AsyncKeyword)}{ParameterName(value.Parameter)} => {Expression(value.ExpressionBody)}",
+        SimpleLambdaExpressionSyntax value when value.Block is not null => Lambda(value),
         _ => throw Unsupported("WRK101", expression)
     };
 
@@ -50,8 +51,17 @@ internal sealed partial class JavaScriptEmitter
     {
         var parameters = string.Join(", ", value.ParameterList.Parameters.Select(ParameterName));
         var statements = string.Join(" ", value.Block!.Statements.Select(LambdaStatement));
-        return $"{(value.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword) ? "async " : "")}({parameters}) => {{ {statements} }}";
+        return $"{AsyncPrefix(value.AsyncKeyword)}({parameters}) => {{ {statements} }}";
     }
+
+    private string Lambda(SimpleLambdaExpressionSyntax value)
+    {
+        var statements = string.Join(" ", value.Block!.Statements.Select(LambdaStatement));
+        return $"{AsyncPrefix(value.AsyncKeyword)}{ParameterName(value.Parameter)} => {{ {statements} }}";
+    }
+
+    private static string AsyncPrefix(SyntaxToken token) =>
+        token.IsKind(SyntaxKind.AsyncKeyword) ? "async " : "";
 
     private string LambdaStatement(StatementSyntax statement) => statement switch
     {

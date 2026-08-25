@@ -47,11 +47,13 @@ internal static class WorkerDiscovery
         IEnumerable<MethodDeclarationSyntax> methods,
         (string Attribute, string Event) type)
     {
-        var method = methods.SingleOrDefault(candidate => HasAttribute(
+        var matches = methods.Where(candidate => HasAttribute(
             compilation,
             candidate,
-            $"Workers.{type.Attribute}Attribute"));
-        return method is null ? null : new WorkerEvent(type.Event, method);
+            $"Workers.{type.Attribute}Attribute")).Take(2).ToArray();
+        if (matches.Length > 1)
+            throw new NotSupportedException($"WRK111: Multiple '{type.Event}' event entrypoints are not supported.");
+        return matches.Length == 0 ? null : new WorkerEvent(type.Event, matches[0]);
     }
 
     private static bool HasAttribute(

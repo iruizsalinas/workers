@@ -13,6 +13,7 @@ internal sealed partial class JavaScriptEmitter
     private readonly Dictionary<IMethodSymbol, string> _userMethods = new(SymbolEqualityComparer.Default);
     private readonly Queue<IMethodSymbol> _pendingUserMethods = new();
     private readonly HashSet<IMethodSymbol> _emittedUserMethods = new(SymbolEqualityComparer.Default);
+    private readonly Stack<string> _caughtExceptions = new();
     private SemanticModel _model = null!;
     private JavaScriptEmitter(CSharpCompilation compilation)
     {

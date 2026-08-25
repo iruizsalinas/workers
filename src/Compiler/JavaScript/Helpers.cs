@@ -1,4 +1,4 @@
-internal enum JavaScriptHelper { WithHeader, Delay, Stream, Socket, Digest, WebSocketEvents, IntegerDivide }
+internal enum JavaScriptHelper { WithHeader, Delay, Stream, Socket, Digest, WebSocketEvents, IntegerDivide, IntegerRemainder, RandomNext }
 
 internal sealed class HelperRegistry(GeneratedNameAllocator names)
 {
@@ -26,6 +26,8 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.Digest => "digestWriter",
         JavaScriptHelper.WebSocketEvents => "webSocketEvents",
         JavaScriptHelper.IntegerDivide => "integerDivide",
+        JavaScriptHelper.IntegerRemainder => "integerRemainder",
+        JavaScriptHelper.RandomNext => "randomNext",
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 }

@@ -44,7 +44,8 @@ internal enum BindingIntrinsicKind
     BlobSliceBytes,
     QueryNames,
     CompressStream,
-    DecompressStream
+    DecompressStream,
+    DictionaryObject
 }
 
 internal sealed record BindingIntrinsic(string JavascriptName, BindingIntrinsicKind Kind = BindingIntrinsicKind.Direct);
