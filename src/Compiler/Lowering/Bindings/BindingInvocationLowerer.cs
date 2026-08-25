@@ -88,6 +88,11 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.CompressStream => $"{receiver}.pipeThrough(new CompressionStream({arguments[0].Value}))",
             BindingIntrinsicKind.DecompressStream => $"{receiver}.pipeThrough(new DecompressionStream({arguments[0].Value}))",
             BindingIntrinsicKind.DictionaryObject => EmitDictionaryObject(receiver, method, intrinsic.JavascriptName, arguments),
+            BindingIntrinsicKind.QueueSend => EmitQueueSend(receiver, intrinsic.JavascriptName, arguments),
+            BindingIntrinsicKind.QueueSendBatch => EmitQueueSendBatch(receiver, intrinsic.JavascriptName, arguments),
+            BindingIntrinsicKind.QueueRequest => EmitQueueRequest(intrinsic.JavascriptName, arguments),
+            BindingIntrinsicKind.RequestWithUrl => $"new Request({arguments[0].Value}, {receiver})",
+            BindingIntrinsicKind.Utf8Decode => EmitUtf8Decode(arguments),
             _ => throw new InvalidOperationException($"Unknown binding intrinsic kind '{intrinsic.Kind}'.")
         };
     }
@@ -183,12 +188,56 @@ internal sealed partial class JavaScriptEmitter
         return $"{receiver}.{method}({key}, {nativeOption})";
     }
 
-    private static string EmitServiceRpc(
+    private string EmitServiceRpc(
         string receiver,
         IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
     {
         var method = arguments.Single(item => item.Parameter.Name == "methodName").Value;
         var values = arguments.FirstOrDefault(item => item.Parameter.Name == "arguments").Value;
-        return values is null ? $"{receiver}[{method}]()" : $"{receiver}[{method}](...({values} ?? []))";
+        return values is null
+            ? $"{receiver}[{method}]()"
+            : $"{receiver}[{method}](...{_helpers.Require(JavaScriptHelper.RpcArguments)}({values}))";
+    }
+
+    private static string EmitQueueSend(
+        string receiver,
+        string contentType,
+        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
+    {
+        var message = arguments.Single(item => item.Parameter.Name == "message").Value;
+        var options = arguments.FirstOrDefault(item => item.Parameter.Name == "options").Value;
+        var nativeOptions = options is null
+            ? $"{{ contentType: \"{contentType}\" }}"
+            : $"{{ ...({options} ?? {{}}), contentType: \"{contentType}\" }}";
+        return $"{receiver}.send({message}, {nativeOptions})";
+    }
+
+    private static string EmitQueueSendBatch(
+        string receiver,
+        string contentType,
+        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
+    {
+        var messages = arguments.Single(item => item.Parameter.Name == "messages").Value;
+        var options = arguments.FirstOrDefault(item => item.Parameter.Name == "options").Value;
+        var requests = $"Array.from({messages}, body => ({{ body, contentType: \"{contentType}\" }}))";
+        return $"{receiver}.sendBatch({requests}{(options is null ? "" : ", " + options)})";
+    }
+
+    private static string EmitQueueRequest(
+        string contentType,
+        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
+    {
+        var body = arguments.Single(item => item.Parameter.Name == "body").Value;
+        var delay = arguments.FirstOrDefault(item => item.Parameter.Name == "delaySeconds").Value;
+        return $"{{ body: {body}, contentType: \"{contentType}\"{(delay is null ? "" : $", delaySeconds: {delay} ?? undefined")} }}";
+    }
+
+    private static string EmitUtf8Decode(
+        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
+    {
+        var bytes = arguments.Single(item => item.Parameter.Name == "bytes").Value;
+        var fatal = arguments.FirstOrDefault(item => item.Parameter.Name == "fatal").Value ?? "false";
+        var ignoreBom = arguments.FirstOrDefault(item => item.Parameter.Name == "ignoreBom").Value ?? "false";
+        return $"new TextDecoder(\"utf-8\", {{ fatal: {fatal}, ignoreBOM: {ignoreBom} }}).decode({bytes})";
     }
 }

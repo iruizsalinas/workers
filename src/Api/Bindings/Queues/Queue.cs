@@ -32,4 +32,4 @@ public sealed class QueueSendRequest
     public static QueueSendRequest Bytes(ReadOnlyMemory<byte> body, int? delaySeconds = null) => WorkerApi.NotExecutable<QueueSendRequest>();
 }
 
-public sealed record QueueMetrics(int? BacklogCount, int? BacklogBytes, int? OldestMessageAgeSeconds);
+public sealed record QueueMetrics(int BacklogCount, int BacklogBytes, DateTimeOffset? OldestMessageTimestamp);

@@ -14,6 +14,7 @@ describe("queue bindings", () => {
 
     expect(send).toHaveBeenCalledOnce();
     expect(send.mock.calls[0][0]).toMatchObject({ path: "/jobs/123" });
+    expect(send.mock.calls[0][1]).toEqual({ contentType: "json" });
     expect(send.mock.calls[0][0].queuedAt).toBeInstanceOf(Date);
     await expect(response.json()).resolves.toEqual({ queued: true });
   });

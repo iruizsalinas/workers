@@ -50,26 +50,26 @@ internal sealed partial class JavaScriptEmitter
     private string Lambda(ParenthesizedLambdaExpressionSyntax value)
     {
         var parameters = string.Join(", ", value.ParameterList.Parameters.Select(ParameterName));
-        var statements = string.Join(" ", value.Block!.Statements.Select(LambdaStatement));
-        return $"{AsyncPrefix(value.AsyncKeyword)}({parameters}) => {{ {statements} }}";
+        return $"{AsyncPrefix(value.AsyncKeyword)}({parameters}) => {LambdaBlock(value.Block!)}";
     }
 
     private string Lambda(SimpleLambdaExpressionSyntax value)
     {
-        var statements = string.Join(" ", value.Block!.Statements.Select(LambdaStatement));
-        return $"{AsyncPrefix(value.AsyncKeyword)}{ParameterName(value.Parameter)} => {{ {statements} }}";
+        return $"{AsyncPrefix(value.AsyncKeyword)}{ParameterName(value.Parameter)} => {LambdaBlock(value.Block!)}";
     }
 
     private static string AsyncPrefix(SyntaxToken token) =>
         token.IsKind(SyntaxKind.AsyncKeyword) ? "async " : "";
 
-    private string LambdaStatement(StatementSyntax statement) => statement switch
+    private string LambdaBlock(BlockSyntax block)
     {
-        ExpressionStatementSyntax expression => Expression(expression.Expression) + ";",
-        ReturnStatementSyntax { Expression: { } expression } => "return " + Expression(expression) + ";",
-        ReturnStatementSyntax => "return;",
-        _ => throw Unsupported("WRK100", statement)
-    };
+        var start = _output.Length;
+        foreach (var statement in block.Statements)
+            EmitStatement(statement, 1);
+        var statements = _output.ToString(start, _output.Length - start).TrimEnd();
+        _output.Length = start;
+        return statements.Length == 0 ? "{}" : $"{{\n{statements}\n}}";
+    }
 
     private string Collection(CollectionExpressionSyntax value)
     {

@@ -12,6 +12,7 @@ public interface IDurableObjectNamespace : IBinding
 public interface IDurableObjectStub : IFetcherBinding
 {
     Task<TResult?> InvokeAsync<TResult>(string methodName, IEnumerable<object?>? arguments = null, CancellationToken cancellationToken = default);
+    Task InvokeVoidAsync(string methodName, IEnumerable<object?>? arguments = null, CancellationToken cancellationToken = default);
 }
 
 public sealed record DurableObjectIdOptions

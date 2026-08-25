@@ -25,6 +25,11 @@ internal sealed partial class JavaScriptEmitter
                 $"JSON.stringify({receiver})",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
                    && name == "Add" && arguments.Length == 1 => $"{receiver}.push({arguments[0]})",
+            _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>"
+                   && name == "Add" && arguments.Length == 1 =>
+                $"{_helpers.Require(JavaScriptHelper.SetAdd)}({receiver}, {arguments[0]})",
+            _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>"
+                   && name == "Contains" && arguments.Length == 1 => $"{receiver}.has({arguments[0]})",
             _ when name == "ToString" && arguments.Length == 0
                    && type?.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Decimal =>
                 $"String({receiver})",
@@ -59,11 +64,16 @@ internal sealed partial class JavaScriptEmitter
         {
             ("Trim", 0) => $"{receiver}.trim()",
             ("ToLowerInvariant", 0) => $"{receiver}.toLowerCase()",
+            ("ToUpperInvariant", 0) => $"{receiver}.toUpperCase()",
             ("Contains", 1) => $"{receiver}.includes({arguments[0]})",
             ("StartsWith", 1) => $"{receiver}.startsWith({arguments[0]})",
             ("EndsWith", 1) => $"{receiver}.endsWith({arguments[0]})",
             ("Substring", 1) => $"{receiver}.slice({arguments[0]})",
             ("Substring", 2) => $"{receiver}.slice({arguments[0]}, {arguments[0]} + {arguments[1]})",
+            ("Replace", 2) => $"{receiver}.replaceAll({arguments[0]}, {arguments[1]})",
+            ("IndexOf", 2) when source.ArgumentList.Arguments[1].Expression is MemberAccessExpressionSyntax comparison
+                                && comparison.Name.Identifier.Text == "Ordinal" =>
+                $"{receiver}.indexOf({arguments[0]})",
             ("Split", 2) when source.ArgumentList.Arguments[1].Expression is MemberAccessExpressionSyntax option
                               && option.Name.Identifier.Text == "RemoveEmptyEntries" =>
                 $"{receiver}.split({arguments[0]}).filter(Boolean)",

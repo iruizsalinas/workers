@@ -1,0 +1,31 @@
+name = "workers-example-telemetry-pipeline"
+main = "dist/worker.js"
+compatibility_date = "2026-08-15"
+
+[build]
+command = "dotnet publish -c Release -p:NuGetAudit=false"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "telemetry-example"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[[queues.producers]]
+binding = "READINGS"
+queue = "telemetry-example"
+
+[[queues.consumers]]
+queue = "telemetry-example"
+max_batch_size = 10
+max_batch_timeout = 5
+
+[[durable_objects.bindings]]
+name = "RATE_GATE"
+class_name = "RateGate"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateGate"]

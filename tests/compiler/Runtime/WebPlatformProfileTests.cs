@@ -24,7 +24,7 @@ public sealed class WebPlatformProfileTests
             }
             """);
 
-        Assert.Contains("new URL(request.url.toString())", module);
+        Assert.Contains("new URL(new URL(request.url).toString())", module);
         Assert.Contains("searchParams.set(\"lang\", \"en\")", module);
         Assert.Contains("subtle.importKey", module);
         Assert.Contains("pipeThrough(new CompressionStream(\"gzip\"))", module);

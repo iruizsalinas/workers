@@ -15,6 +15,9 @@ internal sealed partial class JavaScriptEmitter
         if (property?.ContainingType.ToDisplayString() == "System.Random" && property.Name == "Shared") return "Math";
         if (property?.ContainingType.ToDisplayString() == "Workers.CacheStorage" && property.Name == "Default")
             return "caches.default";
+        if (symbol is IFieldSymbol { ContainingType: { } comparisonType, Name: "Ordinal" }
+            && comparisonType.ToDisplayString() == "System.StringComparison")
+            return "\"ordinal\"";
         if (symbol is IFieldSymbol { ContainingType: { } enumType } field
             && enumType.ToDisplayString() == "Workers.DigestAlgorithm")
             return field.Name switch
@@ -34,7 +37,7 @@ internal sealed partial class JavaScriptEmitter
                 _ => throw Unsupported("WRK108", member)
             };
         if (symbol is IFieldSymbol { ContainingType: { } redirectType } redirect
-            && redirectType.ToDisplayString() == "Workers.RequestRedirect")
+            && redirectType.ToDisplayString() == "Workers.RedirectMode")
             return JsonSerializer.Serialize(LowerFirst(redirect.Name));
         if (symbol is IFieldSymbol { ContainingType: { } compressionType } compression
             && compressionType.ToDisplayString() == "Workers.CompressionFormat")
@@ -83,8 +86,19 @@ internal sealed partial class JavaScriptEmitter
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "PathAndQuery")
             return $"(value => value.pathname + value.search)(new URL({Expression(member.Expression)}.url))";
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "QueryParameters") return $"new URL({Expression(member.Expression)}.url).searchParams";
+        if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Url")
+            return $"new URL({Expression(member.Expression)}.url)";
         if (property?.ContainingType.ToDisplayString() == "Workers.Url")
-            return $"{Expression(member.Expression)}.{property.Name switch { "Path" => "pathname", "Query" => "search", "QueryParameters" => "searchParams", _ => LowerFirst(property.Name) }}";
+            return $"{Expression(member.Expression)}.{property.Name switch
+            {
+                "Hostname" => "hostname",
+                "Username" => "username",
+                "Path" => "pathname",
+                "Query" => "search",
+                "Fragment" => "hash",
+                "QueryParameters" => "searchParams",
+                _ => LowerFirst(property.Name)
+            }}";
         if (property?.ContainingType.ToDisplayString() == "Workers.Headers" && property.Name == "Count")
             return $"Array.from({Expression(member.Expression)}).length";
         if (property is { Name: "Length" }
@@ -110,6 +124,8 @@ internal sealed partial class JavaScriptEmitter
             return $"{Expression(member.Expression)}.messages.length";
         if (property is { Name: "Count" } && IsDictionary(_model.GetTypeInfo(member.Expression).Type))
             return $"Object.keys({Expression(member.Expression)}).length";
+        if (property is { Name: "Count" } && IsSet(_model.GetTypeInfo(member.Expression).Type))
+            return $"{Expression(member.Expression)}.size";
         if (property is { Name: "Count", ContainingType: { } collection }
             && (collection.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyCollection<T>"
                 || collection.AllInterfaces.Any(item => item.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyCollection<T>")))
@@ -126,6 +142,15 @@ internal sealed partial class JavaScriptEmitter
             || named.AllInterfaces.Any(item => item.OriginalDefinition.ToDisplayString() is
                 "System.Collections.Generic.IDictionary<TKey, TValue>" or
                 "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>"));
+
+    private static bool IsSet(ITypeSymbol? type) => type is INamedTypeSymbol named
+        && (named.OriginalDefinition.ToDisplayString() is
+                "System.Collections.Generic.HashSet<T>" or
+                "System.Collections.Generic.ISet<T>" or
+                "System.Collections.Generic.IReadOnlySet<T>"
+            || named.AllInterfaces.Any(item => item.OriginalDefinition.ToDisplayString() is
+                "System.Collections.Generic.ISet<T>" or
+                "System.Collections.Generic.IReadOnlySet<T>"));
 
     private static void ThrowIfUnsupportedFrameworkMember(ISymbol? symbol, SyntaxNode source)
     {

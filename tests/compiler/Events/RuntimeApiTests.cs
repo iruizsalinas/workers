@@ -3,6 +3,43 @@ namespace Workers.Compiler.Tests;
 public sealed class RuntimeApiTests
 {
     [Fact]
+    public void ExposesNativeRequestAndUrlMetadata()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var url = request.Url;
+                    return Response.Json(new
+                    {
+                        url.Origin,
+                        url.Protocol,
+                        url.Host,
+                        url.Hostname,
+                        url.Port,
+                        url.Username,
+                        url.Password,
+                        url.Fragment,
+                        request.Redirect,
+                        hasSignal = request.Signal is not null
+                    });
+                }
+            }
+            """);
+
+        Assert.Contains("let url = new URL(request.url)", module);
+        Assert.Contains("origin: url.origin", module);
+        Assert.Contains("protocol: url.protocol", module);
+        Assert.Contains("hostname: url.hostname", module);
+        Assert.Contains("fragment: url.hash", module);
+        Assert.Contains("redirect: request.redirect", module);
+        Assert.Contains("hasSignal: request.signal != null", module);
+    }
+
+    [Fact]
     public void PreservesNamedResponseArgumentMeaning()
     {
         var module = Compile("""

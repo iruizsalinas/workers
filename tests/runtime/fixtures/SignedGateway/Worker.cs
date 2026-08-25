@@ -93,7 +93,7 @@ public static class Worker
                 Method = request.Method,
                 Headers = headers,
                 Body = request.Method == "GET" || request.Method == "HEAD" ? null : request.Body,
-                Redirect = RequestRedirect.Manual,
+                Redirect = RedirectMode.Manual,
                 Signal = controller.Signal
             });
         }

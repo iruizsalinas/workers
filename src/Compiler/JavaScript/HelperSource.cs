@@ -11,6 +11,9 @@ internal static class HelperSource
         JavaScriptHelper.IntegerDivide => IntegerDivide(name),
         JavaScriptHelper.IntegerRemainder => IntegerRemainder(name),
         JavaScriptHelper.RandomNext => RandomNext(name),
+        JavaScriptHelper.SetAdd => SetAdd(name),
+        JavaScriptHelper.Base64 => Base64(name),
+        JavaScriptHelper.RpcArguments => RpcArguments(name),
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 
@@ -155,6 +158,34 @@ internal static class HelperSource
           if (minimum > maximum) throw new RangeError("Minimum cannot exceed maximum.");
           if (minimum === maximum) return minimum;
           return Math.floor(Math.random() * (maximum - minimum)) + minimum;
+        }
+
+        """;
+
+    private static string SetAdd(Func<string, string> name) => $$"""
+        function {{name("setAdd")}}(set, value) {
+          if (set.has(value)) return false;
+          set.add(value);
+          return true;
+        }
+
+        """;
+
+    private static string Base64(Func<string, string> name) => $$"""
+        function {{name("base64Encode")}}(bytes) {
+          let binary = "";
+          for (const byte of bytes) binary += String.fromCharCode(byte);
+          return btoa(binary);
+        }
+        function {{name("base64Decode")}}(value) {
+          return Uint8Array.from(atob(value), character => character.charCodeAt(0));
+        }
+
+        """;
+
+    private static string RpcArguments(Func<string, string> name) => $$"""
+        function {{name("rpcArguments")}}(value) {
+          return value ?? [];
         }
 
         """;

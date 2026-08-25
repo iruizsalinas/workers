@@ -1,0 +1,9 @@
+name = "workers-example-request-policy"
+main = "dist/worker.js"
+compatibility_date = "2026-08-15"
+
+[build]
+command = "dotnet publish -c Release -p:NuGetAudit=false"
+
+[vars]
+ORIGIN = "https://telemetry.example"

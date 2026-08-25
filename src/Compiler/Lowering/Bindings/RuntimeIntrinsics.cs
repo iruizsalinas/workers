@@ -20,6 +20,7 @@ internal static class RuntimeIntrinsics
             [Key("Workers.Request", "JsonAsync")] = Direct("json"),
             [Key("Workers.Request", "FormDataAsync")] = Direct("formData"),
             [Key("Workers.Request", "Clone")] = Direct("clone"),
+            [Key("Workers.Request", "WithUrl")] = new("", BindingIntrinsicKind.RequestWithUrl),
             [Key("Workers.Request", "BodyStream")] = new("body", BindingIntrinsicKind.Property),
             [Key("Workers.Response", "Clone")] = Direct("clone"),
             [Key("Workers.Response", "TextAsync")] = Direct("text"),
@@ -106,6 +107,7 @@ internal static class RuntimeIntrinsics
             [Key("Workers.HtmlComment", "After")] = new("after", BindingIntrinsicKind.Fluent),
             [Key("Workers.HtmlComment", "Replace")] = new("replace", BindingIntrinsicKind.Fluent),
             [Key("Workers.HtmlComment", "Remove")] = new("remove", BindingIntrinsicKind.Fluent),
-            [Key("Workers.HtmlDocumentEnd", "Append")] = new("append", BindingIntrinsicKind.Fluent)
+            [Key("Workers.HtmlDocumentEnd", "Append")] = new("append", BindingIntrinsicKind.Fluent),
+            [Key("Workers.TextCodec", "DecodeUtf8")] = new("", BindingIntrinsicKind.Utf8Decode)
         };
 }

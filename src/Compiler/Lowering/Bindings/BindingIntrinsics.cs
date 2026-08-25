@@ -45,7 +45,12 @@ internal enum BindingIntrinsicKind
     QueryNames,
     CompressStream,
     DecompressStream,
-    DictionaryObject
+    DictionaryObject,
+    QueueSend,
+    QueueSendBatch,
+    QueueRequest,
+    RequestWithUrl,
+    Utf8Decode
 }
 
 internal sealed record BindingIntrinsic(string JavascriptName, BindingIntrinsicKind Kind = BindingIntrinsicKind.Direct);

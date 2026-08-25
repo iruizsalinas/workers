@@ -7,7 +7,7 @@ public sealed class FetchOptions
     public Body? Body { get; init; }
     public object? Cf { get; init; }
     public AbortSignal? Signal { get; init; }
-    public RequestRedirect? Redirect { get; init; }
+    public RedirectMode? Redirect { get; init; }
 }
 
 public readonly record struct RequestPriority(int Weight, bool Exclusive, int Group, int GroupWeight);
@@ -39,7 +39,7 @@ public enum ReferrerPolicy
     UnsafeUrl
 }
 
-public enum RequestRedirect
+public enum RedirectMode
 {
     Follow,
     Error,

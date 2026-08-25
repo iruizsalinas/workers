@@ -130,6 +130,21 @@ public sealed class EchoObject
         return deleted && value is null && typed!.Value == 42 && typedMissing is null;
     }
 
+    public async Task<bool> TransactionLifecycleAsync()
+    {
+        var observed = false;
+        await _state.Storage.TransactionAsync(async transaction =>
+        {
+            await transaction.PutAsync("transactional", "stored");
+            var value = await transaction.GetAsync<string>("transactional");
+            if (value == "stored")
+                observed = true;
+        });
+        var stored = await _state.Storage.GetAsync<string>("transactional");
+        await _state.Storage.DeleteAsync("transactional");
+        return observed && stored == "stored";
+    }
+
     public void AlarmAsync(AlarmInfo info)
     {
     }

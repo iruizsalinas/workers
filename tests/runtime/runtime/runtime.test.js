@@ -109,6 +109,36 @@ describe("runtime intrinsics", () => {
     });
   });
 
+  it("exposes a parsed URL and native request metadata", async () => {
+    const response = await invoke("/url?mode=full");
+
+    await expect(response.json()).resolves.toEqual({
+      origin: "https://worker.test",
+      protocol: "https:",
+      host: "worker.test",
+      hostname: "worker.test",
+      port: "",
+      username: "",
+      password: "",
+      path: "/url",
+      query: "?mode=full",
+      fragment: "",
+      redirect: "follow",
+      hasSignal: true,
+    });
+  });
+
+  it("round-trips UTF-8/base64 and replaces a request URL", async () => {
+    const response = await invoke("/text-codec");
+
+    await expect(response.json()).resolves.toEqual({
+      encoded: "aGVsbG8gKyBlZGdl",
+      decoded: "hello + edge",
+      escaped: "hello%20%20%20edge",
+      forwarded: "/accepted?source=codec",
+    });
+  });
+
   it("opens a named native Cache and completes its full lifecycle", async () => {
     const response = await invoke("/cache-lifecycle");
 

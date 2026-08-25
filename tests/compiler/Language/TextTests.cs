@@ -3,6 +3,38 @@ namespace Workers.Compiler.Tests;
 public sealed class TextTests
 {
     [Fact]
+    public void UsesNativeUtf8Base64UriAndStringOperations()
+    {
+        var module = Compile("""
+            using System.Text;
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var bytes = Encoding.UTF8.GetBytes("hello");
+                    var encoded = Convert.ToBase64String(bytes);
+                    var decoded = TextCodec.DecodeUtf8(Convert.FromBase64String(encoded), fatal: true);
+                    var escaped = Uri.EscapeDataString(decoded.Replace("+", " "));
+                    var upper = escaped.ToUpperInvariant();
+                    var separator = upper.IndexOf("%", StringComparison.Ordinal);
+                    var forwarded = request.WithUrl(new Url("/accepted", request.Url.Origin));
+                    return Response.Json(new { decoded, upper, separator, forwarded = forwarded.Url.Path });
+                }
+            }
+            """);
+
+        Assert.Contains("base64Encode(bytes)", module);
+        Assert.Contains("new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: false })", module);
+        Assert.Contains("replaceAll(\"\\u002B\", \" \")", module);
+        Assert.Contains("encodeURIComponent(", module);
+        Assert.Contains("escaped.toUpperCase()", module);
+        Assert.Contains("upper.indexOf(\"%\")", module);
+        Assert.Contains("new Request(new URL(\"/accepted\", new URL(request.url).origin), request)", module);
+    }
+
+    [Fact]
     public void EmitsJavascriptSafeLiteralValuesInsteadOfCSharpTokenText()
     {
         var module = Compile(""""

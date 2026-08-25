@@ -22,6 +22,8 @@ internal sealed partial class JavaScriptEmitter
         if (typeName is "System.Uri" or "Workers.Url") return CreateUrl(value, constructor, arguments);
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" && arguments.Length == 0)
             return "[]";
+        if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>" && arguments.Length == 0)
+            return $"new Set([{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}])";
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Dictionary<TKey, TValue>"
             && type.TypeArguments[0].SpecialType == SpecialType.System_String)
             return "{ " + string.Join(", ", value.Initializer?.Expressions.Select(DictionaryProperty) ?? []) + " }";
@@ -41,7 +43,9 @@ internal sealed partial class JavaScriptEmitter
         arguments.Length switch
         {
             1 => $"new URL({Expression(arguments[0].Expression)})",
-            2 => $"new URL({Expression(arguments[1].Expression)}, {Expression(arguments[0].Expression)})",
+            2 when constructor?.ContainingType.ToDisplayString() == "System.Uri" =>
+                $"new URL({Expression(arguments[1].Expression)}, {Expression(arguments[0].Expression)})",
+            2 => $"new URL({Expression(arguments[0].Expression)}, {Expression(arguments[1].Expression)})",
             _ => throw UnsupportedSymbol(constructor, source)
         };
 

@@ -11,6 +11,8 @@ internal sealed partial class JavaScriptEmitter
         var methodName = method?.Name;
         if (containingType is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask" && methodName == "FromResult")
             return $"Promise.resolve({arguments[0]})";
+        if (containingType == "System.Threading.Tasks.Task" && methodName == "WhenAll")
+            return TaskWhenAll(invocation, method!, arguments);
         if (containingType == "System.Threading.Tasks.Task" && methodName == "Delay")
         {
             if (arguments.Length != 1) throw UnsupportedSymbol(method, invocation);
@@ -35,8 +37,11 @@ internal sealed partial class JavaScriptEmitter
             ("System.Guid", "NewGuid") => "globalThis.crypto.randomUUID()",
             ("Workers.Performance", "Now") => "performance.now()",
             ("System.Uri", "UnescapeDataString") => $"decodeURIComponent({arguments[0]})",
+            ("System.Uri", "EscapeDataString") => $"encodeURIComponent({arguments[0]})",
             ("System.Convert", "FromHexString") => $"Uint8Array.from({arguments[0]}.match(/../g) ?? [], value => Number.parseInt(value, 16))",
             ("System.Convert", "ToHexString") => $"Array.from({arguments[0]}, byte => byte.toString(16).padStart(2, \"0\")).join(\"\")",
+            ("System.Convert", "ToBase64String") => $"{_helpers.Require(JavaScriptHelper.Base64)}({arguments[0]})",
+            ("System.Convert", "FromBase64String") => Base64Decode(arguments[0]),
             ("System.Text.Encoding", "GetBytes") => $"new TextEncoder().encode({arguments[0]})",
             ("int", "Parse") => $"Number.parseInt({arguments[0]}, 10)",
             ("System.Math", "Min" or "Max") => $"Math.{name!.ToLowerInvariant()}({string.Join(", ", arguments)})",
@@ -50,6 +55,28 @@ internal sealed partial class JavaScriptEmitter
         };
         return result.Length != 0;
     }
+
+    private string Base64Decode(string value)
+    {
+        _helpers.Require(JavaScriptHelper.Base64);
+        return $"{_helpers.Name("base64Decode")}({value})";
+    }
+
+    private string TaskWhenAll(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method,
+        IReadOnlyList<string> arguments)
+    {
+        if (!method.Parameters[0].IsParams)
+            return $"Promise.all({arguments[0]})";
+        if (arguments.Count == 1 && IsTaskCollection(_model.GetTypeInfo(invocation.ArgumentList.Arguments[0].Expression).Type))
+            return $"Promise.all({arguments[0]})";
+        return $"Promise.all([{string.Join(", ", arguments)}])";
+    }
+
+    private static bool IsTaskCollection(ITypeSymbol? type) => type is IArrayTypeSymbol
+        || type is INamedTypeSymbol named && named.AllInterfaces.Any(item =>
+            item.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>");
 
     private string MemberInvocation(InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax member, IMethodSymbol? method, string? type, string[] arguments)
     {

@@ -1,3 +1,4 @@
+using System.Text;
 using Workers;
 
 namespace RuntimeIntrinsics;
@@ -53,6 +54,42 @@ public static class Worker
                 originalCloned = original.Contains("x-cloned"),
                 cloneRemoved = clone.Contains("x-remove"),
                 cookies = responseHeaders.GetSetCookie()
+            });
+        }
+
+        if (request.Path == "/url")
+        {
+            var url = request.Url;
+            return Response.Json(new
+            {
+                url.Origin,
+                url.Protocol,
+                url.Host,
+                url.Hostname,
+                url.Port,
+                url.Username,
+                url.Password,
+                url.Path,
+                url.Query,
+                url.Fragment,
+                request.Redirect,
+                hasSignal = request.Signal is not null
+            });
+        }
+
+        if (request.Path == "/text-codec")
+        {
+            var bytes = Encoding.UTF8.GetBytes("hello + edge");
+            var encoded = Convert.ToBase64String(bytes);
+            var decoded = TextCodec.DecodeUtf8(Convert.FromBase64String(encoded), fatal: true);
+            var escaped = Uri.EscapeDataString(decoded.Replace("+", " "));
+            var forwarded = request.WithUrl(new Url("/accepted?source=codec", request.Url.Origin));
+            return Response.Json(new
+            {
+                encoded,
+                decoded,
+                escaped,
+                forwarded = forwarded.PathAndQuery
             });
         }
 

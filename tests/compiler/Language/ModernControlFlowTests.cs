@@ -3,6 +3,85 @@ namespace Workers.Compiler.Tests;
 public sealed class ModernControlFlowTests
 {
     [Fact]
+    public void UsesNativeSetSemanticsForHashSets()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var methods = new HashSet<string> { "GET", "HEAD" };
+                    methods.Add("OPTIONS");
+                    return Response.Json(new
+                    {
+                        allowed = methods.Contains(request.Method),
+                        count = methods.Count
+                    });
+                }
+            }
+            """);
+
+        Assert.Contains("let methods = new Set([\"GET\", \"HEAD\"]);", module);
+        Assert.Contains("setAdd(methods, \"OPTIONS\")", module);
+        Assert.Contains("allowed: methods.has(request.method)", module);
+        Assert.Contains("count: methods.size", module);
+    }
+
+    [Fact]
+    public void RunsIndependentTasksInParallel()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                {
+                    var responses = await Task.WhenAll(
+                        Http.FetchAsync("https://one.example"),
+                        Http.FetchAsync("https://two.example"));
+                    var pending = new List<Task<Response>> { Http.FetchAsync("https://three.example") };
+                    var more = await Task.WhenAll(pending);
+                    var single = await Task.WhenAll(Http.FetchAsync("https://four.example"));
+                    return Response.Json(new { first = responses[0].Status, second = responses[1].Status });
+                }
+            }
+            """);
+
+        Assert.Contains("await Promise.all([fetch(\"https://one.example\"), fetch(\"https://two.example\")])", module);
+        Assert.Contains("await Promise.all(pending)", module);
+        Assert.Contains("await Promise.all([fetch(\"https://four.example\")])", module);
+    }
+
+    [Fact]
+    public void SupportsControlFlowInsideAsyncCallbacks()
+    {
+        var module = Compile("""
+            using Workers;
+            [DurableObject("Gate")]
+            public sealed class Gate
+            {
+                private readonly DurableObjectState _state;
+                public Gate(DurableObjectState state, Env env) => _state = state;
+
+                public Task ReserveAsync(string owner) => _state.Storage.TransactionAsync(async storage =>
+                {
+                    var current = await storage.GetAsync<string>("owner");
+                    if (current is not null)
+                        return;
+                    await storage.PutAsync("owner", owner);
+                });
+            }
+            """);
+
+        Assert.Contains("storage => {\n  let current = await storage.get(\"owner\")", module);
+        Assert.Contains("if (current != null)", module);
+        Assert.Contains("await storage.put(\"owner\", owner)", module);
+    }
+
+    [Fact]
     public void UsesObjectSemanticsForStringDictionaries()
     {
         var module = Compile("""

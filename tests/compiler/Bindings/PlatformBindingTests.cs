@@ -26,7 +26,7 @@ public sealed class PlatformBindingTests
             """);
 
         Assert.Contains("env[\"FILES\"].get(\"key\", { range: { offset: 0, length: 10, suffix: undefined } })", module);
-        Assert.Contains("env[\"JOBS\"].send({ key: \"value\" }, { delaySeconds: 5 })", module);
+        Assert.Contains("env[\"JOBS\"].send({ key: \"value\" }, { ...({ delaySeconds: 5 } ?? {}), contentType: \"json\" })", module);
         Assert.Contains("caches.default.match(request, { ignoreMethod: true }).then(value => value ?? null)", module);
         Assert.Contains("env[\"API\"].fetch(\"https://example.com\")", module);
     }

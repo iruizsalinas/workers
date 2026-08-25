@@ -16,6 +16,8 @@ public sealed class DurableObjectBindingTests
                 {
                     var stub = env.DurableObject("COUNTERS").GetByName("primary");
                     var response = await stub.FetchAsync("https://counter");
+                    var value = await stub.InvokeAsync<int>("read", ["count"]);
+                    await stub.InvokeVoidAsync("reset");
                     await state.Storage.PutAsync("count", 1);
                     var count = await state.Storage.GetAsync<int>("count");
                     var rows = await state.Storage.Sql.Prepare("SELECT 1").AllAsync<object>();
@@ -26,6 +28,8 @@ public sealed class DurableObjectBindingTests
 
         Assert.Contains("env[\"COUNTERS\"].getByName(\"primary\")", module);
         Assert.Contains("stub.fetch(\"https://counter\")", module);
+        Assert.Contains("stub[\"read\"]", module);
+        Assert.Contains("stub[\"reset\"]()", module);
         Assert.Contains("state.storage.put(\"count\", 1)", module);
         Assert.Contains("state.storage.get(\"count\")", module);
         Assert.Contains("state.storage.sql.exec(\"SELECT 1\").all()", module);

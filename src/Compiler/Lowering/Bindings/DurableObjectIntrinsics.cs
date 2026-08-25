@@ -12,6 +12,7 @@ DurableObjectIntrinsics
             [Key("Workers.IDurableObjectNamespace", "Get")] = Direct("get"),
             [Key("Workers.IDurableObjectNamespace", "GetByName")] = Direct("getByName"),
             [Key("Workers.IDurableObjectStub", "InvokeAsync")] = new("", BindingIntrinsicKind.ServiceRpc),
+            [Key("Workers.IDurableObjectStub", "InvokeVoidAsync")] = new("", BindingIntrinsicKind.ServiceRpc),
             [Key("Workers.DurableObjectId", "ToString")] = Direct("toString"),
             [Key("Workers.DurableObjectState", "WaitUntil")] = Direct("waitUntil"),
             [Key("Workers.DurableObjectState", "BlockConcurrencyWhileAsync")] = Direct("blockConcurrencyWhile"),
