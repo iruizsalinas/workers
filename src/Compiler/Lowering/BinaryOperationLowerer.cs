@@ -20,6 +20,9 @@ internal sealed partial class JavaScriptEmitter
                 || expression.Right.IsKind(SyntaxKind.NullLiteralExpression)))
             return $"{left} {(expression.IsKind(SyntaxKind.EqualsExpression) ? "==" : "!=")} {right}";
 
+        if (expression.IsKind(SyntaxKind.CoalesceExpression))
+            return $"(({left}) ?? ({right}))";
+
         if (operation?.IsChecked == true && integral32
             && expression.Kind() is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression)
             throw Unsupported("WRK108", expression);
@@ -70,7 +73,6 @@ internal sealed partial class JavaScriptEmitter
     {
         SyntaxKind.EqualsExpression => "===",
         SyntaxKind.NotEqualsExpression => "!==",
-        SyntaxKind.CoalesceExpression => "??",
         SyntaxKind.LogicalAndExpression => "&&",
         SyntaxKind.LogicalOrExpression => "||",
         SyntaxKind.AddExpression => "+",

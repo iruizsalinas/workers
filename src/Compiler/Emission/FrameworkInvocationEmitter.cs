@@ -90,7 +90,7 @@ internal sealed partial class JavaScriptEmitter
             "ToString" when arguments.Length == 1
                             && source.ArgumentList.Arguments[0].Expression is LiteralExpressionSyntax format
                             && format.Token.ValueText is "O" or "o" =>
-                $"new Date({receiver}).toISOString().replace(/(\\.\\d{{3}})Z$/, \"$1\" + \"0000+00:00\")",
+                DateTimeRoundTrip(receiver),
             "AddDays" when arguments.Length == 1 =>
                 $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 86400000)",
             "AddSeconds" when arguments.Length == 1 =>

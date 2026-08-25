@@ -29,7 +29,8 @@ internal sealed partial class JavaScriptEmitter
     {
         InterpolatedStringTextSyntax text => EscapeTemplateText(text.TextToken.ValueText),
         InterpolationSyntax { AlignmentClause: not null } item => throw Unsupported("WRK108", item),
-        InterpolationSyntax { FormatClause.FormatStringToken.ValueText: "O" or "o" } item => "${new Date(" + Expression(item.Expression) + ").toISOString()}",
+        InterpolationSyntax { FormatClause.FormatStringToken.ValueText: "O" or "o" } item =>
+            "${" + DateTimeRoundTrip(Expression(item.Expression)) + "}",
         InterpolationSyntax { FormatClause: not null } item => throw Unsupported("WRK108", item),
         InterpolationSyntax item => "${" + Expression(item.Expression) + " ?? \"\"}",
         _ => throw Unsupported("WRK108", value)
@@ -38,6 +39,9 @@ internal sealed partial class JavaScriptEmitter
     private static string EscapeTemplateText(string value) => value.Replace("{{", "{", StringComparison.Ordinal)
         .Replace("}}", "}", StringComparison.Ordinal).Replace("\\", "\\\\", StringComparison.Ordinal)
         .Replace("`", "\\`", StringComparison.Ordinal).Replace("${", "\\${", StringComparison.Ordinal);
+
+    private static string DateTimeRoundTrip(string value) =>
+        $"new Date({value}).toISOString().replace(/(\\.\\d{{3}})Z$/, \"$1\" + \"0000+00:00\")";
 
     private string Element(CollectionElementSyntax value) => value switch
     {

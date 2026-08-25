@@ -15,7 +15,7 @@ describe("request body pipeline", () => {
     const result = await response.json();
     expect(result).toMatchObject({
       fields: [{ name: "title", value: "example" }],
-      files: [{ field: "upload", name: "sample.bin", size: 4, type: "application/octet-stream", firstBytes: "000102fa" }],
+      files: [{ field: "upload", name: "sample.bin", size: 4, type: "application/octet-stream", firstBytes: "000102FA" }],
     });
     expect(result.files[0].lastModified).toBeGreaterThan(0);
   });

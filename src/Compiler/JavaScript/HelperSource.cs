@@ -14,6 +14,9 @@ internal static class HelperSource
         JavaScriptHelper.SetAdd => SetAdd(name),
         JavaScriptHelper.Base64 => Base64(name),
         JavaScriptHelper.RpcArguments => RpcArguments(name),
+        JavaScriptHelper.IntParse => IntParse(name),
+        JavaScriptHelper.HexDecode => HexDecode(name),
+        JavaScriptHelper.EscapeDataString => EscapeDataString(name),
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 
@@ -186,6 +189,36 @@ internal static class HelperSource
     private static string RpcArguments(Func<string, string> name) => $$"""
         function {{name("rpcArguments")}}(value) {
           return value ?? [];
+        }
+
+        """;
+
+    private static string IntParse(Func<string, string> name) => $$"""
+        function {{name("intParse")}}(input) {
+          const value = input.trim();
+          if (!/^[+-]?\d+$/.test(value)) throw new TypeError("Invalid Int32 value.");
+          const number = Number(value);
+          if (number < -2147483648 || number > 2147483647) throw new RangeError("Int32 overflow.");
+          return number | 0;
+        }
+
+        """;
+
+    private static string HexDecode(Func<string, string> name) => $$"""
+        function {{name("hexDecode")}}(value) {
+          if (value.length % 2 !== 0 || !/^[0-9a-f]*$/i.test(value)) throw new TypeError("Invalid hexadecimal value.");
+          const bytes = new Uint8Array(value.length / 2);
+          for (let index = 0; index < bytes.length; index++)
+            bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
+          return bytes;
+        }
+
+        """;
+
+    private static string EscapeDataString(Func<string, string> name) => $$"""
+        function {{name("escapeDataString")}}(value) {
+          return encodeURIComponent(value).replace(/[!'()*]/g, character =>
+            `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
         }
 
         """;

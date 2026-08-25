@@ -35,7 +35,7 @@ describe("event workers", () => {
 
     await scheduledTask.scheduled(controller, env, createExecutionContext());
 
-    expect(log).toHaveBeenCalledWith("Ran */5 * * * * at 2026-08-15T12:00:00.000Z");
+    expect(log).toHaveBeenCalledWith("Ran */5 * * * * at 2026-08-15T12:00:00.0000000+00:00");
   });
 
   it("forwards a faithfully shaped email event mock", async () => {

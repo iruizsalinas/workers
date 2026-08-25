@@ -3,6 +3,56 @@ namespace Workers.Compiler.Tests;
 public sealed class TextTests
 {
     [Fact]
+    public void UsesStrictIntegerHexAndUriConversions()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) => Response.Json(new
+                {
+                    number = int.Parse("42"),
+                    bytes = Convert.FromHexString("00ff"),
+                    hex = Convert.ToHexString(Convert.FromHexString("00ff")),
+                    escaped = Uri.EscapeDataString("!*'()")
+                });
+            }
+            """);
+
+        Assert.Contains("intParse(\"42\")", module);
+        Assert.Contains("hexDecode(\"00ff\")", module);
+        Assert.Contains(".join(\"\").toUpperCase()", module);
+        Assert.Contains("escapeDataString(", module);
+        Assert.Contains("if (!/^[+-]?\\d+$/.test(value))", module);
+        Assert.Contains("if (value.length % 2 !== 0 || !/^[0-9a-f]*$/i.test(value))", module);
+        Assert.Contains("encodeURIComponent(value).replace(/[!'()*]/g", module);
+    }
+
+    [Fact]
+    public void UsesRoundTripFormattingForInterpolatedDateTimes()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var timestamp = DateTimeOffset.UtcNow;
+                    return Response.Json(new
+                    {
+                        interpolated = $"{timestamp:O}",
+                        explicitFormat = timestamp.ToString("O")
+                    });
+                }
+            }
+            """);
+
+        Assert.Equal(2, module.Split("0000+00:00", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
     public void UsesNativeUtf8Base64UriAndStringOperations()
     {
         var module = Compile("""
