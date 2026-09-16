@@ -6,6 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Workers" Version="0.1.0" Condition="'$(WorkersUseProjectReference)' != 'true'" />
+    <PackageReference Include="Workers" Version="0.3.0" Condition="'$(WorkersUseProjectReference)' != 'true'" />
   </ItemGroup>
 </Project>
