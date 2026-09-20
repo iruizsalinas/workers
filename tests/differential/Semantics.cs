@@ -21,7 +21,10 @@ public sealed record CoreSemanticsResult(
     int CalendarMillisecond,
     bool EqualInstants,
     bool OrderedInstants,
-    string AddedInstant);
+    string AddedInstant,
+    int FieldPropertyCollision,
+    int UpperPropertyCollision,
+    int LowerPropertyCollision);
 
 public static class CoreSemantics
 {
@@ -43,10 +46,24 @@ public static class CoreSemantics
         var instant = new DateTimeOffset(2024, 2, 29, 23, 58, 57, 123, TimeSpan.Zero);
         var sameInstant = new DateTimeOffset(2024, 2, 29, 23, 58, 57, 123, TimeSpan.Zero);
         var laterInstant = instant.AddMinutes(2);
+        var collision = new NamingCollision();
+        var propertyCollision = new PropertyCollision { Value = 3, value = 4 };
         return new(signed, unsigned, single, -minimum, -unarySingle == -0.1f, $"{true}:{false}", true.ToString(),
             'A' + 1, 'B' - 'A', character + 5, character - otherCharacter, total,
             instant.Year, instant.Month, instant.Day, instant.DayOfWeek, instant.Hour, instant.Minute,
             instant.Second, instant.Millisecond, instant == sameInstant, instant < laterInstant,
-            laterInstant.ToString("O"));
+            laterInstant.ToString("O"), collision.Value, propertyCollision.Value, propertyCollision.value);
     }
+}
+
+public sealed class NamingCollision
+{
+    private int value = 2;
+    public int Value => value * 2;
+}
+
+public sealed class PropertyCollision
+{
+    public int Value { get; init; }
+    public int value { get; init; }
 }

@@ -99,8 +99,8 @@ internal sealed partial class JavaScriptEmitter
     private string UserInitializerMemberName(ExpressionSyntax expression) =>
         _model.GetSymbolInfo(expression).Symbol switch
         {
-            IPropertySymbol property => LowerFirst(property.Name),
-            IFieldSymbol field => UserIdentifier(field, field.Name),
+            IPropertySymbol property => UserMemberName(property),
+            IFieldSymbol field => UserMemberName(field),
             var symbol => throw UnsupportedSymbol(symbol, expression)
         };
 

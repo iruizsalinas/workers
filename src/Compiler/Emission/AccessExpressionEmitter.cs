@@ -25,6 +25,12 @@ internal sealed partial class JavaScriptEmitter
         if (member.Name.Identifier.Text == "Length"
             && (receiverType?.SpecialType == SpecialType.System_String || receiverType is IArrayTypeSymbol))
             return $"{receiver}?.length";
+        if (symbol?.ContainingType is { } userType && IsUserInstanceType(userType) && RequiresUserClass(userType)
+            && symbol is IFieldSymbol or IPropertySymbol)
+        {
+            QueueUserType(userType, member);
+            return $"{receiver}?.{UserMemberName(symbol)}";
+        }
         ThrowIfUnsupportedFrameworkMember(symbol, member);
         return $"{receiver}?.{LowerFirst(member.Name.Identifier.Text)}";
     }

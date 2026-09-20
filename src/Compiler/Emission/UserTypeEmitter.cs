@@ -47,6 +47,40 @@ internal sealed partial class JavaScriptEmitter
         return name;
     }
 
+    private string UserMemberName(ISymbol member)
+    {
+        PrepareUserMemberNames(member.ContainingType);
+        return _userMemberNames.TryGetValue(member, out var name)
+            ? name
+            : throw new InvalidOperationException($"User member '{member}' was not assigned a JavaScript name.");
+    }
+
+    private void PrepareUserMemberNames(INamedTypeSymbol type)
+    {
+        type = type.OriginalDefinition;
+        if (!_preparedUserMemberNames.Add(type)) return;
+
+        var used = new HashSet<string>(["constructor", "toJSON"], StringComparer.Ordinal);
+        var members = type.GetMembers()
+            .Where(member => !member.IsStatic && member.DeclaringSyntaxReferences.Length != 0)
+            .OrderBy(member => member is IPropertySymbol ? 0 : 1)
+            .ThenBy(member => member.DeclaringSyntaxReferences[0].Span.Start);
+        foreach (var member in members)
+        {
+            var preferred = member switch
+            {
+                IPropertySymbol property => LowerFirst(property.Name),
+                IFieldSymbol field => field.Name,
+                _ => null
+            };
+            if (preferred is null) continue;
+            var name = preferred;
+            for (var suffix = 2; !used.Add(name); suffix++)
+                name = $"{preferred}${suffix}";
+            _userMemberNames.Add(member, name);
+        }
+    }
+
     private void EmitUserCode()
     {
         while (_pendingUserMethods.Count != 0 || _pendingUserTypes.Count != 0)
@@ -99,7 +133,7 @@ internal sealed partial class JavaScriptEmitter
         _output.AppendLine("  toJSON() {");
         _output.Append("    return { ")
             .Append(string.Join(", ", properties.Select(property =>
-                $"{LowerFirst(property.Name)}: this.{LowerFirst(property.Name)}")))
+                $"{UserMemberName(property)}: this.{UserMemberName(property)}")))
             .AppendLine(" };");
         _output.AppendLine("  }");
     }
@@ -118,7 +152,7 @@ internal sealed partial class JavaScriptEmitter
             {
                 var symbol = (IFieldSymbol)_model.GetDeclaredSymbol(variable)!;
                 if (symbol.IsStatic) continue;
-                _output.Append("    this.").Append(UserIdentifier(symbol, symbol.Name)).Append(" = ")
+                _output.Append("    this.").Append(UserMemberName(symbol)).Append(" = ")
                     .Append(variable.Initializer is null
                         ? DefaultFieldValue(symbol.Type, variable)
                         : Expression(variable.Initializer.Value)).AppendLine(";");
@@ -129,14 +163,14 @@ internal sealed partial class JavaScriptEmitter
             {
                 var parameterSymbol = (IParameterSymbol)_model.GetDeclaredSymbol(parameter)!;
                 var property = type.GetMembers(parameterSymbol.Name).OfType<IPropertySymbol>().Single();
-                _output.Append("    this.").Append(LowerFirst(property.Name)).Append(" = ")
+                _output.Append("    this.").Append(UserMemberName(property)).Append(" = ")
                     .Append(ParameterName(parameter)).AppendLine(";");
             }
 
         foreach (var property in declaration.Members.OfType<PropertyDeclarationSyntax>().Where(IsAutoProperty))
         {
             var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
-            _output.Append("    this.").Append(LowerFirst(symbol.Name)).Append(" = ")
+            _output.Append("    this.").Append(UserMemberName(symbol)).Append(" = ")
                 .Append(property.Initializer is null
                     ? DefaultFieldValue(symbol.Type, property)
                     : Expression(property.Initializer.Value)).AppendLine(";");
@@ -153,7 +187,7 @@ internal sealed partial class JavaScriptEmitter
     private void EmitComputedProperty(PropertyDeclarationSyntax property)
     {
         var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
-        _output.Append("  get ").Append(LowerFirst(symbol.Name)).AppendLine("() {");
+        _output.Append("  get ").Append(UserMemberName(symbol)).AppendLine("() {");
         if (property.ExpressionBody is not null)
             _output.Append("    return ").Append(Expression(property.ExpressionBody.Expression)).AppendLine(";");
         else

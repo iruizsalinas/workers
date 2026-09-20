@@ -140,8 +140,8 @@ internal sealed partial class JavaScriptEmitter
         if (symbol?.ContainingType is { } userType && IsUserInstanceType(userType) && RequiresUserClass(userType))
         {
             QueueUserType(userType, member);
-            if (symbol is IFieldSymbol userField)
-                return $"{Expression(member.Expression)}.{UserIdentifier(userField, userField.Name)}";
+            if (symbol is IFieldSymbol or IPropertySymbol)
+                return $"{Expression(member.Expression)}.{UserMemberName(symbol)}";
         }
         ThrowIfUnsupportedFrameworkMember(symbol, member);
         return $"{Expression(member.Expression)}.{LowerFirst(member.Name.Identifier.Text)}";
@@ -210,7 +210,9 @@ internal sealed partial class JavaScriptEmitter
         IPropertySymbol { ContainingType: { } type, Name: var name }
             when type.ToDisplayString() == "Workers.WorkerEntrypoint" => name == "Environment" ? "this.env" : "this.ctx",
         IPropertySymbol { IsStatic: false } property when IsUserInstanceType(property.ContainingType) =>
-            $"this.{LowerFirst(property.Name)}",
+            $"this.{UserMemberName(property)}",
+        IFieldSymbol { IsStatic: false } field when IsUserInstanceType(field.ContainingType) =>
+            $"this.{UserMemberName(field)}",
         IFieldSymbol { IsStatic: false } field => $"this.{UserIdentifier(field, field.Name)}",
         IFieldSymbol { IsStatic: true, HasConstantValue: true } field => LiteralConstant(field.ConstantValue, value),
         IFieldSymbol { IsStatic: true } => throw Unsupported("WRK110", value),

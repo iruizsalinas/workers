@@ -140,4 +140,41 @@ public sealed class UserTypeTests
 
         Assert.StartsWith("WRK119:", error.Message);
     }
+
+    [Fact]
+    public void KeepsFieldsAndCaseDistinctPropertiesCollisionSafe()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var counter = new Counter();
+                    var pair = new Pair { Value = 3, value = 4 };
+                    return Response.Json(new { counter.Count, pair.Value, pair.value });
+                }
+            }
+            public sealed class Counter
+            {
+                private int count = 2;
+                public int Count => count * 2;
+            }
+            public sealed class Pair
+            {
+                public int Value { get; init; }
+                public int value { get; init; }
+            }
+            """);
+
+        Assert.Contains("this.count$2 = 2;", module);
+        Assert.Contains("get count()", module);
+        Assert.Contains("Math.imul(this.count$2, 2)", module);
+        Assert.Contains("this.value = 0;", module);
+        Assert.Contains("this.value$2 = 0;", module);
+        Assert.Contains("$workers$value.value = 3;", module);
+        Assert.Contains("$workers$value.value$2 = 4;", module);
+        Assert.Contains("return { value: this.value, value$2: this.value$2 };", module);
+    }
 }
