@@ -73,6 +73,35 @@ public sealed class TextTests
     }
 
     [Fact]
+    public void ResolvesVerbatimFrameworkMemberNamesSemantically()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var text = "value";
+                    string? optional = text;
+                    return Response.Json(new
+                    {
+                        length = text.@Length,
+                        contains = text.@Contains("alu"),
+                        optionalLength = optional?.@Length
+                    });
+                }
+            }
+            """);
+
+        Assert.Contains("length: text.length", module);
+        Assert.Contains("stringContains(text, \"alu\")", module);
+        Assert.Contains("optionalLength: optional?.length", module);
+        Assert.DoesNotContain("@Length", module);
+        Assert.DoesNotContain("@Contains", module);
+    }
+
+    [Fact]
     public void UsesJsonElementValueKindFormattingForToString()
     {
         var module = Compile("""

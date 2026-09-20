@@ -209,7 +209,7 @@ internal sealed partial class JavaScriptEmitter
                 return UserMemberAccess(Expression(member.Expression), symbol);
         }
         ThrowIfUnsupportedFrameworkMember(symbol, member);
-        return $"{Expression(member.Expression)}.{LowerFirst(member.Name.Identifier.Text)}";
+        return $"{Expression(member.Expression)}.{LowerFirst(symbol?.Name ?? member.Name.Identifier.ValueText)}";
     }
 
     private string DateTimeMember(MemberAccessExpressionSyntax member, IPropertySymbol property)

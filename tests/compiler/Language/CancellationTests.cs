@@ -3,6 +3,25 @@ namespace Workers.Compiler.Tests;
 public sealed class CancellationTests
 {
     [Fact]
+    public void AllowsOmittedOptionalCancellationTokensOnUserMethods()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) => Response.Json(Read());
+
+                private static bool Read(CancellationToken cancellationToken = default) =>
+                    cancellationToken.CanBeCanceled;
+            }
+            """);
+
+        Assert.Contains("function $workers$cs$Worker$Read$0(cancellationToken = null)", module);
+        Assert.Contains("$workers$cs$Worker$Read$0()", module);
+    }
+
+    [Fact]
     public void EmitsTokenSourcesStateAndCancellationChecks()
     {
         var module = Compile("""

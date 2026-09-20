@@ -38,7 +38,7 @@ internal sealed partial class JavaScriptEmitter
     {
         var symbol = _model.GetSymbolInfo(member).Symbol;
         var receiverType = _model.GetTypeInfo(access.Expression).Type;
-        if (member.Name.Identifier.Text == "Length"
+        if (symbol?.Name == "Length"
             && (receiverType?.SpecialType == SpecialType.System_String || receiverType is IArrayTypeSymbol))
             return $"{receiver}?.length";
         if (symbol?.ContainingType is { } userType && IsUserInstanceType(userType) && RequiresUserClass(userType)
@@ -51,7 +51,7 @@ internal sealed partial class JavaScriptEmitter
                 : $"{receiver}?.[{System.Text.Json.JsonSerializer.Serialize(name)}]";
         }
         ThrowIfUnsupportedFrameworkMember(symbol, member);
-        return $"{receiver}?.{LowerFirst(member.Name.Identifier.Text)}";
+        return $"{receiver}?.{LowerFirst(symbol?.Name ?? member.Name.Identifier.ValueText)}";
     }
 
     private string ElementAccess(ElementAccessExpressionSyntax value)

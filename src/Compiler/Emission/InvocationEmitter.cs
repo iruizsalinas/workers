@@ -94,7 +94,7 @@ internal sealed partial class JavaScriptEmitter
             _names.Get($"{key}:argument:{index}", $"arg{index + 1}")).ToArray();
         var supplied = invocation.ArgumentList.Arguments.Select((argument, index) =>
             (Parameter: InvocationParameter(method, argument, index), Value: temporaries[index])).ToArray();
-        var lastOrdinal = supplied.Max(argument => argument.Parameter.Ordinal);
+        var lastOrdinal = supplied.Length == 0 ? -1 : supplied.Max(argument => argument.Parameter.Ordinal);
         var ordered = new List<string>();
         foreach (var parameter in method.Parameters.Take(lastOrdinal + 1))
         {
@@ -324,7 +324,7 @@ internal sealed partial class JavaScriptEmitter
         string[] arguments,
         string? receiverOverride = null)
     {
-        var name = member.Name.Identifier.Text;
+        var name = method?.Name ?? member.Name.Identifier.ValueText;
         if (type == "System.IO.TextWriter" && name == "WriteLine"
             && _model.GetSymbolInfo(member.Expression).Symbol is IPropertySymbol { ContainingType: { } consoleType, Name: "Error" }
             && consoleType.ToDisplayString() == "System.Console")
