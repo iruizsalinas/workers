@@ -111,7 +111,13 @@ internal sealed partial class JavaScriptEmitter
     {
         result = (type, name) switch
         {
-            ("System.TimeSpan", "FromMilliseconds") => arguments[0],
+            ("System.TimeSpan", "FromDays") when arguments.Length == 1 => TimeSpanValue(arguments[0], 86400000),
+            ("System.TimeSpan", "FromHours") when arguments.Length == 1 => TimeSpanValue(arguments[0], 3600000),
+            ("System.TimeSpan", "FromMinutes") when arguments.Length == 1 => TimeSpanValue(arguments[0], 60000),
+            ("System.TimeSpan", "FromSeconds") when arguments.Length == 1 => TimeSpanValue(arguments[0], 1000),
+            ("System.TimeSpan", "FromMilliseconds") when arguments.Length == 1 => TimeSpanValue(arguments[0], 1),
+            ("System.TimeSpan", "Compare") when arguments.Length == 2 => TimeSpanCompare(arguments[0], arguments[1]),
+            ("System.TimeSpan", "Equals") when arguments.Length == 2 => $"{arguments[0]} === {arguments[1]}",
             ("System.DateTimeOffset", "FromUnixTimeMilliseconds") when arguments.Length == 1 =>
                 $"{_helpers.Require(JavaScriptHelper.DateTimeFromUnixTime)}({arguments[0]}, false)",
             ("System.DateTimeOffset", "FromUnixTimeSeconds") when arguments.Length == 1 =>
@@ -153,6 +159,15 @@ internal sealed partial class JavaScriptEmitter
 
     private string HelperInvocation(JavaScriptHelper helper, IReadOnlyList<string> arguments) =>
         $"{_helpers.Require(helper)}({string.Join(", ", arguments)})";
+
+    private string TimeSpanValue(string value, int factor) =>
+        $"{_helpers.Require(JavaScriptHelper.TimeSpan)}({(factor == 1 ? value : $"({value}) * {factor}")})";
+
+    private string TimeSpanCompare(string left, string right)
+    {
+        _helpers.Require(JavaScriptHelper.TimeSpan);
+        return $"{_helpers.Name("timeSpanCompare")}({left}, {right})";
+    }
 
     private bool IsUtf8EncodingInvocation(InvocationExpressionSyntax invocation) =>
         invocation.Expression is MemberAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax receiver }

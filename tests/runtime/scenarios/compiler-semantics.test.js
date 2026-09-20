@@ -92,6 +92,17 @@ describe("compiler value semantics", () => {
     });
   });
 
+  it("enforces TimeSpan range and MinValue arithmetic", async () => {
+    const response = await invoke("/timespan-errors");
+
+    await expect(response.json()).resolves.toEqual({
+      factoryRejected: true,
+      additionRejected: true,
+      negationRejected: true,
+      durationRejected: true,
+    });
+  });
+
   it.each([
     ["string", "hello", "hello"],
     ["boolean", true, "True"],

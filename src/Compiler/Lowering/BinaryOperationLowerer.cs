@@ -8,6 +8,13 @@ internal sealed partial class JavaScriptEmitter
     private string Binary(BinaryExpressionSyntax expression)
     {
         var operation = _model.GetOperation(expression) as IBinaryOperation;
+        if (operation is { } timeOperation
+            && (IsTimeSpan(timeOperation.LeftOperand.Type) || IsTimeSpan(timeOperation.RightOperand.Type)))
+            return TimeSpanBinary(expression, timeOperation);
+        if (operation is { } dateDifference
+            && IsDateValue(dateDifference.LeftOperand.Type) && IsDateValue(dateDifference.RightOperand.Type)
+            && expression.IsKind(SyntaxKind.SubtractExpression))
+            return $"new Date({Expression(expression.Left)}).getTime() - new Date({Expression(expression.Right)}).getTime()";
         if (operation is { } dateOperation
             && IsDateValue(dateOperation.LeftOperand.Type) && IsDateValue(dateOperation.RightOperand.Type)
             && SymbolEqualityComparer.Default.Equals(dateOperation.LeftOperand.Type, dateOperation.RightOperand.Type)
@@ -96,6 +103,35 @@ internal sealed partial class JavaScriptEmitter
 
     private static bool IsDateValue(ITypeSymbol? type) =>
         type?.ToDisplayString() is "System.DateTimeOffset" or "System.DateTime";
+
+    private static bool IsTimeSpan(ITypeSymbol? type) => type?.ToDisplayString() == "System.TimeSpan";
+
+    private string TimeSpanBinary(BinaryExpressionSyntax expression, IBinaryOperation operation)
+    {
+        var left = Expression(expression.Left);
+        var right = Expression(expression.Right);
+        if (IsDateValue(operation.LeftOperand.Type))
+            return expression.Kind() switch
+            {
+                SyntaxKind.AddExpression => DateTimeAddMilliseconds(left, right),
+                SyntaxKind.SubtractExpression => DateTimeAddMilliseconds(left, $"-({right})"),
+                _ => throw UnsupportedSymbol(operation.OperatorMethod, expression)
+            };
+        if (!IsTimeSpan(operation.LeftOperand.Type) || !IsTimeSpan(operation.RightOperand.Type))
+            throw UnsupportedSymbol(operation.OperatorMethod, expression);
+        return expression.Kind() switch
+        {
+            SyntaxKind.AddExpression => TimeSpanArithmetic(left, right, "+"),
+            SyntaxKind.SubtractExpression => TimeSpanArithmetic(left, right, "-"),
+            SyntaxKind.EqualsExpression => $"{left} === {right}",
+            SyntaxKind.NotEqualsExpression => $"{left} !== {right}",
+            SyntaxKind.LessThanExpression => $"{left} < {right}",
+            SyntaxKind.LessThanOrEqualExpression => $"{left} <= {right}",
+            SyntaxKind.GreaterThanExpression => $"{left} > {right}",
+            SyntaxKind.GreaterThanOrEqualExpression => $"{left} >= {right}",
+            _ => throw UnsupportedSymbol(operation.OperatorMethod, expression)
+        };
+    }
 
     private string BinaryOperand(ExpressionSyntax operand, bool numeric)
     {

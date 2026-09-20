@@ -10,6 +10,8 @@ internal sealed partial class JavaScriptEmitter
         var type = constructor?.ContainingType;
         var arguments = value.ArgumentList?.Arguments.ToArray() ?? [];
         var typeName = type?.ToDisplayString();
+        if (typeName == "System.TimeSpan")
+            return CreateTimeSpan(value, constructor, arguments);
         if (typeName == "System.DateTimeOffset")
             return CreateDateTimeOffset(value, constructor, arguments);
         if (typeName is "Workers.Request" or "Workers.Response")
@@ -44,6 +46,25 @@ internal sealed partial class JavaScriptEmitter
         if (type is not null && IsUserInstanceType(type))
             return UserObject(value, constructor, type, arguments);
         throw UnsupportedSymbol(constructor, value);
+    }
+
+    private string CreateTimeSpan(
+        SyntaxNode source,
+        IMethodSymbol? constructor,
+        ArgumentSyntax[] arguments)
+    {
+        if (constructor is null || arguments.Length is < 3 or > 5
+            || constructor.Parameters.Any(parameter => parameter.Type.SpecialType != SpecialType.System_Int32))
+            throw UnsupportedSymbol(constructor, source);
+        return PositionalObjectCreation(source, constructor, arguments, values =>
+        {
+            var offset = values.Count == 3 ? 0 : 1;
+            var days = values.Count == 3 ? "0" : values[0];
+            var milliseconds = values.Count == 5 ? values[4] : "0";
+            var total = $"((({days}) * 24 + ({values[offset]})) * 60 + ({values[offset + 1]})) * 60000"
+                + $" + ({values[offset + 2]}) * 1000 + ({milliseconds})";
+            return $"{_helpers.Require(JavaScriptHelper.TimeSpan)}({total})";
+        });
     }
 
     private string CreateDateTimeOffset(

@@ -51,6 +51,8 @@ internal sealed partial class JavaScriptEmitter
     private string UnaryNumeric(PrefixUnaryExpressionSyntax value, string operation)
     {
         var unary = _model.GetOperation(value) as IUnaryOperation;
+        if (unary?.Type?.ToDisplayString() == "System.TimeSpan" && operation == "-")
+            return TimeSpanNegate(Expression(value.Operand));
         if (unary?.OperatorMethod is not null)
             throw UnsupportedSymbol(unary.OperatorMethod, value);
         var type = unary?.Type?.SpecialType ?? SpecialType.None;
@@ -81,6 +83,12 @@ internal sealed partial class JavaScriptEmitter
             throw Unsupported("WRK108", value);
         var type = _model.GetTypeInfo(value).Type?.SpecialType ?? SpecialType.None;
         var target = Expression(value.Left);
+        if (IsDateValue(_model.GetTypeInfo(value.Left).Type)
+            && IsTimeSpan(_model.GetTypeInfo(value.Right).Type))
+            return $"({target} = {DateTimeAddMilliseconds(target,
+                operation == "+" ? Expression(value.Right) : $"-({Expression(value.Right)})")})";
+        if (_model.GetTypeInfo(value).Type?.ToDisplayString() == "System.TimeSpan")
+            return $"({target} = {TimeSpanArithmetic(target, Expression(value.Right), operation)})";
         if (type == SpecialType.System_String && operation == "+")
             return $"({target} = ({target} ?? \"\") + ({Expression(value.Right)} ?? \"\"))";
         return $"({target} = {NumericResult($"{target} {operation} {Expression(value.Right)}", type, value)})";

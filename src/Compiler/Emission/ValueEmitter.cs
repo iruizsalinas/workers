@@ -14,8 +14,12 @@ internal sealed partial class JavaScriptEmitter
             && property.ContainingType.ToDisplayString() == "System.DateTimeOffset") return "new Date()";
         if (symbol is { IsStatic: true, Name: "UnixEpoch", ContainingType: { } epochType }
             && epochType.ToDisplayString() == "System.DateTimeOffset") return "new Date(0)";
-        if (symbol is { IsStatic: true, Name: "Zero", ContainingType: { } timeSpanType }
-            && timeSpanType.ToDisplayString() == "System.TimeSpan") return "0";
+        if (symbol is { IsStatic: true, ContainingType: { } timeSpanType }
+            && timeSpanType.ToDisplayString() == "System.TimeSpan")
+            return TimeSpanStaticMember(member, symbol.Name);
+        if (property is { IsStatic: false, ContainingType: { } durationType }
+            && durationType.ToDisplayString() == "System.TimeSpan")
+            return TimeSpanMember(member, property.Name);
         if (property is { IsStatic: false, ContainingType: { } dateTimeType }
             && dateTimeType.ToDisplayString() is "System.DateTimeOffset" or "System.DateTime")
             return DateTimeMember(member, property);
@@ -173,6 +177,39 @@ internal sealed partial class JavaScriptEmitter
             "DateTime" when property.ContainingType.ToDisplayString() == "System.DateTimeOffset" =>
                 $"new Date({receiver})",
             _ => throw UnsupportedSymbol(property, member)
+        };
+    }
+
+    private string TimeSpanStaticMember(SyntaxNode source, string name) => name switch
+    {
+        "Zero" => "0",
+        "MaxValue" => TimeSpanLimit(negative: false),
+        "MinValue" => TimeSpanLimit(negative: true),
+        _ => throw Unsupported("WRK105", source)
+    };
+
+    private string TimeSpanLimit(bool negative)
+    {
+        _helpers.Require(JavaScriptHelper.TimeSpan);
+        return (negative ? "-" : "") + _helpers.Name("timeSpanLimit");
+    }
+
+    private string TimeSpanMember(MemberAccessExpressionSyntax member, string name)
+    {
+        var receiver = Expression(member.Expression);
+        return name switch
+        {
+            "Days" => $"Math.trunc(({receiver}) / 86400000)",
+            "Hours" => $"Math.trunc(({receiver}) / 3600000) % 24",
+            "Minutes" => $"Math.trunc(({receiver}) / 60000) % 60",
+            "Seconds" => $"Math.trunc(({receiver}) / 1000) % 60",
+            "Milliseconds" => $"Math.trunc({receiver}) % 1000",
+            "TotalDays" => $"({receiver}) / 86400000",
+            "TotalHours" => $"({receiver}) / 3600000",
+            "TotalMinutes" => $"({receiver}) / 60000",
+            "TotalSeconds" => $"({receiver}) / 1000",
+            "TotalMilliseconds" => receiver,
+            _ => throw Unsupported("WRK105", member)
         };
     }
 

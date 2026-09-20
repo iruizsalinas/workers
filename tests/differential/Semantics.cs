@@ -95,7 +95,20 @@ public sealed record CoreSemanticsResult(
     int[] LinqZip,
     int LinqAggregate,
     int[] LinqJoin,
-    int[] LinqGroupJoin);
+    int[] LinqGroupJoin,
+    int SpanDays,
+    int SpanHours,
+    int SpanMinutes,
+    int SpanSeconds,
+    int SpanMilliseconds,
+    double SpanTotalHours,
+    double SpanFactoryMilliseconds,
+    double SpanNegatedMilliseconds,
+    bool SpanOrdered,
+    bool SpanEqual,
+    int SpanComparison,
+    double DateSpanDifference,
+    string DateSpanAddition);
 
 public static class CoreSemantics
 {
@@ -150,6 +163,9 @@ public static class CoreSemantics
         ];
         var lookup = aggregateItems.ToLookup(item => item.Group, item => item.Value);
         var dictionary = words.ToDictionary(word => word, word => word.Length);
+        var span = new TimeSpan(1, 2, 3, 4, 5);
+        var factorySpan = TimeSpan.FromHours(1.5).Add(TimeSpan.FromMinutes(2)).Subtract(TimeSpan.FromSeconds(30));
+        var spanEnd = instant + TimeSpan.FromMinutes(2);
         return new(signed, unsigned, single, -minimum, -unarySingle == -0.1f, $"{true}:{false}", true.ToString(),
             'A' + 1, 'B' - 'A', character + 5, character - otherCharacter, total,
             instant.Year, instant.Month, instant.Day, instant.DayOfWeek, instant.Hour, instant.Minute,
@@ -201,7 +217,11 @@ public static class CoreSemantics
             aggregateItems.Join(new List<string> { "a", "b" }, item => item.Group, group => group,
                 (item, group) => item.Id).ToArray(),
             aggregateItems.GroupJoin(new List<string> { "a", "a", "b" }, item => item.Group, group => group,
-                (item, groups) => groups.Count()).ToArray());
+                (item, groups) => groups.Count()).ToArray(),
+            span.Days, span.Hours, span.Minutes, span.Seconds, span.Milliseconds, span.TotalHours,
+            factorySpan.TotalMilliseconds, (-span).TotalMilliseconds,
+            span > factorySpan, span == factorySpan, TimeSpan.Compare(span, factorySpan),
+            (spanEnd - instant).TotalMilliseconds, spanEnd.ToString("O"));
     }
 }
 

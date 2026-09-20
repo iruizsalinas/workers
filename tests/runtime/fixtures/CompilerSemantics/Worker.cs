@@ -177,6 +177,23 @@ public static class Worker
             });
         }
 
+        if (request.Path == "/timespan-errors")
+        {
+            var factoryRejected = false;
+            var additionRejected = false;
+            var negationRejected = false;
+            var durationRejected = false;
+            try { TimeSpan.FromDays(20_000_000); }
+            catch (Exception) { factoryRejected = true; }
+            try { TimeSpan.MaxValue.Add(TimeSpan.FromMilliseconds(1)); }
+            catch (Exception) { additionRejected = true; }
+            try { var value = -TimeSpan.MinValue; }
+            catch (Exception) { negationRejected = true; }
+            try { TimeSpan.MinValue.Duration(); }
+            catch (Exception) { durationRejected = true; }
+            return Response.Json(new { factoryRejected, additionRejected, negationRejected, durationRejected });
+        }
+
         if (request.Path == "/json-element-text")
         {
             var value = await request.JsonAsync<JsonElement>();

@@ -26,6 +26,7 @@ internal static partial class HelperSource
         JavaScriptHelper.DateTimeIsLeapYear => DateTimeIsLeapYear(name),
         JavaScriptHelper.DateTimeDaysInMonth => DateTimeDaysInMonth(name),
         JavaScriptHelper.DateTimeAddMilliseconds => DateTimeAddMilliseconds(name),
+        JavaScriptHelper.TimeSpan => TimeSpan(name),
         JavaScriptHelper.LinqValues => LinqValues(name),
         JavaScriptHelper.LinqWhere => LinqWhere(name),
         JavaScriptHelper.LinqSelect => LinqSelect(name),
