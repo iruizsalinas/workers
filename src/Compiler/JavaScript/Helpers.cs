@@ -4,8 +4,9 @@ internal enum JavaScriptHelper
     RandomNext, SetAdd, Base64, RpcArguments, IntParse, HexDecode, EscapeDataString, JsonElementToString,
     DateTimeOffset, DateTimeAddMonths, DateTimeFromUnixTime, DateTimeCompare, DateTimeDayOfYear,
     DateTimeIsLeapYear, DateTimeDaysInMonth, DateTimeAddMilliseconds,
-    LinqValues, LinqWhere, LinqSelect, LinqSkip, LinqTake, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains,
-    LinqFirst, LinqLast, LinqSingle, LinqToArray
+    LinqValues, LinqWhere, LinqSelect, LinqSelectMany, LinqAppend, LinqPrepend, LinqSkip, LinqTake,
+    LinqSkipWhile, LinqTakeWhile, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains, LinqDistinct,
+    LinqDistinctBy, LinqSequenceEqual, LinqElementAt, LinqFirst, LinqLast, LinqSingle, LinqToArray
 }
 
 internal sealed class HelperRegistry(GeneratedNameAllocator names)
@@ -58,13 +59,22 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.LinqValues => "linqValues",
         JavaScriptHelper.LinqWhere => "linqWhere",
         JavaScriptHelper.LinqSelect => "linqSelect",
+        JavaScriptHelper.LinqSelectMany => "linqSelectMany",
+        JavaScriptHelper.LinqAppend => "linqAppend",
+        JavaScriptHelper.LinqPrepend => "linqPrepend",
         JavaScriptHelper.LinqSkip => "linqSkip",
         JavaScriptHelper.LinqTake => "linqTake",
+        JavaScriptHelper.LinqSkipWhile => "linqSkipWhile",
+        JavaScriptHelper.LinqTakeWhile => "linqTakeWhile",
         JavaScriptHelper.LinqConcat => "linqConcat",
         JavaScriptHelper.LinqAny => "linqAny",
         JavaScriptHelper.LinqAll => "linqAll",
         JavaScriptHelper.LinqCount => "linqCount",
         JavaScriptHelper.LinqContains => "linqContains",
+        JavaScriptHelper.LinqDistinct => "linqDistinct",
+        JavaScriptHelper.LinqDistinctBy => "linqDistinctBy",
+        JavaScriptHelper.LinqSequenceEqual => "linqSequenceEqual",
+        JavaScriptHelper.LinqElementAt => "linqElementAt",
         JavaScriptHelper.LinqFirst => "linqFirst",
         JavaScriptHelper.LinqLast => "linqLast",
         JavaScriptHelper.LinqSingle => "linqSingle",

@@ -27,10 +27,19 @@ internal sealed partial class JavaScriptEmitter
                 Linq(JavaScriptHelper.LinqWhere, source, operationArguments),
             "Select" when HasDelegate(parameters, operationArguments, 0) =>
                 Linq(JavaScriptHelper.LinqSelect, source, operationArguments),
+            "SelectMany" => LinqSelectMany(invocation, method, parameters, source, operationArguments),
+            "Append" when operationArguments.Length == 1 =>
+                Linq(JavaScriptHelper.LinqAppend, source, operationArguments),
+            "Prepend" when operationArguments.Length == 1 =>
+                Linq(JavaScriptHelper.LinqPrepend, source, operationArguments),
             "Skip" when HasInt32(parameters, operationArguments) =>
                 Linq(JavaScriptHelper.LinqSkip, source, operationArguments),
             "Take" when HasInt32(parameters, operationArguments) =>
                 Linq(JavaScriptHelper.LinqTake, source, operationArguments),
+            "SkipWhile" when HasDelegate(parameters, operationArguments, 0, SpecialType.System_Boolean) =>
+                Linq(JavaScriptHelper.LinqSkipWhile, source, operationArguments),
+            "TakeWhile" when HasDelegate(parameters, operationArguments, 0, SpecialType.System_Boolean) =>
+                Linq(JavaScriptHelper.LinqTakeWhile, source, operationArguments),
             "Concat" when operationArguments.Length == 1 =>
                 Linq(JavaScriptHelper.LinqConcat, source, operationArguments),
             "Any" when operationArguments.Length == 0 => Linq(JavaScriptHelper.LinqAny, source, ["null", "false"]),
@@ -43,6 +52,20 @@ internal sealed partial class JavaScriptEmitter
                 Linq(JavaScriptHelper.LinqCount, source, [operationArguments[0], "true"]),
             "Contains" when operationArguments.Length == 1 && SupportsLinqEquality(method.TypeArguments[0]) =>
                 Linq(JavaScriptHelper.LinqContains, source, operationArguments),
+            "Distinct" when operationArguments.Length == 0 && SupportsLinqEquality(method.TypeArguments[0]) =>
+                Linq(JavaScriptHelper.LinqDistinct, source, []),
+            "DistinctBy" when operationArguments.Length == 1 && parameters.Length == 1
+                              && IsDelegate(parameters[0].Type)
+                              && method.TypeArguments.Length == 2
+                              && SupportsLinqEquality(method.TypeArguments[1]) =>
+                Linq(JavaScriptHelper.LinqDistinctBy, source, operationArguments),
+            "SequenceEqual" when operationArguments.Length == 1 && SupportsLinqEquality(method.TypeArguments[0]) =>
+                Linq(JavaScriptHelper.LinqSequenceEqual, source, operationArguments),
+            "ElementAt" when HasInt32(parameters, operationArguments) =>
+                Linq(JavaScriptHelper.LinqElementAt, source, [operationArguments[0], "null", "false"]),
+            "ElementAtOrDefault" when HasInt32(parameters, operationArguments) =>
+                Linq(JavaScriptHelper.LinqElementAt, source,
+                    [operationArguments[0], DefaultFieldValue(method.ReturnType, invocation), "true"]),
             "First" => LinqElement(invocation, method, parameters, source, operationArguments,
                 JavaScriptHelper.LinqFirst, orDefault: false),
             "FirstOrDefault" => LinqElement(invocation, method, parameters, source, operationArguments,
@@ -59,6 +82,21 @@ internal sealed partial class JavaScriptEmitter
             "ToList" when operationArguments.Length == 0 => Linq(JavaScriptHelper.LinqToArray, source, []),
             _ => throw UnsupportedSymbol(method, invocation)
         };
+    }
+
+    private string LinqSelectMany(
+        SyntaxNode sourceNode,
+        IMethodSymbol method,
+        IParameterSymbol[] parameters,
+        string source,
+        string[] arguments)
+    {
+        if (arguments.Length is not (1 or 2) || parameters.Length != arguments.Length
+            || !IsDelegate(parameters[0].Type)
+            || arguments.Length == 2 && !IsDelegate(parameters[1].Type))
+            throw UnsupportedSymbol(method, sourceNode);
+        return Linq(JavaScriptHelper.LinqSelectMany, source,
+            [arguments[0], arguments.Length == 2 ? arguments[1] : "null", arguments.Length == 2 ? "true" : "false"]);
     }
 
     private string LinqElement(

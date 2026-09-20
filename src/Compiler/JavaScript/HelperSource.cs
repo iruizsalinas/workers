@@ -29,13 +29,22 @@ internal static class HelperSource
         JavaScriptHelper.LinqValues => LinqValues(name),
         JavaScriptHelper.LinqWhere => LinqWhere(name),
         JavaScriptHelper.LinqSelect => LinqSelect(name),
+        JavaScriptHelper.LinqSelectMany => LinqSelectMany(name),
+        JavaScriptHelper.LinqAppend => LinqAppend(name),
+        JavaScriptHelper.LinqPrepend => LinqPrepend(name),
         JavaScriptHelper.LinqSkip => LinqSkip(name),
         JavaScriptHelper.LinqTake => LinqTake(name),
+        JavaScriptHelper.LinqSkipWhile => LinqSkipWhile(name),
+        JavaScriptHelper.LinqTakeWhile => LinqTakeWhile(name),
         JavaScriptHelper.LinqConcat => LinqConcat(name),
         JavaScriptHelper.LinqAny => LinqAny(name),
         JavaScriptHelper.LinqAll => LinqAll(name),
         JavaScriptHelper.LinqCount => LinqCount(name),
         JavaScriptHelper.LinqContains => LinqContains(name),
+        JavaScriptHelper.LinqDistinct => LinqDistinct(name),
+        JavaScriptHelper.LinqDistinctBy => LinqDistinctBy(name),
+        JavaScriptHelper.LinqSequenceEqual => LinqSequenceEqual(name),
+        JavaScriptHelper.LinqElementAt => LinqElementAt(name),
         JavaScriptHelper.LinqFirst => LinqFirst(name),
         JavaScriptHelper.LinqLast => LinqLast(name),
         JavaScriptHelper.LinqSingle => LinqSingle(name),
@@ -376,6 +385,45 @@ internal static class HelperSource
 
         """;
 
+    private static string LinqSelectMany(Func<string, string> name) => $$"""
+        function {{name("linqSelectMany")}}(source, collectionSelector, resultSelector, hasResultSelector) {
+          if (source == null || collectionSelector == null || (hasResultSelector && resultSelector == null))
+            throw new TypeError("LINQ argument cannot be null.");
+          return { *[Symbol.iterator]() {
+            let index = 0;
+            for (const outer of {{name("linqValues")}}(source)) {
+              const inner = collectionSelector(outer, index++);
+              for (const value of {{name("linqValues")}}(inner))
+                yield hasResultSelector ? resultSelector(outer, value) : value;
+            }
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqAppend(Func<string, string> name) => $$"""
+        function {{name("linqAppend")}}(source, value) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          return { *[Symbol.iterator]() {
+            yield* {{name("linqValues")}}(source); yield value;
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqPrepend(Func<string, string> name) => $$"""
+        function {{name("linqPrepend")}}(source, value) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          return { *[Symbol.iterator]() {
+            yield value; yield* {{name("linqValues")}}(source);
+          }
+          };
+        }
+
+        """;
+
     private static string LinqSkip(Func<string, string> name) => $$"""
         function {{name("linqSkip")}}(source, count) {
           if (source == null) throw new TypeError("LINQ source cannot be null.");
@@ -397,6 +445,36 @@ internal static class HelperSource
             for (const value of {{name("linqValues")}}(source)) {
               yield value;
               if (--remaining === 0) return;
+            }
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqSkipWhile(Func<string, string> name) => $$"""
+        function {{name("linqSkipWhile")}}(source, predicate) {
+          if (source == null || predicate == null) throw new TypeError("LINQ argument cannot be null.");
+          return { *[Symbol.iterator]() {
+            let yielding = false, index = 0;
+            for (const value of {{name("linqValues")}}(source)) {
+              if (!yielding && !predicate(value, index++)) yielding = true;
+              if (yielding) yield value;
+            }
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqTakeWhile(Func<string, string> name) => $$"""
+        function {{name("linqTakeWhile")}}(source, predicate) {
+          if (source == null || predicate == null) throw new TypeError("LINQ argument cannot be null.");
+          return { *[Symbol.iterator]() {
+            let index = 0;
+            for (const value of {{name("linqValues")}}(source)) {
+              if (!predicate(value, index++)) return;
+              yield value;
             }
           }
           };
@@ -458,6 +536,65 @@ internal static class HelperSource
           for (const value of {{name("linqValues")}}(source))
             if (value === target || (value !== value && target !== target)) return true;
           return false;
+        }
+
+        """;
+
+    private static string LinqDistinct(Func<string, string> name) => $$"""
+        function {{name("linqDistinct")}}(source) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          return { *[Symbol.iterator]() {
+            const seen = new Set();
+            for (const value of {{name("linqValues")}}(source))
+              if (!seen.has(value)) { seen.add(value); yield value; }
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqDistinctBy(Func<string, string> name) => $$"""
+        function {{name("linqDistinctBy")}}(source, keySelector) {
+          if (source == null || keySelector == null) throw new TypeError("LINQ argument cannot be null.");
+          return { *[Symbol.iterator]() {
+            const seen = new Set();
+            for (const value of {{name("linqValues")}}(source)) {
+              const key = keySelector(value);
+              if (!seen.has(key)) { seen.add(key); yield value; }
+            }
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqSequenceEqual(Func<string, string> name) => $$"""
+        function {{name("linqSequenceEqual")}}(first, second) {
+          if (first == null || second == null) throw new TypeError("LINQ source cannot be null.");
+          const left = {{name("linqValues")}}(first), right = {{name("linqValues")}}(second);
+          try {
+            while (true) {
+              const a = left.next(), b = right.next();
+              if (a.done || b.done) return a.done === b.done;
+              if (!(a.value === b.value || (a.value !== a.value && b.value !== b.value))) return false;
+            }
+          } finally {
+            left.return?.(); right.return?.();
+          }
+        }
+
+        """;
+
+    private static string LinqElementAt(Func<string, string> name) => $$"""
+        function {{name("linqElementAt")}}(source, index, defaultValue, orDefault) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          if (index >= 0) {
+            let current = 0;
+            for (const value of {{name("linqValues")}}(source))
+              if (current++ === index) return value;
+          }
+          if (orDefault) return defaultValue;
+          throw new RangeError("Index was outside the bounds of the sequence.");
         }
 
         """;

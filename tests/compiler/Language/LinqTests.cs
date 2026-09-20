@@ -117,9 +117,72 @@ public sealed class LinqTests
         Assert.Contains("Array.from($workers$linqValues(source))", module);
     }
 
+    [Fact]
+    public void EmitsAdditionalStreamingAndElementOperators()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    List<List<int>> groups = [new List<int> { 1, 2 }, new List<int> { 3 }];
+                    var values = groups.SelectMany((group, index) => group.Select(value => value + index))
+                        .Prepend(0).Append(4).SkipWhile((value, index) => value == index)
+                        .TakeWhile(value => value < 4);
+                    return Response.Json(new
+                    {
+                        values = values.ToArray(),
+                        item = values.ElementAt(1),
+                        missing = values.ElementAtOrDefault(100)
+                    });
+                }
+            }
+            """);
+
+        Assert.Contains("$workers$linqSelectMany(", module);
+        Assert.Contains("$workers$linqPrepend(", module);
+        Assert.Contains("$workers$linqAppend(", module);
+        Assert.Contains("$workers$linqSkipWhile(", module);
+        Assert.Contains("$workers$linqTakeWhile(", module);
+        Assert.Contains("$workers$linqElementAt(", module);
+        Assert.Contains("*[Symbol.iterator]()", module);
+    }
+
+    [Fact]
+    public void EmitsEqualityOperatorsOnlyForFaithfulKeyTypes()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    List<int> values = [1, 2, 1];
+                    List<string> words = ["a", "b", "cc"];
+                    return Response.Json(new
+                    {
+                        distinct = values.Distinct().ToArray(),
+                        byLength = words.DistinctBy(word => word.Length).ToArray(),
+                        equal = values.SequenceEqual(new List<int> { 1, 2, 1 })
+                    });
+                }
+            }
+            """);
+
+        Assert.Contains("$workers$linqDistinct(values)", module);
+        Assert.Contains("$workers$linqDistinctBy(words, word => word.length)", module);
+        Assert.Contains("$workers$linqSequenceEqual(values, [1, 2, 1])", module);
+        Assert.Contains("const seen = new Set()", module);
+    }
+
     [Theory]
     [InlineData("values.Contains(new Item(1))")]
     [InlineData("values.Contains(new Item(1), EqualityComparer<Item>.Default)")]
+    [InlineData("values.Distinct()")]
+    [InlineData("values.SequenceEqual(values)")]
     public void RejectsEqualityOverloadsWithoutFaithfulSemantics(string operation)
     {
         var error = Assert.Throws<NotSupportedException>(() => Compile($$"""

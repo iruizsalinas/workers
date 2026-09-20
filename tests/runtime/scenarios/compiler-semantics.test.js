@@ -83,6 +83,7 @@ describe("compiler value semantics", () => {
       emptyRejected: true,
       multipleRejected: true,
       nullSourceRejected: true,
+      indexRejected: true,
     });
   });
 

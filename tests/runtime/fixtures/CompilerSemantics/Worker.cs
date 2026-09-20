@@ -121,6 +121,7 @@ public static class Worker
             var emptyRejected = false;
             var multipleRejected = false;
             var nullSourceRejected = false;
+            var indexRejected = false;
             try
             {
                 empty.First();
@@ -146,7 +147,15 @@ public static class Worker
             {
                 nullSourceRejected = true;
             }
-            return Response.Json(new { emptyRejected, multipleRejected, nullSourceRejected });
+            try
+            {
+                multiple.ElementAt(5);
+            }
+            catch (Exception)
+            {
+                indexRejected = true;
+            }
+            return Response.Json(new { emptyRejected, multipleRejected, nullSourceRejected, indexRejected });
         }
 
         if (request.Path == "/json-element-text")

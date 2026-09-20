@@ -58,7 +58,15 @@ public sealed record CoreSemanticsResult(
     int LinqIntDefault,
     bool LinqBoolDefault,
     int LinqStringCount,
-    int[] LinqStringValues);
+    int[] LinqStringValues,
+    int[] LinqSelectMany,
+    int[] LinqSelectManyResult,
+    int[] LinqWhile,
+    int[] LinqDistinct,
+    string[] LinqDistinctBy,
+    bool LinqSequenceEqual,
+    int LinqElementAt,
+    int LinqElementDefault);
 
 public static class CoreSemantics
 {
@@ -93,6 +101,9 @@ public static class CoreSemantics
         List<int> linqTail = [9];
         List<int> emptyInts = [];
         List<bool> emptyBools = [];
+        List<List<int>> linqGroups = [new List<int> { 1, 2 }, new List<int> { 3 }];
+        List<int> repeated = [1, 2, 1, 3];
+        List<string> words = ["a", "b", "cc", "dd"];
         return new(signed, unsigned, single, -minimum, -unarySingle == -0.1f, $"{true}:{false}", true.ToString(),
             'A' + 1, 'B' - 'A', character + 5, character - otherCharacter, total,
             instant.Year, instant.Month, instant.Day, instant.DayOfWeek, instant.Hour, instant.Minute,
@@ -112,7 +123,13 @@ public static class CoreSemantics
             linqSource.All(value => value > 0), linqSource.Count(value => value % 2 == 1),
             linqSource.Contains(3), linqSource.First(), linqSource.Last(),
             linqSource.Single(value => value == 2), emptyInts.FirstOrDefault(), emptyBools.LastOrDefault(),
-            "😀".Count(), "😀".Select(character => character + 0).ToArray());
+            "😀".Count(), "😀".Select(character => character + 0).ToArray(),
+            linqGroups.SelectMany((group, index) => group.Select(value => value + index))
+                .Prepend(0).Append(8).ToArray(),
+            linqGroups.SelectMany(group => group, (group, value) => value + group.Count).ToArray(),
+            linqSource.SkipWhile((value, index) => value <= index + 1).TakeWhile(value => value <= 5).ToArray(),
+            repeated.Distinct().ToArray(), words.DistinctBy(word => word.Length).ToArray(),
+            "😀".SequenceEqual("😀"), linqSource.ElementAt(1), linqSource.ElementAtOrDefault(-1));
     }
 }
 
