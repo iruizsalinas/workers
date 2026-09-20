@@ -12,7 +12,7 @@ public sealed class PackageTests
         using var workspace = TemporaryDirectory.Create();
         var repository = FindRepository();
 
-        RunDotNet(repository, "pack", "src/Workers.csproj", "-c", "Release", "--no-restore", "-o", workspace.Path);
+        RunDotNet(repository, "pack", "src/Workers.csproj", "-c", "Release", "-o", workspace.Path);
 
         var package = Directory.GetFiles(workspace.Path, "Workers.*.nupkg").Single();
         using (var archive = ZipFile.OpenRead(package))
