@@ -177,4 +177,29 @@ public sealed class UserTypeTests
         Assert.Contains("$workers$value.value$2 = 4;", module);
         Assert.Contains("return { value: this.value, value$2: this.value$2 };", module);
     }
+
+    [Fact]
+    public void KeepsFieldsFromShadowingTheJsonProjection()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) =>
+                    Response.Json(new Model());
+            }
+            public sealed class Model
+            {
+                private object? toJSON;
+                public int Value => toJSON is null ? 1 : 0;
+            }
+            """);
+
+        Assert.Contains("this.toJSON$2 = null;", module);
+        Assert.Contains("this.toJSON$2 == null", module);
+        Assert.Contains("toJSON()", module);
+        Assert.Contains("return { value: this.value };", module);
+        Assert.DoesNotContain("this.toJSON =", module);
+    }
 }
