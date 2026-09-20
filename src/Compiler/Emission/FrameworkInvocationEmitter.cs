@@ -118,19 +118,19 @@ internal sealed partial class JavaScriptEmitter
             "AddYears" when arguments.Length == 1 =>
                 $"{_helpers.Require(JavaScriptHelper.DateTimeAddMonths)}({receiver}, ({arguments[0]}) * 12)",
             "AddDays" when arguments.Length == 1 =>
-                $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 86400000)",
+                DateTimeAddMilliseconds(receiver, $"({arguments[0]}) * 86400000"),
             "AddHours" when arguments.Length == 1 =>
-                $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 3600000)",
+                DateTimeAddMilliseconds(receiver, $"({arguments[0]}) * 3600000"),
             "AddMinutes" when arguments.Length == 1 =>
-                $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 60000)",
+                DateTimeAddMilliseconds(receiver, $"({arguments[0]}) * 60000"),
             "AddSeconds" when arguments.Length == 1 =>
-                $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 1000)",
+                DateTimeAddMilliseconds(receiver, $"({arguments[0]}) * 1000"),
             "AddMilliseconds" when arguments.Length == 1 =>
-                $"new Date(new Date({receiver}).getTime() + ({arguments[0]}))",
+                DateTimeAddMilliseconds(receiver, arguments[0]),
             "CompareTo" when arguments.Length == 1 && HasSameDateParameter(method) =>
-                DateTimeCalendarInvocation("dateTimeCompare", [receiver, arguments[0]]),
+                DateTimeHelperInvocation(JavaScriptHelper.DateTimeCompare, [receiver, arguments[0]]),
             "Equals" when arguments.Length == 1 && HasSameDateParameter(method) =>
-                $"{DateTimeCalendarInvocation("dateTimeCompare", [receiver, arguments[0]])} === 0",
+                $"{DateTimeHelperInvocation(JavaScriptHelper.DateTimeCompare, [receiver, arguments[0]])} === 0",
             "ToUniversalTime" when arguments.Length == 0
                                    && method?.ContainingType.ToDisplayString() == "System.DateTimeOffset" =>
                 $"new Date({receiver})",
@@ -141,4 +141,7 @@ internal sealed partial class JavaScriptEmitter
 
     private static bool HasSameDateParameter(IMethodSymbol? method) => method is { Parameters.Length: 1 }
         && SymbolEqualityComparer.Default.Equals(method.ContainingType, method.Parameters[0].Type);
+
+    private string DateTimeAddMilliseconds(string receiver, string delta) =>
+        $"{_helpers.Require(JavaScriptHelper.DateTimeAddMilliseconds)}({receiver}, {delta})";
 }

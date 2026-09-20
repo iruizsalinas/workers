@@ -171,10 +171,7 @@ internal sealed partial class JavaScriptEmitter
     }
 
     private string DateTimeDayOfYear(string receiver)
-    {
-        _helpers.Require(JavaScriptHelper.DateTimeCalendar);
-        return $"{_helpers.Name("dateTimeDayOfYear")}({receiver})";
-    }
+        => $"{_helpers.Require(JavaScriptHelper.DateTimeDayOfYear)}({receiver})";
 
     private string FormEntryMember(MemberAccessExpressionSyntax member, IPropertySymbol property)
     {

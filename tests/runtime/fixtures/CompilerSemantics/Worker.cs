@@ -100,6 +100,20 @@ public static class Worker
             });
         }
 
+        if (request.Path == "/date-range")
+        {
+            var rejected = false;
+            try
+            {
+                new DateTimeOffset(9999, 12, 31, 0, 0, 0, TimeSpan.Zero).AddDays(10);
+            }
+            catch (Exception)
+            {
+                rejected = true;
+            }
+            return Response.Json(new { rejected });
+        }
+
         if (request.Path == "/json-element-text")
         {
             var value = await request.JsonAsync<JsonElement>();

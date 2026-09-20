@@ -70,6 +70,12 @@ describe("compiler value semantics", () => {
     expect(result.interpolated).toMatch(/\.\d{7}\+00:00$/);
   });
 
+  it("rejects fixed-duration arithmetic outside the CLR date range", async () => {
+    const response = await invoke("/date-range");
+
+    await expect(response.json()).resolves.toEqual({ rejected: true });
+  });
+
   it.each([
     ["string", "hello", "hello"],
     ["boolean", true, "True"],

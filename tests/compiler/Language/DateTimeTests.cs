@@ -72,6 +72,8 @@ public sealed class DateTimeTests
         Assert.Contains("new Date(new Date(value).setUTCHours(0, 0, 0, 0))", module);
         Assert.Contains("* 3600000", module);
         Assert.Contains("* 60000", module);
+        Assert.Contains("function $workers$dateTimeAddMilliseconds(input, delta)", module);
+        Assert.Contains("!Number.isFinite(delta)", module);
     }
 
     [Fact]
@@ -239,6 +241,43 @@ public sealed class DateTimeTests
         Assert.Contains("epoch: new Date(0)", module);
         Assert.Contains("unspecified: new Date(first)", module);
         Assert.Contains("utc: new Date(first)", module);
+    }
+
+    [Fact]
+    public void EmitsOnlyRequestedDateTimeQueryHelpers()
+    {
+        var compareModule = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx)
+                {
+                    var first = DateTimeOffset.UnixEpoch;
+                    return Response.Json(first.CompareTo(first));
+                }
+            }
+            """);
+
+        Assert.Contains("function $workers$dateTimeCompare(left, right)", compareModule);
+        Assert.DoesNotContain("function $workers$dateTimeDayOfYear", compareModule);
+        Assert.DoesNotContain("function $workers$dateTimeIsLeapYear", compareModule);
+        Assert.DoesNotContain("function $workers$dateTimeDaysInMonth", compareModule);
+
+        var daysModule = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx) =>
+                    Response.Json(DateTime.DaysInMonth(2024, 2));
+            }
+            """);
+
+        Assert.Contains("function $workers$dateTimeDaysInMonth(year, month)", daysModule);
+        Assert.Contains("function $workers$dateTimeIsLeapYear(year)", daysModule);
+        Assert.DoesNotContain("function $workers$dateTimeCompare", daysModule);
+        Assert.DoesNotContain("function $workers$dateTimeDayOfYear", daysModule);
     }
 
 }

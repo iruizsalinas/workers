@@ -2,7 +2,8 @@ internal enum JavaScriptHelper
 {
     WithHeader, Delay, Stream, Socket, Digest, WebSocketEvents, IntegerDivide, IntegerRemainder,
     RandomNext, SetAdd, Base64, RpcArguments, IntParse, HexDecode, EscapeDataString, JsonElementToString,
-    DateTimeOffset, DateTimeAddMonths, DateTimeFromUnixTime, DateTimeCalendar
+    DateTimeOffset, DateTimeAddMonths, DateTimeFromUnixTime, DateTimeCompare, DateTimeDayOfYear,
+    DateTimeIsLeapYear, DateTimeDaysInMonth, DateTimeAddMilliseconds
 }
 
 internal sealed class HelperRegistry(GeneratedNameAllocator names)
@@ -12,6 +13,8 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
     public string Require(JavaScriptHelper helper)
     {
         _required.Add(helper);
+        if (helper == JavaScriptHelper.DateTimeDaysInMonth)
+            _required.Add(JavaScriptHelper.DateTimeIsLeapYear);
         return Name(helper.EntryPoint());
     }
 
@@ -43,7 +46,11 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.DateTimeOffset => "dateTimeOffset",
         JavaScriptHelper.DateTimeAddMonths => "dateTimeAddMonths",
         JavaScriptHelper.DateTimeFromUnixTime => "dateTimeFromUnixTime",
-        JavaScriptHelper.DateTimeCalendar => "dateTimeCompare",
+        JavaScriptHelper.DateTimeCompare => "dateTimeCompare",
+        JavaScriptHelper.DateTimeDayOfYear => "dateTimeDayOfYear",
+        JavaScriptHelper.DateTimeIsLeapYear => "dateTimeIsLeapYear",
+        JavaScriptHelper.DateTimeDaysInMonth => "dateTimeDaysInMonth",
+        JavaScriptHelper.DateTimeAddMilliseconds => "dateTimeAddMilliseconds",
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 }
