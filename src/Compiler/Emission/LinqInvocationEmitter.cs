@@ -369,8 +369,12 @@ internal sealed partial class JavaScriptEmitter
     private static bool HasInt32(IParameterSymbol[] parameters, string[] arguments) =>
         arguments.Length == 1 && parameters is [{ Type.SpecialType: SpecialType.System_Int32 }];
 
-    private static bool SupportsLinqEquality(ITypeSymbol type) => type.TypeKind == TypeKind.Enum
+    private static bool SupportsLinqEquality(ITypeSymbol type)
+    {
+        type = UnwrapNullable(type);
+        return type.TypeKind == TypeKind.Enum
         || type.SpecialType is SpecialType.System_Boolean or SpecialType.System_Char or SpecialType.System_String
             or >= SpecialType.System_SByte and <= SpecialType.System_Decimal
         || type.ToDisplayString() == "System.Guid";
+    }
 }

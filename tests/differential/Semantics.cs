@@ -108,7 +108,9 @@ public sealed record CoreSemanticsResult(
     bool SpanEqual,
     int SpanComparison,
     double DateSpanDifference,
-    string DateSpanAddition);
+    string DateSpanAddition,
+    int?[] LinqNullableDistinct,
+    int[] LinqNullableGroupCounts);
 
 public static class CoreSemantics
 {
@@ -221,7 +223,10 @@ public static class CoreSemantics
             span.Days, span.Hours, span.Minutes, span.Seconds, span.Milliseconds, span.TotalHours,
             factorySpan.TotalMilliseconds, (-span).TotalMilliseconds,
             span > factorySpan, span == factorySpan, TimeSpan.Compare(span, factorySpan),
-            (spanEnd - instant).TotalMilliseconds, spanEnd.ToString("O"));
+            (spanEnd - instant).TotalMilliseconds, spanEnd.ToString("O"),
+            new List<int?> { 1, null, 1, null }.Distinct().ToArray(),
+            new List<int?> { 1, null, 1 }.GroupBy(value => value)
+                .Select(group => group.Count()).ToArray());
     }
 }
 

@@ -183,6 +183,31 @@ public sealed class LinqTests
     }
 
     [Fact]
+    public void SupportsNullablePrimitiveEqualityKeys()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    List<int?> values = [1, null, 1];
+                    return Response.Json(new {
+                        distinct = values.Distinct().ToArray(),
+                        groups = values.GroupBy(value => value).Select(group => group.Count()).ToArray(),
+                        union = values.Union(new List<int?> { null, 2 }).ToArray()
+                    });
+                }
+            }
+            """);
+
+        Assert.Contains("$workers$linqDistinct(values)", module);
+        Assert.Contains("$workers$linqGroupBy(values", module);
+        Assert.Contains("$workers$linqSet(values", module);
+    }
+
+    [Fact]
     public void EmitsStableMultiKeyOrderingAsADeferredSequence()
     {
         var module = Compile("""
@@ -308,6 +333,8 @@ public sealed class LinqTests
         Assert.Contains("$workers$linqDefaultIfEmpty([], 0)", module);
         Assert.Contains("$workers$linqChunk(values, 2)", module);
         Assert.Contains("$workers$linqZip(values, values", module);
+        Assert.Contains("left.return?.()", module);
+        Assert.Contains("right.return?.()", module);
         Assert.Contains("$workers$linqAggregate(values", module);
     }
 

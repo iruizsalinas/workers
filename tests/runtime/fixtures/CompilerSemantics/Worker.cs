@@ -194,6 +194,26 @@ public static class Worker
             return Response.Json(new { factoryRejected, additionRejected, negationRejected, durationRejected });
         }
 
+        if (request.Path == "/bcl-errors")
+        {
+            var delayRejected = false;
+            var substringRejected = false;
+            var nullSearchRejected = false;
+            var emptyReplacementRejected = false;
+            string? missing = null;
+            try { await Task.Delay(-2); }
+            catch (Exception) { delayRejected = true; }
+            try { "value".Substring(-1); }
+            catch (Exception) { substringRejected = true; }
+            try { "value".Contains(missing!); }
+            catch (Exception) { nullSearchRejected = true; }
+            try { "value".Replace("", "replacement"); }
+            catch (Exception) { emptyReplacementRejected = true; }
+            return Response.Json(new {
+                delayRejected, substringRejected, nullSearchRejected, emptyReplacementRejected
+            });
+        }
+
         if (request.Path == "/json-element-text")
         {
             var value = await request.JsonAsync<JsonElement>();

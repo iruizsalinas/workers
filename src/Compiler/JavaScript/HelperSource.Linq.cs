@@ -457,10 +457,15 @@ internal static partial class HelperSource
           if (first == null || second == null || selector == null) throw new TypeError("LINQ argument cannot be null.");
           return { *[Symbol.iterator]() {
             const left = {{name("linqValues")}}(first), right = {{name("linqValues")}}(second);
-            while (true) {
-              const leftItem = left.next(), rightItem = right.next();
-              if (leftItem.done || rightItem.done) return;
-              yield selector(leftItem.value, rightItem.value);
+            try {
+              while (true) {
+                const leftItem = left.next(), rightItem = right.next();
+                if (leftItem.done || rightItem.done) return;
+                yield selector(leftItem.value, rightItem.value);
+              }
+            } finally {
+              left.return?.();
+              right.return?.();
             }
           }
           };

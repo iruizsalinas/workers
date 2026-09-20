@@ -28,7 +28,8 @@ internal sealed partial class JavaScriptEmitter
         if (typeName is "System.Uri" or "Workers.Url") return CreateUrl(value, constructor, arguments);
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" && arguments.Length == 0)
             return $"[{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}]";
-        if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>" && arguments.Length == 0)
+        if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>"
+            && arguments.Length == 0 && SupportsLinqEquality(type.TypeArguments[0]))
             return $"new Set([{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}])";
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Dictionary<TKey, TValue>"
             && type.TypeArguments[0].SpecialType == SpecialType.System_String && arguments.Length == 0)

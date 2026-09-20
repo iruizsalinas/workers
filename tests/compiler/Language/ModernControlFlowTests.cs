@@ -30,6 +30,46 @@ public sealed class ModernControlFlowTests
     }
 
     [Fact]
+    public void RejectsHashSetsThatNeedClrValueEquality()
+    {
+        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var values = new HashSet<Item> { new Item(1) };
+                    return Response.Json(values.Contains(new Item(1)));
+                }
+            }
+            public sealed record Item(int Id);
+            """));
+
+        Assert.StartsWith("WRK105:", error.Message);
+    }
+
+    [Fact]
+    public void ValidatesTaskDelayAndPreservesInfiniteDelay()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                {
+                    await Task.Delay(-1);
+                    return Response.Text("unreachable");
+                }
+            }
+            """);
+
+        Assert.Contains("if (milliseconds < -1 || milliseconds > 4294967294)", module);
+        Assert.Contains("if (milliseconds === -1) return new Promise(() => {})", module);
+    }
+
+    [Fact]
     public void RunsIndependentTasksInParallel()
     {
         var module = Compile("""

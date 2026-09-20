@@ -143,7 +143,7 @@ internal sealed partial class JavaScriptEmitter
             ("int", "Parse") when HasParameters(method, SpecialType.System_String) => $"{_helpers.Require(JavaScriptHelper.IntParse)}({arguments[0]})",
             ("System.Math", "Min" or "Max") => $"Math.{name!.ToLowerInvariant()}({string.Join(", ", arguments)})",
             ("System.Text.RegularExpressions.Regex", "IsMatch") when method?.IsStatic == true && arguments.Length == 2 =>
-                $"new RegExp({arguments[1]}).test({arguments[0]})",
+                RegexIsMatch(invocation, method, arguments),
             ("Workers.Timers", "SetTimeout") => $"setTimeout({arguments[0]}, {arguments[1]})",
             ("Workers.Timers", "ClearTimeout") => $"clearTimeout({arguments[0]})",
             ("Workers.Body", "Text" or "FromBytes") => arguments[0],
@@ -184,6 +184,23 @@ internal sealed partial class JavaScriptEmitter
         _helpers.Require(JavaScriptHelper.Base64);
         return $"{_helpers.Name("base64Decode")}({value})";
     }
+
+    private string RegexIsMatch(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method,
+        IReadOnlyList<string> arguments)
+    {
+        if (invocation.ArgumentList.Arguments[1].Expression is not LiteralExpressionSyntax literal
+            || !IsCompatibleRegexPattern(literal.Token.ValueText))
+            throw UnsupportedSymbol(method, invocation);
+        return $"new RegExp({arguments[1]}).test({arguments[0]})";
+    }
+
+    private static bool IsCompatibleRegexPattern(string pattern) =>
+        pattern.All(character => character <= 0x7f)
+        && !pattern.Contains('\\')
+        && !pattern.Contains("(?", StringComparison.Ordinal)
+        && !pattern.Contains("-[", StringComparison.Ordinal);
 
     private string TaskWhenAll(
         InvocationExpressionSyntax invocation,

@@ -11,6 +11,9 @@ internal static partial class HelperSource
 
     private static string Delay(Func<string, string> name) => $$"""
         function {{name("delay")}}(milliseconds) {
+          if (milliseconds < -1 || milliseconds > 4294967294)
+            throw new RangeError("Delay is out of range.");
+          if (milliseconds === -1) return new Promise(() => {});
           return new Promise(resolve => setTimeout(resolve, milliseconds));
         }
 

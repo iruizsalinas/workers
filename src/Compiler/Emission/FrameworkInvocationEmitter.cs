@@ -32,9 +32,11 @@ internal sealed partial class JavaScriptEmitter
                    && SupportsLinqEquality(type.TypeArguments[0]) =>
                 HelperInvocation(JavaScriptHelper.LinqContains, [receiver, arguments[0]]),
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>"
+                   && SupportsLinqEquality(type.TypeArguments[0])
                    && name == "Add" && arguments.Length == 1 =>
                 $"{_helpers.Require(JavaScriptHelper.SetAdd)}({receiver}, {arguments[0]})",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>"
+                   && SupportsLinqEquality(type.TypeArguments[0])
                    && name == "Contains" && arguments.Length == 1 => $"{receiver}.has({arguments[0]})",
             _ when name == "ToString" && arguments.Length == 0
                    && type?.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Decimal =>
@@ -71,11 +73,19 @@ internal sealed partial class JavaScriptEmitter
             ("Trim", 0) => $"{receiver}.trim()",
             ("ToLowerInvariant", 0) => $"{receiver}.toLowerCase()",
             ("ToUpperInvariant", 0) => $"{receiver}.toUpperCase()",
+            ("Contains", 1) when method?.Parameters[0].Type.SpecialType == SpecialType.System_String =>
+                HelperInvocation(JavaScriptHelper.StringContains, [receiver, arguments[0]]),
             ("Contains", 1) => $"{receiver}.includes({arguments[0]})",
+            ("StartsWith", 1) when method?.Parameters[0].Type.SpecialType == SpecialType.System_String =>
+                HelperInvocation(JavaScriptHelper.StringStartsWith, [receiver, arguments[0]]),
             ("StartsWith", 1) => $"{receiver}.startsWith({arguments[0]})",
+            ("EndsWith", 1) when method?.Parameters[0].Type.SpecialType == SpecialType.System_String =>
+                HelperInvocation(JavaScriptHelper.StringEndsWith, [receiver, arguments[0]]),
             ("EndsWith", 1) => $"{receiver}.endsWith({arguments[0]})",
-            ("Substring", 1) => $"{receiver}.slice({arguments[0]})",
-            ("Substring", 2) => $"{receiver}.slice({arguments[0]}, {arguments[0]} + {arguments[1]})",
+            ("Substring", 1) => HelperInvocation(JavaScriptHelper.StringSubstring, [receiver, arguments[0], "null"]),
+            ("Substring", 2) => HelperInvocation(JavaScriptHelper.StringSubstring, [receiver, .. arguments]),
+            ("Replace", 2) when method?.Parameters[0].Type.SpecialType == SpecialType.System_String =>
+                HelperInvocation(JavaScriptHelper.StringReplace, [receiver, .. arguments]),
             ("Replace", 2) => $"{receiver}.replaceAll({arguments[0]}, {arguments[1]})",
             ("IndexOf", 2) when InvocationArgument(source, method, "comparisonType") is MemberAccessExpressionSyntax comparison
                                 && comparison.Name.Identifier.Text == "Ordinal" =>

@@ -103,6 +103,17 @@ describe("compiler value semantics", () => {
     });
   });
 
+  it("matches CLR validation for delay and string operations", async () => {
+    const response = await invoke("/bcl-errors");
+
+    await expect(response.json()).resolves.toEqual({
+      delayRejected: true,
+      substringRejected: true,
+      nullSearchRejected: true,
+      emptyReplacementRejected: true,
+    });
+  });
+
   it.each([
     ["string", "hello", "hello"],
     ["boolean", true, "True"],

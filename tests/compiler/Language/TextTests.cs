@@ -119,7 +119,7 @@ public sealed class TextTests
 
         Assert.Contains("base64Encode(bytes)", module);
         Assert.Contains("new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: false })", module);
-        Assert.Contains("replaceAll(\"\\u002B\", \" \")", module);
+        Assert.Contains("stringReplace(decoded, \"\\u002B\", \" \")", module);
         Assert.Contains("encodeURIComponent(", module);
         Assert.Contains("escaped.toUpperCase()", module);
         Assert.Contains("upper.indexOf(\"%\")", module);
@@ -188,6 +188,69 @@ public sealed class TextTests
         Assert.Contains("function $workers$fetch($workers$user$default, env, ctx)", module);
         Assert.Contains("let $workers$user$delete = new URL($workers$user$default.url).pathname;", module);
         Assert.DoesNotContain("@default", module);
+    }
+
+    [Fact]
+    public void ValidatesStringArgumentsAndSubstringRanges()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    string? missing = null;
+                    var value = "hello";
+                    return Response.Json(new {
+                        contains = value.Contains(missing!), starts = value.StartsWith(missing!),
+                        ends = value.EndsWith(missing!), substring = value.Substring(-1),
+                        replaced = value.Replace("", "x")
+                    });
+                }
+            }
+            """);
+
+        Assert.Contains("function $workers$stringContains(source, value)", module);
+        Assert.Contains("function $workers$stringSubstring(source, start, length)", module);
+        Assert.Contains("start < 0 || start > source.length", module);
+        Assert.Contains("if (oldValue.length === 0)", module);
+    }
+
+    [Fact]
+    public void AcceptsOnlyLiteralRegexPatternsFromTheCompatibleSubset()
+    {
+        var module = Compile("""
+            using System.Text.RegularExpressions;
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) =>
+                    Response.Json(Regex.IsMatch(request.Path, "^[a-zA-Z0-9_-]+$"));
+            }
+            """);
+        Assert.Contains("new RegExp(", module);
+
+        foreach (var pattern in new[] { "dynamic", "unicode" })
+        {
+            var source = pattern == "dynamic"
+                ? "var pattern = request.Path; return Response.Json(Regex.IsMatch(request.Path, pattern));"
+                : "return Response.Json(Regex.IsMatch(request.Path, @\"\\d+\"));";
+            var error = Assert.Throws<NotSupportedException>(() => Compile($$"""
+                using System.Text.RegularExpressions;
+                using Workers;
+                public static class Worker
+                {
+                    [Fetch]
+                    public static Response Fetch(Request request, Env env, Context context)
+                    {
+                        {{source}}
+                    }
+                }
+                """));
+            Assert.StartsWith("WRK105:", error.Message);
+        }
     }
 
 }
