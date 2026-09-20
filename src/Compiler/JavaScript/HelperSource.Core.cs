@@ -1,5 +1,34 @@
 internal static partial class HelperSource
 {
+    private static string SequenceIndex(Func<string, string> name) => $$"""
+        function {{name("sequenceIndex")}}(source, index) {
+          if (!Number.isInteger(index) || index < 0 || index >= source.length)
+            throw new RangeError("Index was outside the bounds of the sequence.");
+          return source[index];
+        }
+        function {{name("sequenceSet")}}(source, index, value) {
+          if (!Number.isInteger(index) || index < 0 || index >= source.length)
+            throw new RangeError("Index was outside the bounds of the sequence.");
+          source[index] = value;
+          return value;
+        }
+
+        """;
+
+    private static string DictionaryIndex(Func<string, string> name) => $$"""
+        function {{name("dictionaryIndex")}}(source, key) {
+          if (key == null) throw new TypeError("Dictionary key cannot be null.");
+          if (!Object.hasOwn(source, key)) throw new RangeError("The key was not present in the dictionary.");
+          return source[key];
+        }
+        function {{name("dictionarySet")}}(source, key, value) {
+          if (key == null) throw new TypeError("Dictionary key cannot be null.");
+          source[key] = value;
+          return value;
+        }
+
+        """;
+
     private static string WithHeader(Func<string, string> name) => $$"""
         function {{name("withHeader")}}(response, name, value, operation = "set") {
           const copy = new Response(response.body, response);

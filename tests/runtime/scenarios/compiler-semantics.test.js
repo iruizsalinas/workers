@@ -19,7 +19,16 @@ describe("compiler value semantics", () => {
   it("preserves collection initializer elements", async () => {
     const response = await invoke("/collections");
 
-    await expect(response.json()).resolves.toEqual({ count: 3, total: 12 });
+    await expect(response.json()).resolves.toEqual({
+      count: 3,
+      total: 12,
+      updated: 5,
+      readRejected: true,
+      writeRejected: true,
+      specialKey: 7,
+      dictionaryCount: 2,
+      missingKeyRejected: true,
+    });
   });
 
   it("binds reordered record arguments by name", async () => {

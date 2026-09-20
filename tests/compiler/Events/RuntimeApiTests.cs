@@ -136,7 +136,7 @@ public sealed class RuntimeApiTests
             }
             """);
 
-        Assert.Contains("new Headers(tail[0].event.request.headers).get(\"content-type\")", module);
+        Assert.Contains("new Headers($workers$sequenceIndex(tail, 0).event.request.headers).get(\"content-type\")", module);
         Assert.Contains("scheduled.scheduledTime", module);
         Assert.DoesNotContain("scheduled.type", module);
     }

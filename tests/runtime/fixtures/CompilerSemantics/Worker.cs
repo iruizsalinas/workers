@@ -18,7 +18,22 @@ public static class Worker
             var total = 0;
             foreach (var value in values)
                 total += value;
-            return Response.Json(new { values.Count, total });
+            var readRejected = false;
+            var writeRejected = false;
+            var missingKeyRejected = false;
+            try { var missing = values[3]; }
+            catch (Exception) { readRejected = true; }
+            try { values[-1] = 10; }
+            catch (Exception) { writeRejected = true; }
+            values[1] = 5;
+            var dictionary = new Dictionary<string, int> { ["__proto__"] = 7 };
+            dictionary["answer"] = 42;
+            try { var missing = dictionary["missing"]; }
+            catch (Exception) { missingKeyRejected = true; }
+            return Response.Json(new {
+                values.Count, total, updated = values[1], readRejected, writeRejected,
+                specialKey = dictionary["__proto__"], dictionaryCount = dictionary.Count, missingKeyRejected
+            });
         }
 
         if (request.Path == "/records")

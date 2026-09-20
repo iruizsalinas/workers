@@ -76,7 +76,7 @@ public sealed class PlatformBindingTests
             """);
 
         Assert.Contains("let count = batch.messages.length", module);
-        Assert.Contains("let first = batch.messages[0]", module);
+        Assert.Contains("let first = $workers$sequenceIndex(batch.messages, 0)", module);
         Assert.Contains("for (const message of batch.messages)", module);
         Assert.Contains("message.retry({ delaySeconds: 30 })", module);
         Assert.Contains("message.ack();", module);

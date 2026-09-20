@@ -35,7 +35,12 @@ internal sealed partial class JavaScriptEmitter
             return $"new Set([{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}])";
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Dictionary<TKey, TValue>"
             && type.TypeArguments[0].SpecialType == SpecialType.System_String && arguments.Length == 0)
-            return "{ " + string.Join(", ", value.Initializer?.Expressions.Select(DictionaryProperty) ?? []) + " }";
+        {
+            var properties = string.Join(", ", value.Initializer?.Expressions.Select(DictionaryProperty) ?? []);
+            return properties.Length == 0
+                ? "Object.create(null)"
+                : $"Object.assign(Object.create(null), {{ {properties} }})";
+        }
         if (type is not null && type.BaseType?.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler")
             return type.DeclaringSyntaxReferences.Length == 1
                    && type.DeclaringSyntaxReferences[0].GetSyntax() is ClassDeclarationSyntax

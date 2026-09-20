@@ -1,7 +1,7 @@
 internal enum JavaScriptHelper
 {
     WithHeader, Delay, CancellationCheck, CancellationDelay, CancellationCancelAfter,
-    Stream, Socket, Digest, WebSocketEvents, IntegerDivide, IntegerRemainder,
+    Stream, Socket, Digest, WebSocketEvents, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
     RandomNext, SetAdd, Base64, RpcArguments, HexDecode, EscapeDataString, JsonElementToString,
     JsonElementValueKind, JsonElementGetValue, JsonElementGetProperty, JsonElementGetIndex,
     StringTrim, StringContains, StringStartsWith, StringEndsWith, StringSubstring, StringReplace,
@@ -54,6 +54,8 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.Socket => "socketRead",
         JavaScriptHelper.Digest => "digestWriter",
         JavaScriptHelper.WebSocketEvents => "webSocketEvents",
+        JavaScriptHelper.SequenceIndex => "sequenceIndex",
+        JavaScriptHelper.DictionaryIndex => "dictionaryIndex",
         JavaScriptHelper.IntegerDivide => "integerDivide",
         JavaScriptHelper.IntegerRemainder => "integerRemainder",
         JavaScriptHelper.RandomNext => "randomNext",

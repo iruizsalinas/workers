@@ -11,6 +11,8 @@ internal static partial class HelperSource
         JavaScriptHelper.Socket => Sockets(name),
         JavaScriptHelper.Digest => Digest(name),
         JavaScriptHelper.WebSocketEvents => WebSocketEvents(name),
+        JavaScriptHelper.SequenceIndex => SequenceIndex(name),
+        JavaScriptHelper.DictionaryIndex => DictionaryIndex(name),
         JavaScriptHelper.IntegerDivide => IntegerDivide(name),
         JavaScriptHelper.IntegerRemainder => IntegerRemainder(name),
         JavaScriptHelper.RandomNext => RandomNext(name),

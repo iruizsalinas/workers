@@ -9,10 +9,26 @@ internal sealed partial class JavaScriptEmitter
         return value.WhenNotNull switch
         {
             MemberBindingExpressionSyntax member => ConditionalMember(value, member, receiver),
-            ElementBindingExpressionSyntax element =>
-                $"{receiver}?.[{string.Join(", ", element.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))}]",
+            ElementBindingExpressionSyntax element => ConditionalElement(value, element, receiver),
             _ => throw Unsupported("WRK101", value.WhenNotNull)
         };
+    }
+
+    private string ConditionalElement(
+        ConditionalAccessExpressionSyntax access,
+        ElementBindingExpressionSyntax element,
+        string receiver)
+    {
+        var arguments = element.ArgumentList.Arguments;
+        if (!IsSequenceType(_model.GetTypeInfo(access.Expression).Type))
+        {
+            if (!IsDictionary(_model.GetTypeInfo(access.Expression).Type))
+                return $"{receiver}?.[{string.Join(", ", arguments.Select(argument => Expression(argument.Expression)))}]";
+            var dictionary = _names.Get($"conditional-dictionary:{access.SyntaxTree.FilePath}:{access.SpanStart}", "dictionary");
+            return $"(({dictionary}) => {dictionary} == null ? null : {HelperInvocation(JavaScriptHelper.DictionaryIndex, [dictionary, Expression(arguments.Single().Expression)])})({receiver})";
+        }
+        var temporary = _names.Get($"conditional-index:{access.SyntaxTree.FilePath}:{access.SpanStart}", "sequence");
+        return $"(({temporary}) => {temporary} == null ? null : {HelperInvocation(JavaScriptHelper.SequenceIndex, [temporary, Expression(arguments.Single().Expression)])})({receiver})";
     }
 
     private string ConditionalMember(
@@ -54,6 +70,29 @@ internal sealed partial class JavaScriptEmitter
             return $"{receiver}.get({string.Join(", ", value.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))})";
         if (BindingIntrinsicRegistry.IsQueueMessageBatch(_model.GetTypeInfo(value.Expression).Type))
             receiver += ".messages";
+        if (IsSequenceType(_model.GetTypeInfo(value.Expression).Type))
+        {
+            var index = value.ArgumentList.Arguments.Single();
+            return HelperInvocation(JavaScriptHelper.SequenceIndex, [receiver, Expression(index.Expression)]);
+        }
+        if (IsDictionary(_model.GetTypeInfo(value.Expression).Type))
+        {
+            var key = value.ArgumentList.Arguments.Single();
+            return HelperInvocation(JavaScriptHelper.DictionaryIndex, [receiver, Expression(key.Expression)]);
+        }
         return $"{receiver}[{string.Join(", ", value.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))}]";
+    }
+
+    private static bool IsSequenceType(ITypeSymbol? type)
+    {
+        if (type?.SpecialType == SpecialType.System_String || type is IArrayTypeSymbol) return true;
+        return type is INamedTypeSymbol named
+            && (named.OriginalDefinition.ToDisplayString() is
+                    "System.Collections.Generic.List<T>" or
+                    "System.Collections.Generic.IList<T>" or
+                    "System.Collections.Generic.IReadOnlyList<T>"
+                || named.AllInterfaces.Any(item => item.OriginalDefinition.ToDisplayString() is
+                    "System.Collections.Generic.IList<T>" or
+                    "System.Collections.Generic.IReadOnlyList<T>"));
     }
 }

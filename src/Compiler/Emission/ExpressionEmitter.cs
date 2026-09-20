@@ -28,7 +28,7 @@ internal sealed partial class JavaScriptEmitter
         BinaryExpressionSyntax value => Binary(value),
         ConditionalExpressionSyntax value => $"{Expression(value.Condition)} ? {Expression(value.WhenTrue)} : {Expression(value.WhenFalse)}",
         ConditionalAccessExpressionSyntax value => ConditionalAccess(value),
-        AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.SimpleAssignmentExpression) => $"{Expression(value.Left)} = {Expression(value.Right)}",
+        AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.SimpleAssignmentExpression) => SimpleAssignment(value),
         AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.AddAssignmentExpression) => CompoundMutation(value, "+"),
         AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.SubtractAssignmentExpression) => CompoundMutation(value, "-"),
         IsPatternExpressionSyntax value => IsPattern(value),
@@ -53,6 +53,23 @@ internal sealed partial class JavaScriptEmitter
         _model.GetTypeInfo(expression).ConvertedType?.ToDisplayString() == "System.Threading.CancellationToken"
             ? "null"
             : throw Unsupported("WRK108", expression);
+
+    private string SimpleAssignment(AssignmentExpressionSyntax value)
+    {
+        if (value.Left is ElementAccessExpressionSyntax element && IsSequenceType(_model.GetTypeInfo(element.Expression).Type))
+        {
+            var index = element.ArgumentList.Arguments.Single();
+            _helpers.Require(JavaScriptHelper.SequenceIndex);
+            return $"{_helpers.Name("sequenceSet")}({Expression(element.Expression)}, {Expression(index.Expression)}, {Expression(value.Right)})";
+        }
+        if (value.Left is ElementAccessExpressionSyntax dictionary && IsDictionary(_model.GetTypeInfo(dictionary.Expression).Type))
+        {
+            var key = dictionary.ArgumentList.Arguments.Single();
+            _helpers.Require(JavaScriptHelper.DictionaryIndex);
+            return $"{_helpers.Name("dictionarySet")}({Expression(dictionary.Expression)}, {Expression(key.Expression)}, {Expression(value.Right)})";
+        }
+        return $"{Expression(value.Left)} = {Expression(value.Right)}";
+    }
 
     private string UnaryNumeric(PrefixUnaryExpressionSyntax value, string operation)
     {

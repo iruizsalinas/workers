@@ -140,10 +140,10 @@ public sealed class ModernControlFlowTests
             }
             """);
 
-        Assert.Contains("let values = { [\"one\"]: 1, [\"two\"]: 2 };", module);
+        Assert.Contains("let values = Object.assign(Object.create(null), { [\"one\"]: 1, [\"two\"]: 2 });", module);
         Assert.Contains("for (const entry of Object.entries(values))", module);
         Assert.Contains("count: Object.keys(values).length", module);
-        Assert.Contains("first: values[\"one\"]", module);
+        Assert.Contains("first: $workers$dictionaryIndex(values, \"one\")", module);
     }
 
     [Fact]
