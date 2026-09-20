@@ -239,4 +239,16 @@ describe("compiler value semantics", () => {
       },
     });
   });
+
+  it("keeps prototype-sensitive C# members as ordinary own data", async () => {
+    const response = await invoke("/prototype-safety");
+    const body = await response.json();
+
+    expect(Object.hasOwn(body, "__proto__")).toBe(true);
+    expect(body["__proto__"]).toBe("anonymous");
+    expect(Object.hasOwn(body.model, "__proto__")).toBe(true);
+    expect(body.model["__proto__"]).toBe("class");
+    expect(Object.getPrototypeOf(body)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(body.model)).toBe(Object.prototype);
+  });
 });

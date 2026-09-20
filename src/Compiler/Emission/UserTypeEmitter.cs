@@ -68,13 +68,13 @@ internal sealed partial class JavaScriptEmitter
             : $"{receiver}[{JsonSerializer.Serialize(name)}]";
     }
 
-    private static bool IsJavaScriptPropertyIdentifier(string value) => value.Length != 0
+    private static bool IsJavaScriptPropertyIdentifier(string value) => value != "__proto__" && value.Length != 0
         && (char.IsAsciiLetter(value[0]) || value[0] is '_' or '$')
         && value.Skip(1).All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '$');
 
-    private static string JavaScriptObjectKey(string value) => IsJavaScriptPropertyIdentifier(value)
-        ? value
-        : JsonSerializer.Serialize(value);
+    private static string JavaScriptObjectKey(string value) => value == "__proto__"
+        ? $"[{JsonSerializer.Serialize(value)}]"
+        : IsJavaScriptPropertyIdentifier(value) ? value : JsonSerializer.Serialize(value);
 
     private static bool HasAttribute(ISymbol symbol, string name) => symbol.GetAttributes()
         .Any(attribute => attribute.AttributeClass?.ToDisplayString() == name);
@@ -89,7 +89,7 @@ internal sealed partial class JavaScriptEmitter
         type = type.OriginalDefinition;
         if (!_preparedUserMemberNames.Add(type)) return;
 
-        var used = new HashSet<string>(["constructor", "toJSON"], StringComparer.Ordinal);
+        var used = new HashSet<string>(["__proto__", "constructor", "toJSON"], StringComparer.Ordinal);
         var members = type.GetMembers()
             .Where(member => !member.IsStatic && member.DeclaringSyntaxReferences.Length != 0)
             .OrderBy(member => member is IPropertySymbol ? 0 : 1)
@@ -167,7 +167,11 @@ internal sealed partial class JavaScriptEmitter
         _output.AppendLine("  toJSON() {");
         _output.Append("    return { ")
             .Append(string.Join(", ", properties.Select(property =>
-                $"{JavaScriptObjectKey(UserMemberName(property))}: {UserMemberAccess("this", property)}")))
+            {
+                var storageName = UserMemberName(property);
+                var jsonName = LowerFirst(property.Name) == "__proto__" ? "__proto__" : storageName;
+                return $"{JavaScriptObjectKey(jsonName)}: {UserMemberAccess("this", property)}";
+            })))
             .AppendLine(" };");
         _output.AppendLine("  }");
     }

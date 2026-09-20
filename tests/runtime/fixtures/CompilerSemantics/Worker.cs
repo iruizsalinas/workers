@@ -404,6 +404,12 @@ public static class Worker
             });
         }
 
+        if (request.Path == "/prototype-safety")
+        {
+            var model = new PrototypeSafeModel { __proto__ = "class" };
+            return Response.Json(new { __proto__ = "anonymous", model });
+        }
+
         return Response.Text("Not found", status: 404);
     }
 
@@ -456,6 +462,11 @@ public sealed class Counter
     public int Doubled => _value * 2;
     public Counter(int initial) { _value = initial; }
     public int Add(int amount = 1) { _value += amount; return _value; }
+}
+
+public sealed class PrototypeSafeModel
+{
+    public string __proto__ { get; init; } = "initial";
 }
 
 public sealed record Person(string First, string Last)

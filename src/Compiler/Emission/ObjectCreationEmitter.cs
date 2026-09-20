@@ -157,7 +157,7 @@ internal sealed partial class JavaScriptEmitter
         var properties = arguments.Select((argument, index) =>
         {
             var parameter = ArgumentParameter(constructor!, argument, index);
-            return $"{LowerFirst(parameter.Name)}: {OptionalValue(argument.Expression)}";
+            return $"{JavaScriptObjectKey(LowerFirst(parameter.Name))}: {OptionalValue(argument.Expression)}";
         }).ToList();
         if (value.Initializer is not null)
             properties.AddRange(value.Initializer.Expressions.Select(StructuralInitializerProperty));
@@ -172,17 +172,17 @@ internal sealed partial class JavaScriptEmitter
         var supplied = arguments.Select((argument, index) =>
             (Parameter: ArgumentParameter(constructor, argument, index), Value: Expression(argument.Expression))).ToArray();
         var properties = supplied.Select(argument =>
-            $"{LowerFirst(argument.Parameter.Name)}: {argument.Value}").ToList();
+            $"{JavaScriptObjectKey(LowerFirst(argument.Parameter.Name))}: {argument.Value}").ToList();
         properties.AddRange(constructor.Parameters
             .Where(parameter => parameter.HasExplicitDefaultValue
                                 && supplied.All(argument => !SymbolEqualityComparer.Default.Equals(argument.Parameter, parameter)))
             .Select(parameter =>
-                $"{LowerFirst(parameter.Name)}: {LiteralConstant(parameter.ExplicitDefaultValue, source)}"));
+                $"{JavaScriptObjectKey(LowerFirst(parameter.Name))}: {LiteralConstant(parameter.ExplicitDefaultValue, source)}"));
         if (source.Initializer is not null)
             properties.AddRange(source.Initializer.Expressions.Select(expression => expression switch
             {
                 AssignmentExpressionSyntax assignment when assignment.Left is IdentifierNameSyntax =>
-                    $"{UserInitializerMemberName(assignment.Left)}: {Expression(assignment.Right)}",
+                    $"{JavaScriptObjectKey(UserInitializerMemberName(assignment.Left))}: {Expression(assignment.Right)}",
                 _ => throw Unsupported("WRK106", expression)
             }));
         return "{ " + string.Join(", ", properties) + " }";
@@ -221,7 +221,7 @@ internal sealed partial class JavaScriptEmitter
     private string StructuralInitializerProperty(ExpressionSyntax expression) => expression switch
     {
         AssignmentExpressionSyntax assignment when assignment.Left is IdentifierNameSyntax name =>
-            $"{LowerFirst(name.Identifier.Text)}: {StructuralValue(assignment)}",
+            $"{JavaScriptObjectKey(LowerFirst(name.Identifier.ValueText))}: {StructuralValue(assignment)}",
         _ => throw Unsupported("WRK106", expression)
     };
 

@@ -365,12 +365,12 @@ internal sealed partial class JavaScriptEmitter
     }
     private string AnonymousMember(AnonymousObjectMemberDeclaratorSyntax value)
     {
-        var name = value.NameEquals?.Name.Identifier.Text ?? value.Expression switch
+        var name = value.NameEquals?.Name.Identifier.ValueText ?? value.Expression switch
         {
-            IdentifierNameSyntax identifier => identifier.Identifier.Text,
-            MemberAccessExpressionSyntax member => LowerFirst(member.Name.Identifier.Text),
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax member => LowerFirst(member.Name.Identifier.ValueText),
             _ => throw Unsupported("WRK107", value)
         };
-        return $"{name}: {Expression(value.Expression)}";
+        return $"{JavaScriptObjectKey(name)}: {Expression(value.Expression)}";
     }
 }
