@@ -16,17 +16,13 @@ internal static partial class HelperSource
           if (milliseconds < -1 || milliseconds > 4294967294)
             throw new RangeError("Delay is out of range.");
           if (signal.aborted) return Promise.reject({{name("cancellationError")}}());
-          return new Promise((resolve, reject) => {
-            let timer;
-            const cleanup = () => signal.removeEventListener("abort", aborted);
-            const completed = () => { cleanup(); resolve(); };
+          if (milliseconds !== -1) return scheduler.wait(milliseconds, { signal });
+          return new Promise((_, reject) => {
             const aborted = () => {
-              if (timer !== undefined) clearTimeout(timer);
-              cleanup();
+              signal.removeEventListener("abort", aborted);
               reject({{name("cancellationError")}}());
             };
             signal.addEventListener("abort", aborted, { once: true });
-            if (milliseconds !== -1) timer = setTimeout(completed, milliseconds);
           });
         }
 

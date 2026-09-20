@@ -14,7 +14,7 @@ internal static partial class HelperSource
           if (milliseconds < -1 || milliseconds > 4294967294)
             throw new RangeError("Delay is out of range.");
           if (milliseconds === -1) return new Promise(() => {});
-          return new Promise(resolve => setTimeout(resolve, milliseconds));
+          return scheduler.wait(milliseconds);
         }
 
         """;

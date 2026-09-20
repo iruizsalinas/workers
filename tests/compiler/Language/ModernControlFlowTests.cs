@@ -67,6 +67,7 @@ public sealed class ModernControlFlowTests
 
         Assert.Contains("if (milliseconds < -1 || milliseconds > 4294967294)", module);
         Assert.Contains("if (milliseconds === -1) return new Promise(() => {})", module);
+        Assert.Contains("return scheduler.wait(milliseconds)", module);
     }
 
     [Fact]

@@ -59,6 +59,7 @@ public sealed class CancellationTests
 
         Assert.Contains("function $workers$cancellationDelay(milliseconds, signal)", module);
         Assert.Contains("$workers$cancellationDelay(", module);
+        Assert.Contains("scheduler.wait(milliseconds, { signal })", module);
         Assert.Contains("source.signal", module);
         Assert.Contains("=> fetch(", module);
         Assert.Contains("...($workers$arg3 == null ? {} : { signal: $workers$arg3 })", module);
