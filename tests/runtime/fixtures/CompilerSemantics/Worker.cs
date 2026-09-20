@@ -212,6 +212,7 @@ public static class Worker
             var clampRejected = false;
             var roundRejected = false;
             var signRejected = false;
+            var guidParseRejected = false;
             string? missing = null;
             try { await Task.Delay(-2); }
             catch (Exception) { delayRejected = true; }
@@ -245,11 +246,13 @@ public static class Worker
             catch (Exception) { roundRejected = true; }
             try { Math.Sign(double.NaN); }
             catch (Exception) { signRejected = true; }
+            try { Guid.Parse("not-a-guid"); }
+            catch (Exception) { guidParseRejected = true; }
             return Response.Json(new {
                 delayRejected, substringRejected, nullSearchRejected, emptyReplacementRejected,
                 removeRejected, insertRejected, paddingRejected, characterRangeRejected, searchRangeRejected,
                 integerParseRejected, unsignedParseRejected, booleanParseRejected, absoluteRejected,
-                clampRejected, roundRejected, signRejected
+                clampRejected, roundRejected, signRejected, guidParseRejected
             });
         }
 

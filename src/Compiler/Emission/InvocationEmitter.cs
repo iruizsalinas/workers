@@ -11,6 +11,9 @@ internal sealed partial class JavaScriptEmitter
             or SpecialType.System_UInt64 or SpecialType.System_Single or SpecialType.System_Double
             or SpecialType.System_Boolean or SpecialType.System_Decimal)
             throw UnsupportedSymbol(method, invocation);
+        if (method?.Name is "TryParse" or "TryParseExact"
+            && method.ContainingType.ToDisplayString() == "System.Guid")
+            throw UnsupportedSymbol(method, invocation);
         if (method?.Name == "Parse" && method.ContainingType.SpecialType is
             SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal)
             throw UnsupportedSymbol(method, invocation);
@@ -138,6 +141,8 @@ internal sealed partial class JavaScriptEmitter
                 HelperInvocation(JavaScriptHelper.DateTimeCompare, arguments),
             ("System.DateTimeOffset", "Compare") when arguments.Length == 2 =>
                 HelperInvocation(JavaScriptHelper.DateTimeCompare, arguments),
+            ("System.Guid", "Parse") when HasParameters(method, SpecialType.System_String) =>
+                HelperInvocation(JavaScriptHelper.GuidParse, arguments),
             ("System.Console", "WriteLine") when arguments.Length == 1 => $"console.log({arguments[0]})",
             ("System.Guid", "NewGuid") => "globalThis.crypto.randomUUID()",
             ("Workers.Performance", "Now") => "performance.now()",

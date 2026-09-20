@@ -22,6 +22,11 @@ internal sealed partial class JavaScriptEmitter
                 or SyntaxKind.LessThanExpression or SyntaxKind.LessThanOrEqualExpression
                 or SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression)
             return DateTimeOffsetComparison(expression);
+        if (operation is { } guidOperation
+            && guidOperation.LeftOperand.Type?.ToDisplayString() == "System.Guid"
+            && guidOperation.RightOperand.Type?.ToDisplayString() == "System.Guid"
+            && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
+            return $"{Expression(expression.Left)} {BinaryOperator(expression.Kind())} {Expression(expression.Right)}";
         if (operation?.OperatorMethod is not null)
             throw UnsupportedSymbol(operation.OperatorMethod, expression);
         var type = operation?.Type?.SpecialType ?? SpecialType.None;

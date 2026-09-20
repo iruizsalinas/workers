@@ -37,6 +37,8 @@ internal static partial class HelperSource
         JavaScriptHelper.MathClamp => MathClamp(name),
         JavaScriptHelper.MathRound => MathRound(name),
         JavaScriptHelper.MathSign => MathSign(name),
+        JavaScriptHelper.GuidParse => GuidParse(name),
+        JavaScriptHelper.GuidFormat => GuidFormat(name),
         JavaScriptHelper.DateTimeOffset => DateTimeOffset(name),
         JavaScriptHelper.DateTimeAddMonths => DateTimeAddMonths(name),
         JavaScriptHelper.DateTimeFromUnixTime => DateTimeFromUnixTime(name),

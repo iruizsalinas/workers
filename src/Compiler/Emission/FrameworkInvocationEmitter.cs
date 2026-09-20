@@ -20,7 +20,7 @@ internal sealed partial class JavaScriptEmitter
             "System.DateTimeOffset" => DateTimeInvocation(invocation, method, receiver, name, arguments),
             "System.DateTime" => DateTimeInvocation(invocation, method, receiver, name, arguments),
             "System.TimeSpan" => TimeSpanInvocation(invocation, method, receiver, name, arguments),
-            "System.Guid" when name == "ToString" && arguments.Length == 0 => receiver,
+            "System.Guid" => GuidInvocation(invocation, method!, receiver, name, arguments),
             "System.Uri" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             "Workers.Url" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             "System.Text.Json.JsonElement" when name == "ToString" && arguments.Length == 0 =>
@@ -49,6 +49,29 @@ internal sealed partial class JavaScriptEmitter
             _ => ""
         };
         return result.Length != 0;
+    }
+
+    private string GuidInvocation(
+        InvocationExpressionSyntax source,
+        IMethodSymbol method,
+        string receiver,
+        string name,
+        string[] arguments) => (name, arguments.Length) switch
+        {
+            ("ToString", 0) => receiver,
+            ("ToString", 1) when SupportedGuidFormat(source, method) =>
+                HelperInvocation(JavaScriptHelper.GuidFormat, [receiver, arguments[0]]),
+            ("Equals", 1) when method.Parameters[0].Type.ToDisplayString() == "System.Guid" =>
+                $"{receiver} === {arguments[0]}",
+            _ => throw UnsupportedSymbol(method, source)
+        };
+
+    private static bool SupportedGuidFormat(InvocationExpressionSyntax source, IMethodSymbol method)
+    {
+        var format = InvocationArgument(source, method, "format");
+        return format is LiteralExpressionSyntax literal
+            && (literal.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.NullLiteralExpression)
+                || literal.Token.ValueText is "" or "D" or "d" or "N" or "n" or "B" or "b" or "P" or "p");
     }
 
     private string NumericToString(

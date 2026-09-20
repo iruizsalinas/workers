@@ -34,6 +34,9 @@ internal sealed partial class JavaScriptEmitter
             return "\"ordinalIgnoreCase\"";
         if (symbol is IFieldSymbol { IsStatic: true, Name: "Empty", ContainingType.SpecialType: SpecialType.System_String })
             return "\"\"";
+        if (symbol is IFieldSymbol { IsStatic: true, Name: "Empty", ContainingType: { } guidType }
+            && guidType.ToDisplayString() == "System.Guid")
+            return "\"00000000-0000-0000-0000-000000000000\"";
         if (property is { IsStatic: true, Name: "InvariantCulture" }
             && property.ContainingType.ToDisplayString() == "System.Globalization.CultureInfo")
             return "\"invariant\"";

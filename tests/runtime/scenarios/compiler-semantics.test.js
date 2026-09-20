@@ -123,6 +123,7 @@ describe("compiler value semantics", () => {
       clampRejected: true,
       roundRejected: true,
       signRejected: true,
+      guidParseRejected: true,
     });
   });
 

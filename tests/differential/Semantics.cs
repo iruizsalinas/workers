@@ -143,7 +143,14 @@ public sealed record CoreSemanticsResult(
     double MathPower,
     double MathLogarithm,
     int MathSign,
-    float MathFloatRoot);
+    float MathFloatRoot,
+    string ParsedGuid,
+    string ParsedHexGuid,
+    string CompactGuid,
+    string BracedGuid,
+    string ParenthesizedGuid,
+    bool EqualGuids,
+    bool UnequalEmptyGuid);
 
 public static class CoreSemantics
 {
@@ -277,7 +284,15 @@ public static class CoreSemantics
             1.25.ToString("F3", System.Globalization.CultureInfo.InvariantCulture),
             Math.Abs(-42), Math.Clamp(12, 0, 10), Math.Round(2.5), Math.Round(3.5),
             Math.Round(1.2345, 2), Math.Truncate(-1.9), Math.Pow(2, 8), Math.Log(8, 2),
-            Math.Sign(-2.0), MathF.Sqrt(9));
+            Math.Sign(-2.0), MathF.Sqrt(9),
+            Guid.Parse("{00112233-4455-6677-8899-AABBCCDDEEFF}").ToString(),
+            Guid.Parse("{0x00112233,0x4455,0x6677,{0x88,0x99,0xaa,0xbb,0xcc,0xdd,0xee,0xff}}").ToString(),
+            Guid.Parse("00112233-4455-6677-8899-aabbccddeeff").ToString("N"),
+            Guid.Parse("00112233-4455-6677-8899-aabbccddeeff").ToString("B"),
+            Guid.Parse("00112233-4455-6677-8899-aabbccddeeff").ToString("P"),
+            Guid.Parse("00112233-4455-6677-8899-aabbccddeeff")
+                == Guid.Parse("00112233445566778899AABBCCDDEEFF"),
+            Guid.Parse("00112233-4455-6677-8899-aabbccddeeff") != Guid.Empty);
     }
 }
 
