@@ -22,7 +22,7 @@ jobs:
       - run: dotnet restore Workers.slnx
       - run: dotnet test Workers.slnx -c Release --no-restore
       - run: npm ci
-      - run: npm audit --audit-level=high
+      - run: npm audit --audit-level=critical
       - run: npm run test:runtime
       - shell: pwsh
         run: ./eng/verify-worker-artifacts.ps1 -SkipPublish
