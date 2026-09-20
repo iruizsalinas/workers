@@ -21,20 +21,29 @@ internal static class WorkerDiscovery
         var classes = compilation.SyntaxTrees
             .SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
             .ToArray();
+        var distinctClasses = DistinctTypes(compilation, classes);
+        var unsupportedAttributedType = compilation.SyntaxTrees
+            .SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
+            .FirstOrDefault(declaration => declaration is not ClassDeclarationSyntax
+                && (HasAttribute(compilation, declaration, "Workers.DurableObjectAttribute")
+                    || HasAttribute(compilation, declaration, "Workers.WorkerEntrypointAttribute")));
+        if (unsupportedAttributedType is not null)
+            throw new NotSupportedException(
+                $"WRK116: Generated type '{unsupportedAttributedType.Identifier.ValueText}' must be an ordinary class declaration.");
 
         var events = EventTypes
             .Select(type => FindEvent(compilation, methods, type))
             .OfType<WorkerEvent>()
             .ToArray();
-        var durableObjects = classes.Where(declaration => HasAttribute(
+        var durableObjects = distinctClasses.Where(declaration => HasAttribute(
             compilation,
             declaration,
             "Workers.DurableObjectAttribute")).ToArray();
-        var workerEntrypoints = classes.Where(declaration => HasAttribute(
+        var workerEntrypoints = distinctClasses.Where(declaration => HasAttribute(
             compilation,
             declaration,
             "Workers.WorkerEntrypointAttribute")).ToArray();
-        var htmlHandlers = classes.Where(declaration => IsHtmlHandler(compilation, declaration)).ToArray();
+        var htmlHandlers = distinctClasses.Where(declaration => IsHtmlHandler(compilation, declaration)).ToArray();
 
         var defaultExports = events.Length == 0 ? 0 : 1;
         defaultExports += workerEntrypoints.Count(declaration => IsDefaultEntrypoint(compilation, declaration));
@@ -51,6 +60,18 @@ internal static class WorkerDiscovery
             throw new InvalidOperationException("WRK001: No Worker event entrypoint was found.");
 
         return new WorkerProgram(events, durableObjects, workerEntrypoints, htmlHandlers);
+    }
+
+    private static ClassDeclarationSyntax[] DistinctTypes(
+        CSharpCompilation compilation,
+        IEnumerable<ClassDeclarationSyntax> declarations)
+    {
+        var seen = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        return declarations.Where(declaration =>
+        {
+            var symbol = compilation.GetSemanticModel(declaration.SyntaxTree).GetDeclaredSymbol(declaration);
+            return symbol is not null && seen.Add(symbol);
+        }).ToArray();
     }
 
     private static WorkerEvent? FindEvent(
@@ -82,7 +103,13 @@ internal static class WorkerDiscovery
     private static bool IsHtmlHandler(CSharpCompilation compilation, ClassDeclarationSyntax declaration)
     {
         var type = compilation.GetSemanticModel(declaration.SyntaxTree).GetDeclaredSymbol(declaration)?.BaseType;
-        return type?.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler";
+        while (type is not null)
+        {
+            if (type.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler")
+                return true;
+            type = type.BaseType;
+        }
+        return false;
     }
 
     private static bool IsDefaultEntrypoint(CSharpCompilation compilation, ClassDeclarationSyntax declaration)
