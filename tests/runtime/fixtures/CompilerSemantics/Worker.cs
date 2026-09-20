@@ -1,5 +1,6 @@
 using Workers;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace CompilerSemantics;
 
@@ -262,6 +263,49 @@ public static class Worker
             return Response.Text(value.ToString());
         }
 
+        if (request.Path == "/json-api")
+        {
+            var root = await request.JsonAsync<JsonElement>();
+            var values = root.GetProperty("values");
+            var decoded = JsonSerializer.Deserialize<JsonProfile>(
+                "{\"display-name\":\"Ada\"}")!;
+            var encoded = JsonSerializer.Serialize(new JsonProfile
+            {
+                Name = decoded.Name,
+                Secret = "hidden"
+            });
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(new { ok = true });
+            var roundTrip = JsonSerializer.Deserialize<JsonElement>(bytes);
+            return Response.Json(new
+            {
+                isObject = root.ValueKind == JsonValueKind.Object,
+                text = root.GetProperty("text").GetString(),
+                flag = root.GetProperty("flag").GetBoolean(),
+                first = values[0].GetInt32(),
+                approximate = values[1].GetDouble(),
+                length = values.GetArrayLength(),
+                sum = values.EnumerateArray().Sum(value => value.GetInt32()),
+                decoded.Name,
+                encoded,
+                roundTripOk = roundTrip.GetProperty("ok").GetBoolean()
+            });
+        }
+
+        if (request.Path == "/json-errors")
+        {
+            var value = await request.JsonAsync<JsonElement>();
+            var missingPropertyRejected = false;
+            var wrongKindRejected = false;
+            var indexRejected = false;
+            try { value.GetProperty("missing"); }
+            catch (Exception) { missingPropertyRejected = true; }
+            try { value.GetString(); }
+            catch (Exception) { wrongKindRejected = true; }
+            try { value.GetProperty("values")[10].GetInt32(); }
+            catch (Exception) { indexRejected = true; }
+            return Response.Json(new { missingPropertyRejected, wrongKindRejected, indexRejected });
+        }
+
         if (request.Path == "/sync-iterator")
         {
             var total = 0;
@@ -322,6 +366,15 @@ public static class Worker
         events.Add("name");
         return "x-order";
     }
+}
+
+public sealed class JsonProfile
+{
+    [JsonPropertyName("display-name")]
+    public string Name { get; init; } = "";
+
+    [JsonIgnore]
+    public string Secret { get; init; } = "";
 }
 
 public sealed record Parcel(string Label, int Count);

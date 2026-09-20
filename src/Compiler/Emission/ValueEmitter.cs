@@ -23,6 +23,9 @@ internal sealed partial class JavaScriptEmitter
         if (property is { IsStatic: false, ContainingType: { } dateTimeType }
             && dateTimeType.ToDisplayString() is "System.DateTimeOffset" or "System.DateTime")
             return DateTimeMember(member, property);
+        if (property is { IsStatic: false, Name: "ValueKind", ContainingType: { } jsonElementType }
+            && jsonElementType.ToDisplayString() == "System.Text.Json.JsonElement")
+            return HelperInvocation(JavaScriptHelper.JsonElementValueKind, [Expression(member.Expression)]);
         if (property?.ContainingType.ToDisplayString() == "System.Random" && property.Name == "Shared") return "Math";
         if (property?.ContainingType.ToDisplayString() == "Workers.CacheStorage" && property.Name == "Default")
             return "caches.default";
@@ -180,7 +183,7 @@ internal sealed partial class JavaScriptEmitter
         {
             QueueUserType(userType, member);
             if (symbol is IFieldSymbol or IPropertySymbol)
-                return $"{Expression(member.Expression)}.{UserMemberName(symbol)}";
+                return UserMemberAccess(Expression(member.Expression), symbol);
         }
         ThrowIfUnsupportedFrameworkMember(symbol, member);
         return $"{Expression(member.Expression)}.{LowerFirst(member.Name.Identifier.Text)}";
@@ -288,9 +291,9 @@ internal sealed partial class JavaScriptEmitter
         IPropertySymbol { ContainingType: { } type, Name: var name }
             when type.ToDisplayString() == "Workers.WorkerEntrypoint" => name == "Environment" ? "this.env" : "this.ctx",
         IPropertySymbol { IsStatic: false } property when IsUserInstanceType(property.ContainingType) =>
-            $"this.{UserMemberName(property)}",
+            UserMemberAccess("this", property),
         IFieldSymbol { IsStatic: false } field when IsUserInstanceType(field.ContainingType) =>
-            $"this.{UserMemberName(field)}",
+            UserMemberAccess("this", field),
         IFieldSymbol { IsStatic: false } field => $"this.{UserIdentifier(field, field.Name)}",
         IFieldSymbol { IsStatic: true, HasConstantValue: true } field => LiteralConstant(field.ConstantValue, value),
         IFieldSymbol { IsStatic: true } => throw Unsupported("WRK110", value),

@@ -21,10 +21,9 @@ internal sealed partial class JavaScriptEmitter
             "System.DateTime" => DateTimeInvocation(invocation, method, receiver, name, arguments),
             "System.TimeSpan" => TimeSpanInvocation(invocation, method, receiver, name, arguments),
             "System.Guid" => GuidInvocation(invocation, method!, receiver, name, arguments),
+            "System.Text.Json.JsonElement" => JsonElementInvocation(invocation, method!, receiver, name, arguments),
             "System.Uri" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             "Workers.Url" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
-            "System.Text.Json.JsonElement" when name == "ToString" && arguments.Length == 0 =>
-                $"{_helpers.Require(JavaScriptHelper.JsonElementToString)}({receiver})",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
                    && name == "Add" && arguments.Length == 1 => $"{receiver}.push({arguments[0]})",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
@@ -65,6 +64,29 @@ internal sealed partial class JavaScriptEmitter
                 $"{receiver} === {arguments[0]}",
             _ => throw UnsupportedSymbol(method, source)
         };
+
+    private string JsonElementInvocation(
+        InvocationExpressionSyntax source,
+        IMethodSymbol method,
+        string receiver,
+        string name,
+        string[] arguments) => (name, arguments.Length) switch
+        {
+            ("ToString", 0) => HelperInvocation(JavaScriptHelper.JsonElementToString, [receiver]),
+            ("GetString", 0) => JsonElementValue(receiver, 0),
+            ("GetBoolean", 0) => JsonElementValue(receiver, 1),
+            ("GetInt32", 0) => JsonElementValue(receiver, 2),
+            ("GetDouble", 0) => JsonElementValue(receiver, 3),
+            ("GetArrayLength", 0) => JsonElementValue(receiver, 4),
+            ("EnumerateArray", 0) => JsonElementValue(receiver, 5),
+            ("GetProperty", 1) when method.Parameters[0].Type.SpecialType == SpecialType.System_String =>
+                HelperInvocation(JavaScriptHelper.JsonElementGetProperty, [receiver, arguments[0]]),
+            ("Clone", 0) => receiver,
+            _ => throw UnsupportedSymbol(method, source)
+        };
+
+    private string JsonElementValue(string receiver, int operation) =>
+        HelperInvocation(JavaScriptHelper.JsonElementGetValue, [receiver, operation.ToString()]);
 
     private static bool SupportedGuidFormat(InvocationExpressionSyntax source, IMethodSymbol method)
     {

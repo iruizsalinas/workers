@@ -42,6 +42,8 @@ internal sealed partial class JavaScriptEmitter
                 : throw UnsupportedSymbol(constructor, value);
         if (type is not null && BindingIntrinsicRegistry.IsStructuralType(type))
             return StructuralObject(value, constructor, arguments);
+        if (type is not null && IsUserInstanceType(type))
+            ValidateJsonAttributes(type);
         if (type is { IsRecord: true } && IsUserInstanceType(type) && !RequiresUserClass(type))
             return RecordObject(value, constructor!, arguments);
         if (type is not null && IsUserInstanceType(type))
@@ -112,19 +114,21 @@ internal sealed partial class JavaScriptEmitter
         var assignments = source.Initializer.Expressions.Select(expression => expression switch
         {
             AssignmentExpressionSyntax assignment when assignment.Left is IdentifierNameSyntax =>
-                $"{temporary}.{UserInitializerMemberName(assignment.Left)} = {Expression(assignment.Right)};",
+                $"{UserInitializerMemberAccess(temporary, assignment.Left)} = {Expression(assignment.Right)};",
             _ => throw Unsupported("WRK106", expression)
         });
         return $"(({temporary}) => {{ {string.Join(" ", assignments)} return {temporary}; }})({creation})";
     }
 
+    private string UserInitializerMemberAccess(string receiver, ExpressionSyntax expression) =>
+        _model.GetSymbolInfo(expression).Symbol is { } symbol
+            ? UserMemberAccess(receiver, symbol)
+            : throw UnsupportedSymbol(null, expression);
+
     private string UserInitializerMemberName(ExpressionSyntax expression) =>
-        _model.GetSymbolInfo(expression).Symbol switch
-        {
-            IPropertySymbol property => UserMemberName(property),
-            IFieldSymbol field => UserMemberName(field),
-            var symbol => throw UnsupportedSymbol(symbol, expression)
-        };
+        _model.GetSymbolInfo(expression).Symbol is { } symbol
+            ? UserMemberName(symbol)
+            : throw UnsupportedSymbol(null, expression);
 
     private string CreateUrl(SyntaxNode source, IMethodSymbol? constructor, ArgumentSyntax[] arguments) =>
         PositionalObjectCreation(source, constructor, arguments, values => values.Count switch

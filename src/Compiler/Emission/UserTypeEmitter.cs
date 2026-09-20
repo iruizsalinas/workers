@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Text.Json;
 
 internal sealed partial class JavaScriptEmitter
 {
@@ -13,6 +14,10 @@ internal sealed partial class JavaScriptEmitter
     private static bool RequiresUserClass(INamedTypeSymbol type)
     {
         if (!type.IsRecord) return true;
+        if (type.GetMembers().OfType<IPropertySymbol>().Any(property =>
+                HasAttribute(property, "System.Text.Json.Serialization.JsonIgnoreAttribute")
+                || HasAttribute(property, "System.Text.Json.Serialization.JsonPropertyNameAttribute")))
+            return true;
         return type.DeclaringSyntaxReferences.Any(reference =>
             reference.GetSyntax() is RecordDeclarationSyntax record
             && record.Members.Any(member => member is FieldDeclarationSyntax
@@ -55,6 +60,30 @@ internal sealed partial class JavaScriptEmitter
             : throw new InvalidOperationException($"User member '{member}' was not assigned a JavaScript name.");
     }
 
+    private string UserMemberAccess(string receiver, ISymbol member)
+    {
+        var name = UserMemberName(member);
+        return IsJavaScriptPropertyIdentifier(name)
+            ? $"{receiver}.{name}"
+            : $"{receiver}[{JsonSerializer.Serialize(name)}]";
+    }
+
+    private static bool IsJavaScriptPropertyIdentifier(string value) => value.Length != 0
+        && (char.IsAsciiLetter(value[0]) || value[0] is '_' or '$')
+        && value.Skip(1).All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '$');
+
+    private static string JavaScriptObjectKey(string value) => IsJavaScriptPropertyIdentifier(value)
+        ? value
+        : JsonSerializer.Serialize(value);
+
+    private static bool HasAttribute(ISymbol symbol, string name) => symbol.GetAttributes()
+        .Any(attribute => attribute.AttributeClass?.ToDisplayString() == name);
+
+    private static string? JsonPropertyName(ISymbol symbol) => symbol.GetAttributes()
+        .SingleOrDefault(attribute => attribute.AttributeClass?.ToDisplayString()
+            == "System.Text.Json.Serialization.JsonPropertyNameAttribute")
+        ?.ConstructorArguments.SingleOrDefault().Value as string;
+
     private void PrepareUserMemberNames(INamedTypeSymbol type)
     {
         type = type.OriginalDefinition;
@@ -69,11 +98,15 @@ internal sealed partial class JavaScriptEmitter
         {
             var preferred = member switch
             {
-                IPropertySymbol property => LowerFirst(property.Name),
+                IPropertySymbol property => JsonPropertyName(property) ?? LowerFirst(property.Name),
                 IFieldSymbol field => field.Name,
                 _ => null
             };
             if (preferred is null) continue;
+            if (member is IPropertySymbol && JsonPropertyName(member) is not null
+                && (preferred is "constructor" or "toJSON" || used.Contains(preferred)))
+                throw new NotSupportedException(
+                    $"WRK119: User type '{type}' contains a conflicting JSON property name '{preferred}'.");
             var name = preferred;
             for (var suffix = 2; !used.Add(name); suffix++)
                 name = $"{preferred}${suffix}";
@@ -128,12 +161,13 @@ internal sealed partial class JavaScriptEmitter
             .Select(property => (IPropertySymbol)_model.GetDeclaredSymbol(property)!)
             .Where(property => property.DeclaredAccessibility == Accessibility.Public && property.GetMethod is not null));
         var seen = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
-        properties = properties.Where(property => seen.Add(property)).ToList();
+        properties = properties.Where(property => seen.Add(property)
+            && !HasAttribute(property, "System.Text.Json.Serialization.JsonIgnoreAttribute")).ToList();
 
         _output.AppendLine("  toJSON() {");
         _output.Append("    return { ")
             .Append(string.Join(", ", properties.Select(property =>
-                $"{UserMemberName(property)}: this.{UserMemberName(property)}")))
+                $"{JavaScriptObjectKey(UserMemberName(property))}: {UserMemberAccess("this", property)}")))
             .AppendLine(" };");
         _output.AppendLine("  }");
     }
@@ -152,7 +186,7 @@ internal sealed partial class JavaScriptEmitter
             {
                 var symbol = (IFieldSymbol)_model.GetDeclaredSymbol(variable)!;
                 if (symbol.IsStatic) continue;
-                _output.Append("    this.").Append(UserMemberName(symbol)).Append(" = ")
+                _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
                     .Append(variable.Initializer is null
                         ? DefaultFieldValue(symbol.Type, variable)
                         : Expression(variable.Initializer.Value)).AppendLine(";");
@@ -163,14 +197,14 @@ internal sealed partial class JavaScriptEmitter
             {
                 var parameterSymbol = (IParameterSymbol)_model.GetDeclaredSymbol(parameter)!;
                 var property = type.GetMembers(parameterSymbol.Name).OfType<IPropertySymbol>().Single();
-                _output.Append("    this.").Append(UserMemberName(property)).Append(" = ")
+                _output.Append("    ").Append(UserMemberAccess("this", property)).Append(" = ")
                     .Append(ParameterName(parameter)).AppendLine(";");
             }
 
         foreach (var property in declaration.Members.OfType<PropertyDeclarationSyntax>().Where(IsAutoProperty))
         {
             var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
-            _output.Append("    this.").Append(UserMemberName(symbol)).Append(" = ")
+            _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
                 .Append(property.Initializer is null
                     ? DefaultFieldValue(symbol.Type, property)
                     : Expression(property.Initializer.Value)).AppendLine(";");
@@ -187,7 +221,11 @@ internal sealed partial class JavaScriptEmitter
     private void EmitComputedProperty(PropertyDeclarationSyntax property)
     {
         var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
-        _output.Append("  get ").Append(UserMemberName(symbol)).AppendLine("() {");
+        var name = UserMemberName(symbol);
+        _output.Append("  get ").Append(IsJavaScriptPropertyIdentifier(name)
+                ? name
+                : $"[{JsonSerializer.Serialize(name)}]")
+            .AppendLine("() {");
         if (property.ExpressionBody is not null)
             _output.Append("    return ").Append(Expression(property.ExpressionBody.Expression)).AppendLine(";");
         else
@@ -229,6 +267,7 @@ internal sealed partial class JavaScriptEmitter
             || type.BaseType?.SpecialType != SpecialType.System_Object)
             throw new NotSupportedException(
                 $"WRK119: User type '{type}' must be a non-abstract, non-generic class or record without inheritance.");
+        ValidateJsonAttributes(type);
         if (declaration is RecordDeclarationSyntax { ParameterList: { } recordParameters }
             && recordParameters.Parameters.Any(parameter =>
                 LowerFirst(parameter.Identifier.ValueText) == "toJSON"))
@@ -258,6 +297,41 @@ internal sealed partial class JavaScriptEmitter
         });
         if (unsupported is not null)
             throw new NotSupportedException($"WRK119: User type '{type}' contains an unsupported member: {unsupported}");
+    }
+
+    private static void ValidateJsonAttributes(INamedTypeSymbol type)
+    {
+        foreach (var symbol in type.GetMembers().Where(member => !member.IsImplicitlyDeclared).Prepend(type))
+        foreach (var attribute in symbol.GetAttributes().Where(attribute =>
+                     attribute.AttributeClass?.ContainingNamespace.ToDisplayString()
+                     == "System.Text.Json.Serialization"))
+        {
+            var name = attribute.AttributeClass!.Name;
+            var supported = symbol is IPropertySymbol && name switch
+            {
+                "JsonPropertyNameAttribute" => attribute.ConstructorArguments is
+                    [{ Kind: TypedConstantKind.Primitive, Value: string }]
+                    && attribute.NamedArguments.Length == 0,
+                "JsonIgnoreAttribute" => attribute.ConstructorArguments.Length == 0
+                    && attribute.NamedArguments.Length == 0,
+                _ => false
+            };
+            if (!supported)
+                throw new NotSupportedException(
+                    $"WRK119: User type '{type}' uses unsupported JSON attribute '{attribute.AttributeClass}'.");
+        }
+
+        var properties = type.GetMembers().OfType<IPropertySymbol>().Select(property => new
+        {
+            Property = property,
+            Name = JsonPropertyName(property) ?? LowerFirst(property.Name),
+            Explicit = JsonPropertyName(property) is not null
+        }).ToArray();
+        var collision = properties.GroupBy(property => property.Name, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1 && group.Any(property => property.Explicit));
+        if (collision is not null)
+            throw new NotSupportedException(
+                $"WRK119: User type '{type}' contains conflicting JSON property name '{collision.Key}'.");
     }
 
     private static bool IsSupportedUserMethod(MethodDeclarationSyntax declaration)

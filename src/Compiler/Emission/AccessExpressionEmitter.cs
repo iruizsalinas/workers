@@ -29,7 +29,10 @@ internal sealed partial class JavaScriptEmitter
             && symbol is IFieldSymbol or IPropertySymbol)
         {
             QueueUserType(userType, member);
-            return $"{receiver}?.{UserMemberName(symbol)}";
+            var name = UserMemberName(symbol);
+            return IsJavaScriptPropertyIdentifier(name)
+                ? $"{receiver}?.{name}"
+                : $"{receiver}?.[{System.Text.Json.JsonSerializer.Serialize(name)}]";
         }
         ThrowIfUnsupportedFrameworkMember(symbol, member);
         return $"{receiver}?.{LowerFirst(member.Name.Identifier.Text)}";
@@ -38,6 +41,14 @@ internal sealed partial class JavaScriptEmitter
     private string ElementAccess(ElementAccessExpressionSyntax value)
     {
         var receiver = Expression(value.Expression);
+        if (_model.GetTypeInfo(value.Expression).Type?.ToDisplayString() == "System.Text.Json.JsonElement")
+        {
+            var index = value.ArgumentList.Arguments.Single();
+            if (_model.GetTypeInfo(index.Expression).Type?.SpecialType != SpecialType.System_Int32)
+                throw Unsupported("WRK108", value);
+            var position = Expression(index.Expression);
+            return HelperInvocation(JavaScriptHelper.JsonElementGetIndex, [receiver, position]);
+        }
         if (_model.GetTypeInfo(value.Expression).Type is INamedTypeSymbol lookup
             && lookup.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>")
             return $"{receiver}.get({string.Join(", ", value.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))})";

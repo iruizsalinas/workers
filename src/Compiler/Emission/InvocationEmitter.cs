@@ -14,6 +14,9 @@ internal sealed partial class JavaScriptEmitter
         if (method?.Name is "TryParse" or "TryParseExact"
             && method.ContainingType.ToDisplayString() == "System.Guid")
             throw UnsupportedSymbol(method, invocation);
+        if (method?.Name == "TryGetProperty"
+            && method.ContainingType.ToDisplayString() == "System.Text.Json.JsonElement")
+            throw UnsupportedSymbol(method, invocation);
         if (method?.Name == "Parse" && method.ContainingType.SpecialType is
             SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal)
             throw UnsupportedSymbol(method, invocation);
@@ -143,6 +146,12 @@ internal sealed partial class JavaScriptEmitter
                 HelperInvocation(JavaScriptHelper.DateTimeCompare, arguments),
             ("System.Guid", "Parse") when HasParameters(method, SpecialType.System_String) =>
                 HelperInvocation(JavaScriptHelper.GuidParse, arguments),
+            ("System.Text.Json.JsonSerializer", "Serialize") when arguments.Length == 1 =>
+                $"JSON.stringify({arguments[0]})",
+            ("System.Text.Json.JsonSerializer", "SerializeToUtf8Bytes") when arguments.Length == 1 =>
+                $"new TextEncoder().encode(JSON.stringify({arguments[0]}))",
+            ("System.Text.Json.JsonSerializer", "Deserialize") when arguments.Length == 1 =>
+                JsonDeserialize(invocation, method!, arguments[0]),
             ("System.Console", "WriteLine") when arguments.Length == 1 => $"console.log({arguments[0]})",
             ("System.Guid", "NewGuid") => "globalThis.crypto.randomUUID()",
             ("Workers.Performance", "Now") => "performance.now()",
@@ -205,6 +214,21 @@ internal sealed partial class JavaScriptEmitter
 
     private string NumericParse(string value, int kind) =>
         $"{_helpers.Require(JavaScriptHelper.NumericParse)}({value}, {kind})";
+
+    private string JsonDeserialize(InvocationExpressionSyntax source, IMethodSymbol method, string value)
+    {
+        if (method.TypeArguments.FirstOrDefault() is INamedTypeSymbol resultType && IsUserInstanceType(resultType))
+            ValidateJsonAttributes(resultType);
+        var input = method.Parameters[0].Type;
+        if (input.SpecialType == SpecialType.System_String)
+            return $"JSON.parse({value})";
+        if (input.ToDisplayString() == "System.ReadOnlySpan<byte>" || input is IArrayTypeSymbol
+            {
+                ElementType.SpecialType: SpecialType.System_Byte
+            })
+            return $"JSON.parse(new TextDecoder().decode({value}))";
+        throw UnsupportedSymbol(method, source);
+    }
 
     private string MathInvocation(
         InvocationExpressionSyntax source,

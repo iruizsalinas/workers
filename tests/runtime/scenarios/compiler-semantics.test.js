@@ -141,6 +141,39 @@ describe("compiler value semantics", () => {
     await expect(response.text()).resolves.toBe(expected);
   });
 
+  it("supports native JSON serialization and JsonElement inspection", async () => {
+    const response = await invoke("/json-api", {
+      method: "POST",
+      body: JSON.stringify({ text: "hello", flag: true, values: [2, 3] }),
+    });
+
+    await expect(response.json()).resolves.toEqual({
+      isObject: true,
+      text: "hello",
+      flag: true,
+      first: 2,
+      approximate: 3,
+      length: 2,
+      sum: 5,
+      name: "Ada",
+      encoded: '{"display-name":"Ada"}',
+      roundTripOk: true,
+    });
+  });
+
+  it("validates JsonElement kinds, properties, and indexes", async () => {
+    const response = await invoke("/json-errors", {
+      method: "POST",
+      body: JSON.stringify({ values: [1] }),
+    });
+
+    await expect(response.json()).resolves.toEqual({
+      missingPropertyRejected: true,
+      wrongKindRejected: true,
+      indexRejected: true,
+    });
+  });
+
   it("executes synchronous C# iterators as JavaScript generators", async () => {
     const response = await invoke("/sync-iterator");
 

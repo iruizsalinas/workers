@@ -2,6 +2,7 @@ internal enum JavaScriptHelper
 {
     WithHeader, Delay, Stream, Socket, Digest, WebSocketEvents, IntegerDivide, IntegerRemainder,
     RandomNext, SetAdd, Base64, RpcArguments, HexDecode, EscapeDataString, JsonElementToString,
+    JsonElementValueKind, JsonElementGetValue, JsonElementGetProperty, JsonElementGetIndex,
     StringContains, StringStartsWith, StringEndsWith, StringSubstring, StringReplace,
     StringIsNullOrEmpty, StringIsNullOrWhiteSpace, StringJoin, StringOrdinal,
     StringRemove, StringInsert, StringPad, StringToCharArray, StringSplit,
@@ -53,6 +54,10 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.HexDecode => "hexDecode",
         JavaScriptHelper.EscapeDataString => "escapeDataString",
         JavaScriptHelper.JsonElementToString => "jsonElementToString",
+        JavaScriptHelper.JsonElementValueKind => "jsonElementValueKind",
+        JavaScriptHelper.JsonElementGetValue => "jsonElementGetValue",
+        JavaScriptHelper.JsonElementGetProperty => "jsonElementGetProperty",
+        JavaScriptHelper.JsonElementGetIndex => "jsonElementGetIndex",
         JavaScriptHelper.StringContains => "stringContains",
         JavaScriptHelper.StringStartsWith => "stringStartsWith",
         JavaScriptHelper.StringEndsWith => "stringEndsWith",
