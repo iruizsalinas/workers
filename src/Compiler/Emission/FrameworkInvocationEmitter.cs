@@ -22,6 +22,10 @@ internal sealed partial class JavaScriptEmitter
             "System.TimeSpan" => TimeSpanInvocation(invocation, method, receiver, name, arguments),
             "System.Guid" => GuidInvocation(invocation, method!, receiver, name, arguments),
             "System.Text.Json.JsonElement" => JsonElementInvocation(invocation, method!, receiver, name, arguments),
+            "System.Threading.CancellationToken" =>
+                CancellationTokenInvocation(invocation, method!, receiver, name, arguments),
+            "System.Threading.CancellationTokenSource" =>
+                CancellationTokenSourceInvocation(invocation, method!, receiver, name, arguments),
             "System.Uri" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             "Workers.Url" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
@@ -87,6 +91,33 @@ internal sealed partial class JavaScriptEmitter
 
     private string JsonElementValue(string receiver, int operation) =>
         HelperInvocation(JavaScriptHelper.JsonElementGetValue, [receiver, operation.ToString()]);
+
+    private string CancellationTokenInvocation(
+        InvocationExpressionSyntax source,
+        IMethodSymbol method,
+        string receiver,
+        string name,
+        string[] arguments) => (name, arguments.Length) switch
+        {
+            ("ThrowIfCancellationRequested", 0) =>
+                HelperInvocation(JavaScriptHelper.CancellationCheck, [receiver]),
+            ("Equals", 1) when method.Parameters[0].Type.ToDisplayString()
+                                  == "System.Threading.CancellationToken" => $"{receiver} === {arguments[0]}",
+            _ => throw UnsupportedSymbol(method, source)
+        };
+
+    private string CancellationTokenSourceInvocation(
+        InvocationExpressionSyntax source,
+        IMethodSymbol method,
+        string receiver,
+        string name,
+        string[] arguments) => (name, arguments.Length) switch
+        {
+            ("Cancel", 0) => $"{receiver}.abort()",
+            ("CancelAfter", 1) when method.Parameters[0].Type.SpecialType == SpecialType.System_Int32 =>
+                HelperInvocation(JavaScriptHelper.CancellationCancelAfter, [receiver, arguments[0]]),
+            _ => throw UnsupportedSymbol(method, source)
+        };
 
     private static bool SupportedGuidFormat(InvocationExpressionSyntax source, IMethodSymbol method)
     {

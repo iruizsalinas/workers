@@ -13,7 +13,8 @@ internal sealed partial class JavaScriptEmitter
         var parameterOrdinals = invocation.ArgumentList.Arguments.Select((argument, index) => argument.NameColon is { } name
             ? method.Parameters.Single(parameter => parameter.Name == name.Name.Identifier.ValueText).Ordinal
             : Math.Min(index, method.Parameters.Length - 1)).ToArray();
-        if (parameterOrdinals.Where((ordinal, index) => ordinal != index).Any())
+        if (parameterOrdinals.Where((ordinal, index) => ordinal != index).Any()
+            || arguments.Any(argument => IsCancellationToken(argument.Parameter)))
         {
             var key = $"binding:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}";
             var receiverTemporary = _names.Get(key + ":receiver", "receiver");
@@ -22,8 +23,7 @@ internal sealed partial class JavaScriptEmitter
             var rebound = arguments.Select((argument, index) => (argument.Parameter, Value: argumentTemporaries[index])).ToArray();
             var lastOrdinal = rebound.Max(argument => argument.Parameter.Ordinal);
             var ordered = new List<(IParameterSymbol Parameter, string Value)>();
-            foreach (var parameter in method.Parameters.Take(lastOrdinal + 1)
-                         .Where(parameter => parameter.Type.ToDisplayString() != "System.Threading.CancellationToken"))
+            foreach (var parameter in method.Parameters.Take(lastOrdinal + 1))
             {
                 var supplied = rebound.Where(argument => SymbolEqualityComparer.Default.Equals(argument.Parameter, parameter)).ToArray();
                 if (supplied.Length == 0) ordered.Add((parameter, "undefined"));
@@ -42,7 +42,9 @@ internal sealed partial class JavaScriptEmitter
         BindingIntrinsic intrinsic,
         IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
     {
-        return intrinsic.Kind switch
+        var cancellation = arguments.FirstOrDefault(argument => IsCancellationToken(argument.Parameter)).Value;
+        arguments = arguments.Where(argument => !IsCancellationToken(argument.Parameter)).ToArray();
+        var result = intrinsic.Kind switch
         {
             BindingIntrinsicKind.Direct => $"{receiver}.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))})",
             BindingIntrinsicKind.KvBytesGet => EmitKvGet(receiver, intrinsic.JavascriptName, arguments, "arrayBuffer"),
@@ -95,6 +97,9 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.Utf8Decode => EmitUtf8Decode(arguments),
             _ => throw new InvalidOperationException($"Unknown binding intrinsic kind '{intrinsic.Kind}'.")
         };
+        return cancellation is null
+            ? result
+            : $"({HelperInvocation(JavaScriptHelper.CancellationCheck, [cancellation])}, {result})";
     }
 
     private string EmitDigestWrite(string receiver, string value) { _helpers.Require(JavaScriptHelper.Digest); return $"{_helpers.Name("digestWriter")}({receiver}).write({value})"; }
@@ -118,8 +123,6 @@ internal sealed partial class JavaScriptEmitter
             var parameter = argument.NameColon is { } name
                 ? method.Parameters.Single(item => item.Name == name.Name.Identifier.Text)
                 : method.Parameters[Math.Min(index, method.Parameters.Length - 1)];
-            if (parameter.Type.ToDisplayString() == "System.Threading.CancellationToken")
-                continue;
             values.Add((parameter, Expression(argument.Expression)));
         }
         return values;

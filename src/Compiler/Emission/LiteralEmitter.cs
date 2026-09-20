@@ -8,6 +8,7 @@ internal sealed partial class JavaScriptEmitter
 {
     private string Literal(LiteralExpressionSyntax literal)
     {
+        if (literal.IsKind(SyntaxKind.DefaultLiteralExpression)) return DefaultValue(literal);
         if (literal.IsKind(SyntaxKind.NullLiteralExpression)) return "null";
         if (literal.IsKind(SyntaxKind.TrueLiteralExpression)) return "true";
         if (literal.IsKind(SyntaxKind.FalseLiteralExpression)) return "false";

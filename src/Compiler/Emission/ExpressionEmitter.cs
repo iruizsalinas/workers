@@ -8,6 +8,7 @@ internal sealed partial class JavaScriptEmitter
     private string Expression(ExpressionSyntax expression) => expression switch
     {
         LiteralExpressionSyntax value => Literal(value),
+        DefaultExpressionSyntax value => DefaultValue(value),
         IdentifierNameSyntax value => Identifier(value),
         ThisExpressionSyntax => "this",
         ParenthesizedExpressionSyntax value => $"({Expression(value.Expression)})",
@@ -47,6 +48,11 @@ internal sealed partial class JavaScriptEmitter
         SimpleLambdaExpressionSyntax value when value.Block is not null => Lambda(value),
         _ => throw Unsupported("WRK101", expression)
     };
+
+    private string DefaultValue(ExpressionSyntax expression) =>
+        _model.GetTypeInfo(expression).ConvertedType?.ToDisplayString() == "System.Threading.CancellationToken"
+            ? "null"
+            : throw Unsupported("WRK108", expression);
 
     private string UnaryNumeric(PrefixUnaryExpressionSyntax value, string operation)
     {

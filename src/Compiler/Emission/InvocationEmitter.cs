@@ -23,7 +23,9 @@ internal sealed partial class JavaScriptEmitter
         var arguments = invocation.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)).ToArray();
         var member = invocation.Expression as MemberAccessExpressionSyntax;
         var isBindingIntrinsic = method is not null && BindingIntrinsicRegistry.TryGet(method, out _);
-        if (method is not null && invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
+        if (method is not null
+            && (invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
+                || method.Parameters.Any(IsCancellationToken))
             && !isBindingIntrinsic)
         {
             var receiver = member is null || method.IsStatic ? null : Expression(member.Expression);
@@ -55,8 +57,13 @@ internal sealed partial class JavaScriptEmitter
             return TaskWhenAll(invocation, method!, arguments);
         if (containingType == "System.Threading.Tasks.Task" && methodName == "Delay")
         {
-            if (arguments.Length != 1) throw UnsupportedSymbol(method, invocation);
-            return $"{_helpers.Require(JavaScriptHelper.Delay)}({arguments[0]})";
+            return arguments.Length switch
+            {
+                1 => HelperInvocation(JavaScriptHelper.Delay, arguments),
+                2 when IsCancellationToken(method!.Parameters[1]) =>
+                    HelperInvocation(JavaScriptHelper.CancellationDelay, arguments),
+                _ => throw UnsupportedSymbol(method, invocation)
+            };
         }
         if (TryEmitStaticInvocation(invocation, method, containingType, methodName, arguments, receiverOverride, out var result)) return result;
         if (member is not null)
@@ -326,7 +333,8 @@ internal sealed partial class JavaScriptEmitter
         if (TryEmitFrameworkInvocation(invocation, method, receiver, name, arguments, out var framework)) return framework;
         if (type == "Workers.Env" && EnvironmentBindings.Contains(name)) return $"{receiver}[{arguments[0]}]";
         if (type == "Workers.CacheStorage" && name == "OpenAsync") return $"caches.open({arguments[0]})";
-        if (type == "Workers.Http" && name == "FetchAsync") return $"fetch({string.Join(", ", arguments)})";
+        if (type == "Workers.Http" && name == "FetchAsync")
+            return HttpFetch(invocation, method!, arguments);
         if (type == "Workers.WebSocketPair" && name == "Create") return "new WebSocketPair()";
         if (type == "Workers.TcpSocket" && name == "Connect") return SocketConnect(method, arguments);
         if (type == "Workers.Crypto") receiver = "globalThis.crypto";
@@ -341,6 +349,23 @@ internal sealed partial class JavaScriptEmitter
         if (method is not null && method.DeclaringSyntaxReferences.Length != 0) return EmitUserInvocation(method, invocation, arguments);
         throw UnsupportedSymbol(method, invocation);
     }
+
+    private string HttpFetch(InvocationExpressionSyntax source, IMethodSymbol method, string[] arguments)
+    {
+        var tokenIndex = method.Parameters.FirstOrDefault(IsCancellationToken)?.Ordinal ?? -1;
+        if (tokenIndex < 0) return $"fetch({string.Join(", ", arguments)})";
+        var token = arguments[tokenIndex];
+        var native = arguments.Where((_, index) => index != tokenIndex).ToArray();
+        return native.Length switch
+        {
+            1 => $"fetch({native[0]}, {{ signal: {token} ?? undefined }})",
+            2 => $"fetch({native[0]}, {{ ...{native[1]}, ...({token} == null ? {{}} : {{ signal: {token} }}) }})",
+            _ => throw UnsupportedSymbol(method, source)
+        };
+    }
+
+    private static bool IsCancellationToken(IParameterSymbol parameter) =>
+        parameter.Type.ToDisplayString() == "System.Threading.CancellationToken";
 
     private string ResponseInvocation(
         InvocationExpressionSyntax invocation,

@@ -14,6 +14,8 @@ internal sealed partial class JavaScriptEmitter
             return CreateTimeSpan(value, constructor, arguments);
         if (typeName == "System.DateTimeOffset")
             return CreateDateTimeOffset(value, constructor, arguments);
+        if (typeName == "System.Threading.CancellationTokenSource" && arguments.Length == 0)
+            return "new AbortController()";
         if (typeName is "Workers.Request" or "Workers.Response")
             return PositionalObjectCreation(value, constructor, arguments,
                 values => $"new {type!.Name}({string.Join(", ", values)})");

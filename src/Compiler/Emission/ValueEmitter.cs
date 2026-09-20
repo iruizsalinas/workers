@@ -26,6 +26,29 @@ internal sealed partial class JavaScriptEmitter
         if (property is { IsStatic: false, Name: "ValueKind", ContainingType: { } jsonElementType }
             && jsonElementType.ToDisplayString() == "System.Text.Json.JsonElement")
             return HelperInvocation(JavaScriptHelper.JsonElementValueKind, [Expression(member.Expression)]);
+        if (property is { ContainingType: { } cancellationType }
+            && cancellationType.ToDisplayString() == "System.Threading.CancellationToken")
+        {
+            var token = property.IsStatic ? "null" : Expression(member.Expression);
+            return property.Name switch
+            {
+                "None" => "null",
+                "CanBeCanceled" => $"{token} != null",
+                "IsCancellationRequested" => $"{token}?.aborted === true",
+                _ => throw UnsupportedSymbol(property, member)
+            };
+        }
+        if (property is { IsStatic: false, ContainingType: { } sourceType }
+            && sourceType.ToDisplayString() == "System.Threading.CancellationTokenSource")
+        {
+            var source = Expression(member.Expression);
+            return property.Name switch
+            {
+                "Token" => $"{source}.signal",
+                "IsCancellationRequested" => $"{source}.signal.aborted",
+                _ => throw UnsupportedSymbol(property, member)
+            };
+        }
         if (property?.ContainingType.ToDisplayString() == "System.Random" && property.Name == "Shared") return "Math";
         if (property?.ContainingType.ToDisplayString() == "Workers.CacheStorage" && property.Name == "Default")
             return "caches.default";

@@ -1,6 +1,7 @@
 internal enum JavaScriptHelper
 {
-    WithHeader, Delay, Stream, Socket, Digest, WebSocketEvents, IntegerDivide, IntegerRemainder,
+    WithHeader, Delay, CancellationCheck, CancellationDelay, CancellationCancelAfter,
+    Stream, Socket, Digest, WebSocketEvents, IntegerDivide, IntegerRemainder,
     RandomNext, SetAdd, Base64, RpcArguments, HexDecode, EscapeDataString, JsonElementToString,
     JsonElementValueKind, JsonElementGetValue, JsonElementGetProperty, JsonElementGetIndex,
     StringContains, StringStartsWith, StringEndsWith, StringSubstring, StringReplace,
@@ -23,6 +24,11 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
     public string Require(JavaScriptHelper helper)
     {
         _required.Add(helper);
+        if (helper == JavaScriptHelper.CancellationDelay)
+        {
+            _required.Add(JavaScriptHelper.Delay);
+            _required.Add(JavaScriptHelper.CancellationCheck);
+        }
         if (helper == JavaScriptHelper.DateTimeDaysInMonth)
             _required.Add(JavaScriptHelper.DateTimeIsLeapYear);
         if (helper.IsLinqOperator())
@@ -41,6 +47,9 @@ internal static class JavaScriptHelperExtensions
     {
         JavaScriptHelper.WithHeader => "withHeader",
         JavaScriptHelper.Delay => "delay",
+        JavaScriptHelper.CancellationCheck => "cancellationCheck",
+        JavaScriptHelper.CancellationDelay => "cancellationDelay",
+        JavaScriptHelper.CancellationCancelAfter => "cancellationCancelAfter",
         JavaScriptHelper.Stream => "streamRead",
         JavaScriptHelper.Socket => "socketRead",
         JavaScriptHelper.Digest => "digestWriter",

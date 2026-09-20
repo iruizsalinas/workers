@@ -27,6 +27,11 @@ internal sealed partial class JavaScriptEmitter
             && guidOperation.RightOperand.Type?.ToDisplayString() == "System.Guid"
             && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
             return $"{Expression(expression.Left)} {BinaryOperator(expression.Kind())} {Expression(expression.Right)}";
+        if (operation is { } cancellationOperation
+            && cancellationOperation.LeftOperand.Type?.ToDisplayString() == "System.Threading.CancellationToken"
+            && cancellationOperation.RightOperand.Type?.ToDisplayString() == "System.Threading.CancellationToken"
+            && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
+            return $"{Expression(expression.Left)} {BinaryOperator(expression.Kind())} {Expression(expression.Right)}";
         if (operation?.OperatorMethod is not null)
             throw UnsupportedSymbol(operation.OperatorMethod, expression);
         var type = operation?.Type?.SpecialType ?? SpecialType.None;

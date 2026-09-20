@@ -174,6 +174,22 @@ describe("compiler value semantics", () => {
     });
   });
 
+  it("maps cancellation tokens to abort signals", async () => {
+    const response = await invoke("/cancellation", { method: "POST", body: "unused" });
+
+    await expect(response.json()).resolves.toEqual({
+      delayCanceled: true,
+      cancellationDisabled: true,
+      throwRejected: true,
+      bodyRejected: true,
+      fetchRejected: true,
+      canBeCanceled: true,
+      isCancellationRequested: true,
+      noneCanBeCanceled: false,
+      defaultsEqual: true,
+    });
+  });
+
   it("executes synchronous C# iterators as JavaScript generators", async () => {
     const response = await invoke("/sync-iterator");
 

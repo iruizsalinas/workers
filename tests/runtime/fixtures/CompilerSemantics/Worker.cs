@@ -306,6 +306,46 @@ public static class Worker
             return Response.Json(new { missingPropertyRejected, wrongKindRejected, indexRejected });
         }
 
+        if (request.Path == "/cancellation")
+        {
+            var timed = new CancellationTokenSource();
+            timed.CancelAfter(5);
+            var delayCanceled = false;
+            try { await Task.Delay(-1, timed.Token); }
+            catch (Exception) { delayCanceled = true; }
+
+            var disabled = new CancellationTokenSource();
+            disabled.CancelAfter(1);
+            disabled.CancelAfter(-1);
+            await Task.Delay(5, CancellationToken.None);
+
+            var manual = new CancellationTokenSource();
+            manual.Cancel();
+            var throwRejected = false;
+            var bodyRejected = false;
+            var fetchRejected = false;
+            try { manual.Token.ThrowIfCancellationRequested(); }
+            catch (Exception) { throwRejected = true; }
+            try { await request.TextAsync(manual.Token); }
+            catch (Exception) { bodyRejected = true; }
+            try { await Http.FetchAsync("https://worker.test/never-dispatched", manual.Token); }
+            catch (Exception) { fetchRejected = true; }
+
+            CancellationToken fallback = default;
+            return Response.Json(new
+            {
+                delayCanceled,
+                cancellationDisabled = !disabled.IsCancellationRequested,
+                throwRejected,
+                bodyRejected,
+                fetchRejected,
+                manual.Token.CanBeCanceled,
+                manual.Token.IsCancellationRequested,
+                noneCanBeCanceled = CancellationToken.None.CanBeCanceled,
+                defaultsEqual = fallback == CancellationToken.None
+            });
+        }
+
         if (request.Path == "/sync-iterator")
         {
             var total = 0;
