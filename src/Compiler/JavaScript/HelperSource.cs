@@ -19,6 +19,8 @@ internal static class HelperSource
         JavaScriptHelper.EscapeDataString => EscapeDataString(name),
         JavaScriptHelper.JsonElementToString => JsonElementToString(name),
         JavaScriptHelper.DateTimeOffset => DateTimeOffset(name),
+        JavaScriptHelper.DateTimeAddMonths => DateTimeAddMonths(name),
+        JavaScriptHelper.DateTimeFromUnixTime => DateTimeFromUnixTime(name),
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 
@@ -248,6 +250,35 @@ internal static class HelperSource
             throw new RangeError("Invalid DateTimeOffset components.");
           }
           return value;
+        }
+
+        """;
+
+    private static string DateTimeAddMonths(Func<string, string> name) => $$"""
+        function {{name("dateTimeAddMonths")}}(input, months) {
+          if (!Number.isInteger(months) || months < -120000 || months > 120000)
+            throw new RangeError("Months must be between -120000 and 120000.");
+          const value = new Date(input);
+          const absoluteMonth = value.getUTCFullYear() * 12 + value.getUTCMonth() + months;
+          const year = Math.floor(absoluteMonth / 12), month = absoluteMonth - year * 12;
+          if (year < 1 || year > 9999) throw new RangeError("DateTime value is out of range.");
+          const monthEnd = new Date(0);
+          monthEnd.setUTCFullYear(year, month + 1, 0);
+          const day = Math.min(value.getUTCDate(), monthEnd.getUTCDate());
+          value.setUTCDate(1);
+          value.setUTCFullYear(year, month, day);
+          return value;
+        }
+
+        """;
+
+    private static string DateTimeFromUnixTime(Func<string, string> name) => $$"""
+        function {{name("dateTimeFromUnixTime")}}(value, seconds) {
+          const minimum = seconds ? -62135596800 : -62135596800000;
+          const maximum = seconds ? 253402300799 : 253402300799999;
+          if (!Number.isInteger(value) || value < minimum || value > maximum)
+            throw new RangeError("Unix time is out of range.");
+          return new Date(seconds ? value * 1000 : value);
         }
 
         """;

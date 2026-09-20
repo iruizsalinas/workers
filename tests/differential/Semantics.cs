@@ -24,7 +24,15 @@ public sealed record CoreSemanticsResult(
     string AddedInstant,
     int FieldPropertyCollision,
     int UpperPropertyCollision,
-    int LowerPropertyCollision);
+    int LowerPropertyCollision,
+    string AddedMonth,
+    string AddedYear,
+    bool PreEpochSecondsFloor,
+    bool UnixSecondsConversion,
+    int DateYear,
+    DayOfWeek DateDayOfWeek,
+    bool EqualDates,
+    string DateRoundTrip);
 
 public static class CoreSemantics
 {
@@ -48,11 +56,19 @@ public static class CoreSemantics
         var laterInstant = instant.AddMinutes(2);
         var collision = new NamingCollision();
         var propertyCollision = new PropertyCollision { Value = 3, value = 4 };
+        var monthEnd = new DateTimeOffset(2026, 1, 31, 0, 0, 0, TimeSpan.Zero);
+        var leapDay = new DateTimeOffset(2024, 2, 29, 12, 30, 0, TimeSpan.Zero);
+        var date = leapDay.Date;
+        var sameDate = new DateTimeOffset(2024, 2, 29, 23, 59, 59, TimeSpan.Zero).Date;
         return new(signed, unsigned, single, -minimum, -unarySingle == -0.1f, $"{true}:{false}", true.ToString(),
             'A' + 1, 'B' - 'A', character + 5, character - otherCharacter, total,
             instant.Year, instant.Month, instant.Day, instant.DayOfWeek, instant.Hour, instant.Minute,
             instant.Second, instant.Millisecond, instant == sameInstant, instant < laterInstant,
-            laterInstant.ToString("O"), collision.Value, propertyCollision.Value, propertyCollision.value);
+            laterInstant.ToString("O"), collision.Value, propertyCollision.Value, propertyCollision.value,
+            monthEnd.AddMonths(1).ToString("O"), leapDay.AddYears(1).ToString("O"),
+            DateTimeOffset.FromUnixTimeMilliseconds(-1).ToUnixTimeSeconds() == -1,
+            DateTimeOffset.FromUnixTimeSeconds(-1).ToUnixTimeMilliseconds() == -1000,
+            date.Year, date.DayOfWeek, date == sameDate, date.ToString("O"));
     }
 }
 

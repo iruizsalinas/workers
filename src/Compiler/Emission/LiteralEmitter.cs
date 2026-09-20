@@ -57,8 +57,9 @@ internal sealed partial class JavaScriptEmitter
         .Replace("}}", "}", StringComparison.Ordinal).Replace("\\", "\\\\", StringComparison.Ordinal)
         .Replace("`", "\\`", StringComparison.Ordinal).Replace("${", "\\${", StringComparison.Ordinal);
 
-    private static string DateTimeRoundTrip(string value) =>
-        $"new Date({value}).toISOString().replace(/(\\.\\d{{3}})Z$/, \"$1\" + \"0000+00:00\")";
+    private static string DateTimeRoundTrip(string value, bool includeOffset = true) => includeOffset
+        ? $"new Date({value}).toISOString().replace(/(\\.\\d{{3}})Z$/, \"$1\" + \"0000+00:00\")"
+        : $"new Date({value}).toISOString().replace(/(\\.\\d{{3}})Z$/, \"$1\" + \"0000\")";
 
     private string Element(CollectionElementSyntax value) => value switch
     {

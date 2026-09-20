@@ -18,6 +18,7 @@ internal sealed partial class JavaScriptEmitter
             "System.Random" => RandomInvocation(invocation, method, name, arguments),
             "string" => StringInvocation(invocation, method, receiver, name, arguments),
             "System.DateTimeOffset" => DateTimeInvocation(invocation, method, receiver, name, arguments),
+            "System.DateTime" => DateTimeInvocation(invocation, method, receiver, name, arguments),
             "System.Guid" when name == "ToString" && arguments.Length == 0 => receiver,
             "System.Uri" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             "Workers.Url" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
@@ -109,7 +110,13 @@ internal sealed partial class JavaScriptEmitter
             "ToString" when arguments.Length == 1
                             && source.ArgumentList.Arguments[0].Expression is LiteralExpressionSyntax format
                             && format.Token.ValueText is "O" or "o" =>
-                DateTimeRoundTrip(receiver),
+                method?.ContainingType.ToDisplayString() == "System.DateTime"
+                    ? DateTimeRoundTrip(receiver, includeOffset: false)
+                    : DateTimeRoundTrip(receiver),
+            "AddMonths" when arguments.Length == 1 =>
+                $"{_helpers.Require(JavaScriptHelper.DateTimeAddMonths)}({receiver}, {arguments[0]})",
+            "AddYears" when arguments.Length == 1 =>
+                $"{_helpers.Require(JavaScriptHelper.DateTimeAddMonths)}({receiver}, ({arguments[0]}) * 12)",
             "AddDays" when arguments.Length == 1 =>
                 $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 86400000)",
             "AddHours" when arguments.Length == 1 =>
@@ -121,6 +128,7 @@ internal sealed partial class JavaScriptEmitter
             "AddMilliseconds" when arguments.Length == 1 =>
                 $"new Date(new Date({receiver}).getTime() + ({arguments[0]}))",
             "ToUnixTimeMilliseconds" when arguments.Length == 0 => $"new Date({receiver}).getTime()",
+            "ToUnixTimeSeconds" when arguments.Length == 0 => $"Math.floor(new Date({receiver}).getTime() / 1000)",
             _ => throw UnsupportedSymbol(method, source)
         };
 }

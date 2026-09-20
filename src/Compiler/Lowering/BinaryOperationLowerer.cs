@@ -8,7 +8,9 @@ internal sealed partial class JavaScriptEmitter
     private string Binary(BinaryExpressionSyntax expression)
     {
         var operation = _model.GetOperation(expression) as IBinaryOperation;
-        if (IsDateTimeOffset(operation?.LeftOperand.Type) && IsDateTimeOffset(operation?.RightOperand.Type)
+        if (operation is { } dateOperation
+            && IsDateValue(dateOperation.LeftOperand.Type) && IsDateValue(dateOperation.RightOperand.Type)
+            && SymbolEqualityComparer.Default.Equals(dateOperation.LeftOperand.Type, dateOperation.RightOperand.Type)
             && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression
                 or SyntaxKind.LessThanExpression or SyntaxKind.LessThanOrEqualExpression
                 or SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression)
@@ -74,6 +76,12 @@ internal sealed partial class JavaScriptEmitter
             && expression.Kind() is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression)
             return $"Math.fround({left} {BinaryOperator(expression.Kind())} {right})";
 
+        if (expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression
+            or SyntaxKind.LessThanExpression or SyntaxKind.LessThanOrEqualExpression
+            or SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression)
+            return $"{ComparisonOperand(expression.Left, left)} {BinaryOperator(expression.Kind())} " +
+                   ComparisonOperand(expression.Right, right);
+
         return $"{left} {BinaryOperator(expression.Kind())} {right}";
     }
 
@@ -86,8 +94,8 @@ internal sealed partial class JavaScriptEmitter
                $"new Date({right}).getTime())({Expression(expression.Left)}, {Expression(expression.Right)})";
     }
 
-    private static bool IsDateTimeOffset(ITypeSymbol? type) =>
-        type?.ToDisplayString() == "System.DateTimeOffset";
+    private static bool IsDateValue(ITypeSymbol? type) =>
+        type?.ToDisplayString() is "System.DateTimeOffset" or "System.DateTime";
 
     private string BinaryOperand(ExpressionSyntax operand, bool numeric)
     {
@@ -96,6 +104,13 @@ internal sealed partial class JavaScriptEmitter
             ? $"({value}).charCodeAt(0)"
             : value;
     }
+
+    private static string ComparisonOperand(ExpressionSyntax syntax, string value) => syntax switch
+    {
+        BinaryExpressionSyntax or AssignmentExpressionSyntax => $"({value})",
+        PrefixUnaryExpressionSyntax prefix when !prefix.IsKind(SyntaxKind.LogicalNotExpression) => $"({value})",
+        _ => value
+    };
 
     private static string BinaryOperator(SyntaxKind kind) => kind switch
     {

@@ -15,8 +15,8 @@ internal sealed partial class JavaScriptEmitter
         if (symbol is { IsStatic: true, Name: "Zero", ContainingType: { } timeSpanType }
             && timeSpanType.ToDisplayString() == "System.TimeSpan") return "0";
         if (property is { IsStatic: false, ContainingType: { } dateTimeType }
-            && dateTimeType.ToDisplayString() == "System.DateTimeOffset")
-            return DateTimeOffsetMember(member, property);
+            && dateTimeType.ToDisplayString() is "System.DateTimeOffset" or "System.DateTime")
+            return DateTimeMember(member, property);
         if (property?.ContainingType.ToDisplayString() == "System.Random" && property.Name == "Shared") return "Math";
         if (property?.ContainingType.ToDisplayString() == "Workers.CacheStorage" && property.Name == "Default")
             return "caches.default";
@@ -147,7 +147,7 @@ internal sealed partial class JavaScriptEmitter
         return $"{Expression(member.Expression)}.{LowerFirst(member.Name.Identifier.Text)}";
     }
 
-    private string DateTimeOffsetMember(MemberAccessExpressionSyntax member, IPropertySymbol property)
+    private string DateTimeMember(MemberAccessExpressionSyntax member, IPropertySymbol property)
     {
         var receiver = Expression(member.Expression);
         return property.Name switch

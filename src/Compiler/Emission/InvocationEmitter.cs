@@ -106,6 +106,10 @@ internal sealed partial class JavaScriptEmitter
         result = (type, name) switch
         {
             ("System.TimeSpan", "FromMilliseconds") => arguments[0],
+            ("System.DateTimeOffset", "FromUnixTimeMilliseconds") when arguments.Length == 1 =>
+                $"{_helpers.Require(JavaScriptHelper.DateTimeFromUnixTime)}({arguments[0]}, false)",
+            ("System.DateTimeOffset", "FromUnixTimeSeconds") when arguments.Length == 1 =>
+                $"{_helpers.Require(JavaScriptHelper.DateTimeFromUnixTime)}({arguments[0]}, true)",
             ("System.Console", "WriteLine") when arguments.Length == 1 => $"console.log({arguments[0]})",
             ("System.Guid", "NewGuid") => "globalThis.crypto.randomUUID()",
             ("Workers.Performance", "Now") => "performance.now()",
