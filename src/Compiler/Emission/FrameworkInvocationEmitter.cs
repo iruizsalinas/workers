@@ -26,6 +26,10 @@ internal sealed partial class JavaScriptEmitter
                 $"{_helpers.Require(JavaScriptHelper.JsonElementToString)}({receiver})",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
                    && name == "Add" && arguments.Length == 1 => $"{receiver}.push({arguments[0]})",
+            _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
+                   && name == "Contains" && arguments.Length == 1
+                   && SupportsLinqEquality(type.TypeArguments[0]) =>
+                HelperInvocation(JavaScriptHelper.LinqContains, [receiver, arguments[0]]),
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>"
                    && name == "Add" && arguments.Length == 1 =>
                 $"{_helpers.Require(JavaScriptHelper.SetAdd)}({receiver}, {arguments[0]})",
@@ -128,9 +132,9 @@ internal sealed partial class JavaScriptEmitter
             "AddMilliseconds" when arguments.Length == 1 =>
                 DateTimeAddMilliseconds(receiver, arguments[0]),
             "CompareTo" when arguments.Length == 1 && HasSameDateParameter(method) =>
-                DateTimeHelperInvocation(JavaScriptHelper.DateTimeCompare, [receiver, arguments[0]]),
+                HelperInvocation(JavaScriptHelper.DateTimeCompare, [receiver, arguments[0]]),
             "Equals" when arguments.Length == 1 && HasSameDateParameter(method) =>
-                $"{DateTimeHelperInvocation(JavaScriptHelper.DateTimeCompare, [receiver, arguments[0]])} === 0",
+                $"{HelperInvocation(JavaScriptHelper.DateTimeCompare, [receiver, arguments[0]])} === 0",
             "ToUniversalTime" when arguments.Length == 0
                                    && method?.ContainingType.ToDisplayString() == "System.DateTimeOffset" =>
                 $"new Date({receiver})",

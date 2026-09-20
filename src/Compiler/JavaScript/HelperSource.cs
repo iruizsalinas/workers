@@ -26,6 +26,19 @@ internal static class HelperSource
         JavaScriptHelper.DateTimeIsLeapYear => DateTimeIsLeapYear(name),
         JavaScriptHelper.DateTimeDaysInMonth => DateTimeDaysInMonth(name),
         JavaScriptHelper.DateTimeAddMilliseconds => DateTimeAddMilliseconds(name),
+        JavaScriptHelper.LinqWhere => LinqWhere(name),
+        JavaScriptHelper.LinqSelect => LinqSelect(name),
+        JavaScriptHelper.LinqSkip => LinqSkip(name),
+        JavaScriptHelper.LinqTake => LinqTake(name),
+        JavaScriptHelper.LinqConcat => LinqConcat(name),
+        JavaScriptHelper.LinqAny => LinqAny(name),
+        JavaScriptHelper.LinqAll => LinqAll(name),
+        JavaScriptHelper.LinqCount => LinqCount(name),
+        JavaScriptHelper.LinqContains => LinqContains(name),
+        JavaScriptHelper.LinqFirst => LinqFirst(name),
+        JavaScriptHelper.LinqLast => LinqLast(name),
+        JavaScriptHelper.LinqSingle => LinqSingle(name),
+        JavaScriptHelper.LinqToArray => LinqToArray(name),
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 
@@ -334,6 +347,162 @@ internal static class HelperSource
           if (year < 1 || year > 9999)
             throw new RangeError("DateTime value is out of range.");
           return value;
+        }
+
+        """;
+
+    private static string LinqWhere(Func<string, string> name) => $$"""
+        function {{name("linqWhere")}}(source, predicate) {
+          if (source == null || predicate == null) throw new TypeError("LINQ argument cannot be null.");
+          return { *[Symbol.iterator]() {
+            let index = 0;
+            for (const value of source) if (predicate(value, index++)) yield value;
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqSelect(Func<string, string> name) => $$"""
+        function {{name("linqSelect")}}(source, selector) {
+          if (source == null || selector == null) throw new TypeError("LINQ argument cannot be null.");
+          return { *[Symbol.iterator]() {
+            let index = 0;
+            for (const value of source) yield selector(value, index++);
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqSkip(Func<string, string> name) => $$"""
+        function {{name("linqSkip")}}(source, count) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          return { *[Symbol.iterator]() {
+            let remaining = Math.max(0, count);
+            for (const value of source) if (remaining > 0) remaining--; else yield value;
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqTake(Func<string, string> name) => $$"""
+        function {{name("linqTake")}}(source, count) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          return { *[Symbol.iterator]() {
+            let remaining = count;
+            if (remaining <= 0) return;
+            for (const value of source) {
+              yield value;
+              if (--remaining === 0) return;
+            }
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqConcat(Func<string, string> name) => $$"""
+        function {{name("linqConcat")}}(first, second) {
+          if (first == null || second == null) throw new TypeError("LINQ source cannot be null.");
+          return { *[Symbol.iterator]() { yield* first; yield* second; }
+          };
+        }
+
+        """;
+
+    private static string LinqAny(Func<string, string> name) => $$"""
+        function {{name("linqAny")}}(source, predicate, hasPredicate) {
+          if (source == null || (hasPredicate && predicate == null))
+            throw new TypeError("LINQ argument cannot be null.");
+          let index = 0;
+          for (const value of source) if (predicate === null || predicate(value, index++)) return true;
+          return false;
+        }
+
+        """;
+
+    private static string LinqAll(Func<string, string> name) => $$"""
+        function {{name("linqAll")}}(source, predicate) {
+          if (source == null || predicate == null) throw new TypeError("LINQ argument cannot be null.");
+          let index = 0;
+          for (const value of source) if (!predicate(value, index++)) return false;
+          return true;
+        }
+
+        """;
+
+    private static string LinqCount(Func<string, string> name) => $$"""
+        function {{name("linqCount")}}(source, predicate, hasPredicate) {
+          if (source == null || (hasPredicate && predicate == null))
+            throw new TypeError("LINQ argument cannot be null.");
+          let count = 0, index = 0;
+          for (const value of source) if (predicate === null || predicate(value, index++)) {
+            if (count === 2147483647) throw new RangeError("Enumerable count overflow.");
+            count++;
+          }
+          return count;
+        }
+
+        """;
+
+    private static string LinqContains(Func<string, string> name) => $$"""
+        function {{name("linqContains")}}(source, target) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          for (const value of source)
+            if (value === target || (value !== value && target !== target)) return true;
+          return false;
+        }
+
+        """;
+
+    private static string LinqFirst(Func<string, string> name) => $$"""
+        function {{name("linqFirst")}}(source, predicate, hasPredicate, defaultValue, orDefault) {
+          if (source == null || (hasPredicate && predicate == null))
+            throw new TypeError("LINQ argument cannot be null.");
+          let index = 0;
+          for (const value of source)
+            if (predicate === null || predicate(value, index++)) return value;
+          if (orDefault) return defaultValue;
+          throw new RangeError("Sequence contains no matching element.");
+        }
+
+        """;
+
+    private static string LinqLast(Func<string, string> name) => $$"""
+        function {{name("linqLast")}}(source, predicate, hasPredicate, defaultValue, orDefault) {
+          if (source == null || (hasPredicate && predicate == null))
+            throw new TypeError("LINQ argument cannot be null.");
+          let found = false, result = defaultValue, index = 0;
+          for (const value of source) if (predicate === null || predicate(value, index++)) {
+            found = true; result = value;
+          }
+          if (found || orDefault) return result;
+          throw new RangeError("Sequence contains no matching element.");
+        }
+
+        """;
+
+    private static string LinqSingle(Func<string, string> name) => $$"""
+        function {{name("linqSingle")}}(source, predicate, hasPredicate, defaultValue, orDefault) {
+          if (source == null || (hasPredicate && predicate == null))
+            throw new TypeError("LINQ argument cannot be null.");
+          let found = false, result = defaultValue, index = 0;
+          for (const value of source) if (predicate === null || predicate(value, index++)) {
+            if (found) throw new RangeError("Sequence contains more than one matching element.");
+            found = true; result = value;
+          }
+          if (found || orDefault) return result;
+          throw new RangeError("Sequence contains no matching element.");
+        }
+
+        """;
+
+    private static string LinqToArray(Func<string, string> name) => $$"""
+        function {{name("linqToArray")}}(source) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          return Array.from(source);
         }
 
         """;

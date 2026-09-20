@@ -3,7 +3,9 @@ internal enum JavaScriptHelper
     WithHeader, Delay, Stream, Socket, Digest, WebSocketEvents, IntegerDivide, IntegerRemainder,
     RandomNext, SetAdd, Base64, RpcArguments, IntParse, HexDecode, EscapeDataString, JsonElementToString,
     DateTimeOffset, DateTimeAddMonths, DateTimeFromUnixTime, DateTimeCompare, DateTimeDayOfYear,
-    DateTimeIsLeapYear, DateTimeDaysInMonth, DateTimeAddMilliseconds
+    DateTimeIsLeapYear, DateTimeDaysInMonth, DateTimeAddMilliseconds,
+    LinqWhere, LinqSelect, LinqSkip, LinqTake, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains,
+    LinqFirst, LinqLast, LinqSingle, LinqToArray
 }
 
 internal sealed class HelperRegistry(GeneratedNameAllocator names)
@@ -51,6 +53,19 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.DateTimeIsLeapYear => "dateTimeIsLeapYear",
         JavaScriptHelper.DateTimeDaysInMonth => "dateTimeDaysInMonth",
         JavaScriptHelper.DateTimeAddMilliseconds => "dateTimeAddMilliseconds",
+        JavaScriptHelper.LinqWhere => "linqWhere",
+        JavaScriptHelper.LinqSelect => "linqSelect",
+        JavaScriptHelper.LinqSkip => "linqSkip",
+        JavaScriptHelper.LinqTake => "linqTake",
+        JavaScriptHelper.LinqConcat => "linqConcat",
+        JavaScriptHelper.LinqAny => "linqAny",
+        JavaScriptHelper.LinqAll => "linqAll",
+        JavaScriptHelper.LinqCount => "linqCount",
+        JavaScriptHelper.LinqContains => "linqContains",
+        JavaScriptHelper.LinqFirst => "linqFirst",
+        JavaScriptHelper.LinqLast => "linqLast",
+        JavaScriptHelper.LinqSingle => "linqSingle",
+        JavaScriptHelper.LinqToArray => "linqToArray",
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 }

@@ -114,6 +114,41 @@ public static class Worker
             return Response.Json(new { rejected });
         }
 
+        if (request.Path == "/linq-errors")
+        {
+            List<int> empty = [];
+            List<int> multiple = [1, 2];
+            var emptyRejected = false;
+            var multipleRejected = false;
+            var nullSourceRejected = false;
+            try
+            {
+                empty.First();
+            }
+            catch (Exception)
+            {
+                emptyRejected = true;
+            }
+            try
+            {
+                multiple.Single();
+            }
+            catch (Exception)
+            {
+                multipleRejected = true;
+            }
+            try
+            {
+                List<int>? missing = null;
+                var query = missing!.Where(value => value > 0);
+            }
+            catch (Exception)
+            {
+                nullSourceRejected = true;
+            }
+            return Response.Json(new { emptyRejected, multipleRejected, nullSourceRejected });
+        }
+
         if (request.Path == "/json-element-text")
         {
             var value = await request.JsonAsync<JsonElement>();

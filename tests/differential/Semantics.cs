@@ -45,7 +45,18 @@ public sealed record CoreSemanticsResult(
     bool InstanceEquals,
     bool UnixEpochIsZero,
     string UnspecifiedDateTime,
-    string UniversalTime);
+    string UniversalTime,
+    int[] LinqProjection,
+    int LinqRepeatedCount,
+    bool LinqAny,
+    bool LinqAll,
+    int LinqCount,
+    bool LinqContains,
+    int LinqFirst,
+    int LinqLast,
+    int LinqSingle,
+    int LinqIntDefault,
+    bool LinqBoolDefault);
 
 public static class CoreSemantics
 {
@@ -73,6 +84,13 @@ public static class CoreSemantics
         var leapDay = new DateTimeOffset(2024, 2, 29, 12, 30, 0, TimeSpan.Zero);
         var date = leapDay.Date;
         var sameDate = new DateTimeOffset(2024, 2, 29, 23, 59, 59, TimeSpan.Zero).Date;
+        var linqSource = new List<int> { 1, 2, 3 };
+        var lazyQuery = linqSource.Where(value => value % 2 == 1)
+            .Select((value, index) => value + index);
+        linqSource.Add(5);
+        List<int> linqTail = [9];
+        List<int> emptyInts = [];
+        List<bool> emptyBools = [];
         return new(signed, unsigned, single, -minimum, -unarySingle == -0.1f, $"{true}:{false}", true.ToString(),
             'A' + 1, 'B' - 'A', character + 5, character - otherCharacter, total,
             instant.Year, instant.Month, instant.Day, instant.DayOfWeek, instant.Hour, instant.Minute,
@@ -86,7 +104,12 @@ public static class CoreSemantics
             DateTimeOffset.Compare(instant, laterInstant), DateTime.Compare(date, sameDate),
             instant.CompareTo(laterInstant), instant.Equals(sameInstant),
             DateTimeOffset.UnixEpoch.ToUnixTimeMilliseconds() == 0,
-            leapDay.DateTime.ToString("O"), leapDay.ToUniversalTime().ToString("O"));
+            leapDay.DateTime.ToString("O"), leapDay.ToUniversalTime().ToString("O"),
+            lazyQuery.Skip(1).Take(2).Concat(linqTail).ToArray(),
+            lazyQuery.Count() + lazyQuery.Count(), linqSource.Any(value => value > 4),
+            linqSource.All(value => value > 0), linqSource.Count(value => value % 2 == 1),
+            linqSource.Contains(3), linqSource.First(), linqSource.Last(),
+            linqSource.Single(value => value == 2), emptyInts.FirstOrDefault(), emptyBools.LastOrDefault());
     }
 }
 

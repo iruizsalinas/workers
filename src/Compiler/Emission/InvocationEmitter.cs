@@ -29,6 +29,8 @@ internal sealed partial class JavaScriptEmitter
     {
         var containingType = method?.ContainingType.ToDisplayString();
         var methodName = method?.Name;
+        if (IsEnumerableMethod(method))
+            return LinqInvocation(invocation, method!, arguments, member, receiverOverride);
         if (containingType is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask" && methodName == "FromResult")
             return $"Promise.resolve({arguments[0]})";
         if (containingType == "System.Threading.Tasks.Task" && methodName == "WhenAll")
@@ -111,13 +113,13 @@ internal sealed partial class JavaScriptEmitter
             ("System.DateTimeOffset", "FromUnixTimeSeconds") when arguments.Length == 1 =>
                 $"{_helpers.Require(JavaScriptHelper.DateTimeFromUnixTime)}({arguments[0]}, true)",
             ("System.DateTime", "IsLeapYear") when arguments.Length == 1 =>
-                DateTimeHelperInvocation(JavaScriptHelper.DateTimeIsLeapYear, arguments),
+                HelperInvocation(JavaScriptHelper.DateTimeIsLeapYear, arguments),
             ("System.DateTime", "DaysInMonth") when arguments.Length == 2 =>
-                DateTimeHelperInvocation(JavaScriptHelper.DateTimeDaysInMonth, arguments),
+                HelperInvocation(JavaScriptHelper.DateTimeDaysInMonth, arguments),
             ("System.DateTime", "Compare") when arguments.Length == 2 =>
-                DateTimeHelperInvocation(JavaScriptHelper.DateTimeCompare, arguments),
+                HelperInvocation(JavaScriptHelper.DateTimeCompare, arguments),
             ("System.DateTimeOffset", "Compare") when arguments.Length == 2 =>
-                DateTimeHelperInvocation(JavaScriptHelper.DateTimeCompare, arguments),
+                HelperInvocation(JavaScriptHelper.DateTimeCompare, arguments),
             ("System.Console", "WriteLine") when arguments.Length == 1 => $"console.log({arguments[0]})",
             ("System.Guid", "NewGuid") => "globalThis.crypto.randomUUID()",
             ("Workers.Performance", "Now") => "performance.now()",
@@ -145,7 +147,7 @@ internal sealed partial class JavaScriptEmitter
     private static bool HasParameters(IMethodSymbol? method, params SpecialType[] types) =>
         method is not null && method.Parameters.Select(parameter => parameter.Type.SpecialType).SequenceEqual(types);
 
-    private string DateTimeHelperInvocation(JavaScriptHelper helper, IReadOnlyList<string> arguments) =>
+    private string HelperInvocation(JavaScriptHelper helper, IReadOnlyList<string> arguments) =>
         $"{_helpers.Require(helper)}({string.Join(", ", arguments)})";
 
     private bool IsUtf8EncodingInvocation(InvocationExpressionSyntax invocation) =>

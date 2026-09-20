@@ -76,6 +76,16 @@ describe("compiler value semantics", () => {
     await expect(response.json()).resolves.toEqual({ rejected: true });
   });
 
+  it("enforces First and Single sequence cardinality", async () => {
+    const response = await invoke("/linq-errors");
+
+    await expect(response.json()).resolves.toEqual({
+      emptyRejected: true,
+      multipleRejected: true,
+      nullSourceRejected: true,
+    });
+  });
+
   it.each([
     ["string", "hello", "hello"],
     ["boolean", true, "True"],
