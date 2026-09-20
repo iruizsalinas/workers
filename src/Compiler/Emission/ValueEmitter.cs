@@ -80,9 +80,7 @@ internal sealed partial class JavaScriptEmitter
                 _ => $"{Expression(member.Expression)}.{LowerFirst(property.Name)}"
             };
         if (property?.ContainingType.ToDisplayString() == "Workers.FormEntry")
-            return property.Name == "File"
-                ? $"({Expression(member.Expression)} instanceof File ? {Expression(member.Expression)} : null)"
-                : $"(typeof {Expression(member.Expression)} === \"string\" ? {Expression(member.Expression)} : null)";
+            return FormEntryMember(member, property);
         if (property?.ContainingType.ToDisplayString() == "Workers.FormFile")
             return $"{Expression(member.Expression)}.{property.Name switch { "FileName" => "name", "ContentType" => "type", "Body" => "", _ => LowerFirst(property.Name) }}".TrimEnd('.');
         if (property?.ContainingType.ToDisplayString() == "Workers.HtmlContentOptions") return property.Name == "Html" ? "{ html: true }" : "{ html: false }";
@@ -136,6 +134,20 @@ internal sealed partial class JavaScriptEmitter
             return $"{Expression(member.Expression)}.length";
         ThrowIfUnsupportedFrameworkMember(symbol, member);
         return $"{Expression(member.Expression)}.{LowerFirst(member.Name.Identifier.Text)}";
+    }
+
+    private string FormEntryMember(MemberAccessExpressionSyntax member, IPropertySymbol property)
+    {
+        var receiver = Expression(member.Expression);
+        var value = _names.Get(
+            $"form-entry:{member.SyntaxTree.FilePath}:{member.SpanStart}",
+            "formEntry");
+        return property.Name switch
+        {
+            "File" => $"(({value}) => {value} instanceof File ? {value} : null)({receiver})",
+            "Text" => $"(({value}) => typeof {value} === \"string\" ? {value} : null)({receiver})",
+            _ => throw UnsupportedSymbol(property, member)
+        };
     }
 
     private static bool IsDictionary(ITypeSymbol? type) => type is INamedTypeSymbol named
