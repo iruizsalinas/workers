@@ -61,6 +61,14 @@ internal sealed partial class JavaScriptEmitter
                 Linq(JavaScriptHelper.LinqDistinctBy, source, operationArguments),
             "SequenceEqual" when operationArguments.Length == 1 && SupportsLinqEquality(method.TypeArguments[0]) =>
                 Linq(JavaScriptHelper.LinqSequenceEqual, source, operationArguments),
+            "OrderBy" => LinqOrdering(invocation, method, parameters, source, operationArguments,
+                descending: false, append: false),
+            "OrderByDescending" => LinqOrdering(invocation, method, parameters, source, operationArguments,
+                descending: true, append: false),
+            "ThenBy" => LinqOrdering(invocation, method, parameters, source, operationArguments,
+                descending: false, append: true),
+            "ThenByDescending" => LinqOrdering(invocation, method, parameters, source, operationArguments,
+                descending: true, append: true),
             "ElementAt" when HasInt32(parameters, operationArguments) =>
                 Linq(JavaScriptHelper.LinqElementAt, source, [operationArguments[0], "null", "false"]),
             "ElementAtOrDefault" when HasInt32(parameters, operationArguments) =>
@@ -98,6 +106,39 @@ internal sealed partial class JavaScriptEmitter
         return Linq(JavaScriptHelper.LinqSelectMany, source,
             [arguments[0], arguments.Length == 2 ? arguments[1] : "null", arguments.Length == 2 ? "true" : "false"]);
     }
+
+    private string LinqOrdering(
+        SyntaxNode sourceNode,
+        IMethodSymbol method,
+        IParameterSymbol[] parameters,
+        string source,
+        string[] arguments,
+        bool descending,
+        bool append)
+    {
+        if (arguments.Length != 1 || parameters.Length != 1
+            || parameters[0].Type is not INamedTypeSymbol { DelegateInvokeMethod: { } selector })
+            throw UnsupportedSymbol(method, sourceNode);
+        var keyKind = GetLinqOrderKeyKind(selector.ReturnType);
+        if (keyKind is null) throw UnsupportedSymbol(method, sourceNode);
+        return Linq(JavaScriptHelper.LinqOrder, source,
+            [arguments[0], descending ? "true" : "false", ((int)keyKind).ToString(), append ? "true" : "false"]);
+    }
+
+    private static LinqOrderKeyKind? GetLinqOrderKeyKind(ITypeSymbol type)
+    {
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            type = nullable.TypeArguments[0];
+        if (type.ToDisplayString() is "System.DateTime" or "System.DateTimeOffset")
+            return LinqOrderKeyKind.DateTime;
+        if (type.SpecialType == SpecialType.System_Char) return LinqOrderKeyKind.Character;
+        if (type.TypeKind == TypeKind.Enum || type.SpecialType == SpecialType.System_Boolean
+            || type.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Double)
+            return LinqOrderKeyKind.Numeric;
+        return null;
+    }
+
+    private enum LinqOrderKeyKind { Numeric, Character, DateTime }
 
     private string LinqElement(
         SyntaxNode sourceNode,

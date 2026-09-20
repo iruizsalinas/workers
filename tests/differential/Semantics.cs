@@ -66,7 +66,11 @@ public sealed record CoreSemanticsResult(
     string[] LinqDistinctBy,
     bool LinqSequenceEqual,
     int LinqElementAt,
-    int LinqElementDefault);
+    int LinqElementDefault,
+    int[] LinqOrdered,
+    int[] LinqNullableOrdered,
+    int[] LinqDateOrdered,
+    char[] LinqCharOrdered);
 
 public static class CoreSemantics
 {
@@ -104,6 +108,18 @@ public static class CoreSemantics
         List<List<int>> linqGroups = [new List<int> { 1, 2 }, new List<int> { 3 }];
         List<int> repeated = [1, 2, 1, 3];
         List<string> words = ["a", "b", "cc", "dd"];
+        List<SortItem> sortItems = [
+            new SortItem(2, 5, 1), new SortItem(1, 7, 2),
+            new SortItem(1, 7, 3), new SortItem(1, 3, 4)
+        ];
+        var orderedItems = sortItems.OrderBy(item => item.Group).ThenByDescending(item => item.Score);
+        sortItems.Add(new SortItem(1, 9, 5));
+        List<NullableSortItem> nullableItems = [
+            new NullableSortItem(2, 1), new NullableSortItem(null, 2), new NullableSortItem(1, 3)
+        ];
+        List<DateSortItem> dateItems = [
+            new DateSortItem(laterInstant, 1), new DateSortItem(instant, 2)
+        ];
         return new(signed, unsigned, single, -minimum, -unarySingle == -0.1f, $"{true}:{false}", true.ToString(),
             'A' + 1, 'B' - 'A', character + 5, character - otherCharacter, total,
             instant.Year, instant.Month, instant.Day, instant.DayOfWeek, instant.Hour, instant.Minute,
@@ -129,7 +145,11 @@ public static class CoreSemantics
             linqGroups.SelectMany(group => group, (group, value) => value + group.Count).ToArray(),
             linqSource.SkipWhile((value, index) => value <= index + 1).TakeWhile(value => value <= 5).ToArray(),
             repeated.Distinct().ToArray(), words.DistinctBy(word => word.Length).ToArray(),
-            "😀".SequenceEqual("😀"), linqSource.ElementAt(1), linqSource.ElementAtOrDefault(-1));
+            "😀".SequenceEqual("😀"), linqSource.ElementAt(1), linqSource.ElementAtOrDefault(-1),
+            orderedItems.Select(item => item.Id).ToArray(),
+            nullableItems.OrderBy(item => item.Key).Select(item => item.Id).ToArray(),
+            dateItems.OrderBy(item => item.Instant).Select(item => item.Id).ToArray(),
+            new List<char> { 'B', 'A', 'C' }.OrderBy(character => character).ToArray());
     }
 }
 
@@ -144,3 +164,7 @@ public sealed class PropertyCollision
     public int Value { get; init; }
     public int value { get; init; }
 }
+
+public sealed record SortItem(int Group, int Score, int Id);
+public sealed record NullableSortItem(int? Key, int Id);
+public sealed record DateSortItem(DateTimeOffset Instant, int Id);

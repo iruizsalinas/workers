@@ -6,7 +6,7 @@ internal enum JavaScriptHelper
     DateTimeIsLeapYear, DateTimeDaysInMonth, DateTimeAddMilliseconds,
     LinqValues, LinqWhere, LinqSelect, LinqSelectMany, LinqAppend, LinqPrepend, LinqSkip, LinqTake,
     LinqSkipWhile, LinqTakeWhile, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains, LinqDistinct,
-    LinqDistinctBy, LinqSequenceEqual, LinqElementAt, LinqFirst, LinqLast, LinqSingle, LinqToArray
+    LinqDistinctBy, LinqSequenceEqual, LinqOrder, LinqElementAt, LinqFirst, LinqLast, LinqSingle, LinqToArray
 }
 
 internal sealed class HelperRegistry(GeneratedNameAllocator names)
@@ -74,6 +74,7 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.LinqDistinct => "linqDistinct",
         JavaScriptHelper.LinqDistinctBy => "linqDistinctBy",
         JavaScriptHelper.LinqSequenceEqual => "linqSequenceEqual",
+        JavaScriptHelper.LinqOrder => "linqOrder",
         JavaScriptHelper.LinqElementAt => "linqElementAt",
         JavaScriptHelper.LinqFirst => "linqFirst",
         JavaScriptHelper.LinqLast => "linqLast",
