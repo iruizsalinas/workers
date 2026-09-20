@@ -121,7 +121,7 @@ internal sealed partial class JavaScriptEmitter
         {
             var argument = invocation.ArgumentList.Arguments[index];
             var parameter = argument.NameColon is { } name
-                ? method.Parameters.Single(item => item.Name == name.Name.Identifier.Text)
+                ? method.Parameters.Single(item => item.Name == name.Name.Identifier.ValueText)
                 : method.Parameters[Math.Min(index, method.Parameters.Length - 1)];
             values.Add((parameter, Expression(argument.Expression)));
         }

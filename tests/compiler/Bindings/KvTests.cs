@@ -46,4 +46,25 @@ public sealed class KvTests
         Assert.Contains("env[\"DATA\"].get(\"bytes\", { type: \"arrayBuffer\" })", module);
     }
 
+    [Fact]
+    public void ResolvesVerbatimNamedBindingArgumentsByTheirCSharpNames()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                {
+                    await env.Kv("DATA").PutTextAsync(value: "content", @key: "entry");
+                    return Response.Empty();
+                }
+            }
+            """);
+
+        Assert.Contains(".put($workers$arg2, $workers$arg1)", module);
+        Assert.Contains(", \"content\", \"entry\")", module);
+        Assert.DoesNotContain("@key", module);
+    }
+
 }

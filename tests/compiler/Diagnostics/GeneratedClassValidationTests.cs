@@ -142,9 +142,9 @@ public sealed class GeneratedClassValidationTests
     }
 
     [Fact]
-    public void AllowsPrivateConstructorNamedHelpers()
+    public void RejectsPrivateConstructorNamedHelpersThatWouldProduceInvalidJavascript()
     {
-        var module = Compile("""
+        var error = Assert.Throws<NotSupportedException>(() => Compile("""
             using Workers;
             [DurableObject("Example")]
             public class Example
@@ -152,10 +152,10 @@ public sealed class GeneratedClassValidationTests
                 private void constructor() { }
                 public void Run() => constructor();
             }
-            """);
+            """));
 
-        Assert.Contains("#constructor()", module);
-        Assert.Contains("this.#constructor()", module);
+        Assert.StartsWith("WRK118:", error.Message);
+        Assert.Contains("reserved JavaScript class method name 'constructor'", error.Message);
     }
 
     [Fact]
