@@ -6,6 +6,10 @@ public sealed record CoreSemanticsResult(
     bool NegatedSingleMatches,
     string BooleanText,
     string BooleanToString,
+    int CharacterLiteralAdd,
+    int CharacterLiteralDifference,
+    int CharacterVariableAdd,
+    int CharacterVariableDifference,
     int LoopTotal);
 
 public static class CoreSemantics
@@ -20,9 +24,12 @@ public static class CoreSemantics
         single += 1f;
         var minimum = int.MinValue;
         var unarySingle = 0.1f;
+        var character = 'C';
+        var otherCharacter = 'A';
         var total = 0;
         for (var index = 0; index < 4; index++)
             total += index;
-        return new(signed, unsigned, single, -minimum, -unarySingle == -0.1f, $"{true}:{false}", true.ToString(), total);
+        return new(signed, unsigned, single, -minimum, -unarySingle == -0.1f, $"{true}:{false}", true.ToString(),
+            'A' + 1, 'B' - 'A', character + 5, character - otherCharacter, total);
     }
 }

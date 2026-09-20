@@ -152,4 +152,47 @@ public sealed class ArithmeticTests
 
         Assert.Contains("WRK108", error.Message);
     }
+
+    [Fact]
+    public void PromotesCharactersToUtf16CodeUnitsForArithmetic()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx) =>
+                    Response.Json(Calculate('C', 'A'));
+
+                private static object Calculate(char value, char other) => new
+                {
+                    literalAdd = 'A' + 1,
+                    literalDifference = 'B' - 'A',
+                    variableAdd = value + 5,
+                    variableDifference = value - other
+                };
+            }
+            """);
+
+        Assert.Contains("(\"A\").charCodeAt(0) + 1", module);
+        Assert.Contains("(\"B\").charCodeAt(0) - (\"A\").charCodeAt(0)", module);
+        Assert.Contains("(value).charCodeAt(0) + 5", module);
+        Assert.Contains("(value).charCodeAt(0) - (other).charCodeAt(0)", module);
+    }
+
+    [Fact]
+    public void ContinuesToRejectCharacterCasts()
+    {
+        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx) =>
+                    Response.Text(((char)65).ToString());
+            }
+            """));
+
+        Assert.Contains("WRK101", error.Message);
+    }
 }

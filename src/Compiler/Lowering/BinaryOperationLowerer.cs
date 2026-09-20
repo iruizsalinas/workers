@@ -11,8 +11,11 @@ internal sealed partial class JavaScriptEmitter
         if (operation?.OperatorMethod is not null)
             throw UnsupportedSymbol(operation.OperatorMethod, expression);
         var type = operation?.Type?.SpecialType ?? SpecialType.None;
-        var left = Expression(expression.Left);
-        var right = Expression(expression.Right);
+        var numeric = type != SpecialType.System_String
+            && expression.Kind() is (SyntaxKind.AddExpression or SyntaxKind.SubtractExpression
+                or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression or SyntaxKind.ModuloExpression);
+        var left = BinaryOperand(expression.Left, numeric);
+        var right = BinaryOperand(expression.Right, numeric);
         var integral32 = type is SpecialType.System_Int32 or SpecialType.System_UInt32;
 
         if (expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression
@@ -67,6 +70,14 @@ internal sealed partial class JavaScriptEmitter
             return $"Math.fround({left} {BinaryOperator(expression.Kind())} {right})";
 
         return $"{left} {BinaryOperator(expression.Kind())} {right}";
+    }
+
+    private string BinaryOperand(ExpressionSyntax operand, bool numeric)
+    {
+        var value = Expression(operand);
+        return numeric && _model.GetTypeInfo(operand).Type?.SpecialType == SpecialType.System_Char
+            ? $"({value}).charCodeAt(0)"
+            : value;
     }
 
     private static string BinaryOperator(SyntaxKind kind) => kind switch
