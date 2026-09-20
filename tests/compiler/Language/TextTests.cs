@@ -53,6 +53,26 @@ public sealed class TextTests
     }
 
     [Fact]
+    public void UsesClrFormattingForBooleanToString()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var enabled = true;
+                    return Response.Text(enabled.ToString());
+                }
+            }
+            """);
+
+        Assert.Contains("(enabled ? \"True\" : \"False\")", module);
+        Assert.DoesNotContain("String(enabled)", module);
+    }
+
+    [Fact]
     public void UsesNativeUtf8Base64UriAndStringOperations()
     {
         var module = Compile("""

@@ -34,7 +34,7 @@ internal sealed partial class JavaScriptEmitter
                    && type?.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Decimal =>
                 $"String({receiver})",
             _ when name == "ToString" && arguments.Length == 0 && type?.SpecialType == SpecialType.System_Boolean =>
-                $"String({receiver})",
+                $"({receiver} ? \"True\" : \"False\")",
             _ => ""
         };
         return result.Length != 0;
