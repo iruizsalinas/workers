@@ -65,4 +65,4 @@ Starting with `0.3.0`, Workers compiles a focused C# profile directly to native 
 
 ## Examples
 
-See the [examples](./examples) directory for complete Workers covering HTTP, storage, queues, scheduled events, and other platform APIs.
+See the [examples](./examples) directory for complete Workers covering HTTP, storage, queues, scheduled events, and other platform APIs. You can also explore a [live demo](https://cloudflare-workers-dotnet.mailpost.workers.dev/) built by [Michiel Post](https://github.com/michielpost).
