@@ -42,8 +42,7 @@ internal sealed partial class JavaScriptEmitter
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())
         {
             var methodSymbol = _model.GetDeclaredSymbol(method)!;
-            var parameters = string.Join(", ", method.ParameterList.Parameters.Select(parameter =>
-                parameter.Default is null ? ParameterName(parameter) : $"{ParameterName(parameter)} = {Expression(parameter.Default.Value)}"));
+            var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterDeclaration));
             _output.Append("  ").Append(method.Modifiers.Any(SyntaxKind.AsyncKeyword) ? "async " : "")
                 .Append(GeneratedInstanceMethodName(methodSymbol))
                 .Append('(').Append(parameters).AppendLine(") {");

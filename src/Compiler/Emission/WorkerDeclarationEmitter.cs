@@ -21,7 +21,7 @@ internal sealed partial class JavaScriptEmitter
         if (constructor is not null || fields.Length != 0)
         {
             _output.Append("  constructor(")
-                .Append(string.Join(", ", constructor?.ParameterList.Parameters.Select(ParameterName) ?? []))
+                .Append(string.Join(", ", constructor?.ParameterList.Parameters.Select(ParameterDeclaration) ?? []))
                 .AppendLine(") {");
             foreach (var field in fields)
                 foreach (var variable in field.Declaration.Variables)
@@ -38,7 +38,7 @@ internal sealed partial class JavaScriptEmitter
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())
         {
             var name = GeneratedInstanceMethodName(_model.GetDeclaredSymbol(method)!);
-            var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterName));
+            var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterDeclaration));
             var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);
             _output.Append("  ").Append(isAsync ? "async " : "").Append(name).Append('(').Append(parameters).AppendLine(") {");
             if (method.ExpressionBody is not null)
@@ -95,7 +95,7 @@ internal sealed partial class JavaScriptEmitter
         {
             _model = model;
             var name = GeneratedInstanceMethodName(model.GetDeclaredSymbol(method)!);
-            var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterName));
+            var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterDeclaration));
             var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);
             _output.Append("  ").Append(isAsync ? "async " : "").Append(name).Append('(').Append(parameters).AppendLine(") {");
             if (method.ExpressionBody is not null)
@@ -111,6 +111,11 @@ internal sealed partial class JavaScriptEmitter
         type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.DurableObjectAttribute")
         || type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.WorkerEntrypointAttribute")
         || type.BaseType?.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler";
+
+    private string ParameterDeclaration(ParameterSyntax parameter) =>
+        parameter.Default is null
+            ? ParameterName(parameter)
+            : $"{ParameterName(parameter)} = {Expression(parameter.Default.Value)}";
 
     private static void ValidateGeneratedClass(ClassDeclarationSyntax declaration, SemanticModel model, string typeName)
     {
@@ -204,8 +209,7 @@ internal sealed partial class JavaScriptEmitter
             if (!_emittedUserMethods.Add(symbol)) continue;
             var declaration = (MethodDeclarationSyntax)symbol.DeclaringSyntaxReferences.Single().GetSyntax();
             _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
-            var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(parameter =>
-                parameter.Default is null ? ParameterName(parameter) : $"{ParameterName(parameter)} = {Expression(parameter.Default.Value)}"));
+            var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(ParameterDeclaration));
             var isAsync = declaration.Modifiers.Any(SyntaxKind.AsyncKeyword);
             var isIterator = symbol.ReturnType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IAsyncEnumerable<T>";
             _output.Append(isAsync ? "async " : "").Append(isIterator ? "function* " : "function ")

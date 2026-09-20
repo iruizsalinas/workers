@@ -46,4 +46,21 @@ public sealed class DurableObjectTests
         Assert.Contains("this._label = null;", module);
     }
 
+    [Fact]
+    public void PreservesOptionalMethodParameters()
+    {
+        var module = Compile("""
+            using Workers;
+            [DurableObject("Counter")]
+            public sealed class Counter
+            {
+                public int Add(int amount = 1) => amount;
+                public int Test() => Add();
+            }
+            """);
+
+        Assert.Contains("add(amount = 1)", module);
+        Assert.Contains("return this.add();", module);
+    }
+
 }

@@ -241,9 +241,13 @@ public sealed class RuntimeApiTests
             using System.Threading.Tasks;
             public sealed class Handler : HtmlElementHandler
             {
+                private readonly string _prefix;
+                public Handler(string prefix = "data") => _prefix = prefix;
+                private string Attribute(string suffix = "worker") => $"{_prefix}-{suffix}";
+
                 public override ValueTask ElementAsync(HtmlElement element)
                 {
-                    element.SetAttribute("data-worker", "csharp");
+                    element.SetAttribute(Attribute(), "csharp");
                     return ValueTask.CompletedTask;
                 }
             }
@@ -258,9 +262,12 @@ public sealed class RuntimeApiTests
             """);
 
         Assert.Contains("class Handler", module);
+        Assert.Contains("constructor(prefix = \"data\")", module);
+        Assert.Contains("#attribute(suffix = \"worker\")", module);
+        Assert.Contains("this.#attribute()", module);
         Assert.Contains("  element(element)", module);
         Assert.DoesNotContain("async element(element)", module);
-        Assert.Contains("value.setAttribute(\"data-worker\", \"csharp\")", module);
+        Assert.Contains("value.setAttribute(this.#attribute(), \"csharp\")", module);
         Assert.Contains("new HTMLRewriter()).transform", module);
     }
 
