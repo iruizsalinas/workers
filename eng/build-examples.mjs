@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -42,6 +42,17 @@ await runParallel(projects, async (project) => {
 
 console.log(`Built ${projects.length} runtime projects in ${formatDuration(performance.now() - started)}.`);
 
+const differentialOutput = await runDotnet([
+  "run", "--project", join(repositoryRoot, "tests", "differential", "Differential.csproj"),
+  "-c", "Release", "--verbosity", "quiet", "-p:NuGetAudit=false",
+]);
+const differentialJson = differentialOutput.trim().split(/\r?\n/).at(-1);
+JSON.parse(differentialJson);
+const generatedDirectory = join(repositoryRoot, "tests", "runtime", "generated");
+mkdirSync(generatedDirectory, { recursive: true });
+writeFileSync(join(generatedDirectory, "differential.json"), `${differentialJson}\n`);
+console.log("Generated CLR differential baseline.");
+
 function findProjects(root) {
   return readdirSync(root, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -84,7 +95,7 @@ function runDotnet(arguments_) {
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) {
-        resolvePromise();
+        resolvePromise(output);
         return;
       }
       reject(new Error(

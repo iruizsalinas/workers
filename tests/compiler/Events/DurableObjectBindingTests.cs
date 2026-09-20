@@ -68,4 +68,33 @@ public sealed class DurableObjectBindingTests
         Assert.Contains("this._state.storage.put(\"count\", (count + 1) | 0)", module);
     }
 
+    [Fact]
+    public void UsesTheSynchronousCurrentDurableObjectIdentityApi()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var ns = env.DurableObject("OBJECTS").Jurisdiction("eu");
+                    var first = ns.IdFromName("one");
+                    var restored = ns.IdFromString(first.ToString());
+                    var unique = ns.NewUniqueId();
+                    var stub = ns.Get(first);
+                    return Response.Json(new { same = first.Equals(restored), idName = first.Name, first.Jurisdiction, stub.Id, stubName = stub.Name });
+                }
+            }
+            """);
+
+        Assert.Contains("env[\"OBJECTS\"].jurisdiction(\"eu\")", module);
+        Assert.Contains("ns.idFromName(\"one\")", module);
+        Assert.Contains("ns.idFromString(first.toString())", module);
+        Assert.Contains("ns.newUniqueId()", module);
+        Assert.Contains("first.equals(restored)", module);
+        Assert.Contains("jurisdiction: first.jurisdiction", module);
+        Assert.Contains("id: stub.id", module);
+    }
+
 }

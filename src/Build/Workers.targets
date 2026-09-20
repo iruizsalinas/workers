@@ -3,12 +3,16 @@
     <WorkerOutputPath Condition="'$(WorkerOutputPath)' == ''">$(MSBuildProjectDirectory)\dist\worker.js</WorkerOutputPath>
     <_WorkersOutputDirectory>$([System.IO.Path]::GetDirectoryName('$(WorkerOutputPath)'))</_WorkersOutputDirectory>
     <_WorkersApiAssembly Condition="Exists('$(MSBuildThisFileDirectory)..\lib\$(TargetFramework)\Workers.dll')">$(MSBuildThisFileDirectory)..\lib\$(TargetFramework)\Workers.dll</_WorkersApiAssembly>
-    <_WorkersApiAssembly Condition="'$(_WorkersApiAssembly)' == '' and Exists('$(MSBuildThisFileDirectory)..\bin\$(Configuration)\$(TargetFramework)\Workers.dll')">$(MSBuildThisFileDirectory)..\bin\$(Configuration)\$(TargetFramework)\Workers.dll</_WorkersApiAssembly>
+    <_WorkersApiAssembly Condition="'$(_WorkersApiAssembly)' == ''">$(MSBuildThisFileDirectory)..\bin\$(Configuration)\$(TargetFramework)\Workers.dll</_WorkersApiAssembly>
     <_WorkersCompilerPath Condition="Exists('$(MSBuildThisFileDirectory)..\tools\net10.0\Workers.Compiler.dll')">$(MSBuildThisFileDirectory)..\tools\net10.0\Workers.Compiler.dll</_WorkersCompilerPath>
-    <_WorkersCompilerPath Condition="'$(_WorkersCompilerPath)' == '' and Exists('$(MSBuildThisFileDirectory)..\Compiler\bin\$(Configuration)\net10.0\Workers.Compiler.dll')">$(MSBuildThisFileDirectory)..\Compiler\bin\$(Configuration)\net10.0\Workers.Compiler.dll</_WorkersCompilerPath>
+    <_WorkersCompilerPath Condition="'$(_WorkersCompilerPath)' == ''">$(MSBuildThisFileDirectory)..\Compiler\bin\$(Configuration)\net10.0\Workers.Compiler.dll</_WorkersCompilerPath>
     <_WorkersDotNetHost Condition="'$(DotNetHostPath)' != ''">$(DotNetHostPath)</_WorkersDotNetHost>
     <_WorkersDotNetHost Condition="'$(_WorkersDotNetHost)' == ''">dotnet</_WorkersDotNetHost>
   </PropertyGroup>
+
+  <Target Name="RemoveStaleWorkerArtifact" BeforeTargets="CoreCompile;Clean" Condition="'$(IsCrossTargetingBuild)' != 'true'">
+    <Delete Files="$(WorkerOutputPath)" />
+  </Target>
 
   <Target Name="CompileWorker"
           AfterTargets="CoreCompile"

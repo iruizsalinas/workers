@@ -76,4 +76,32 @@ public sealed class WorkerEntrypointTests
         Assert.Contains("constructor(ctx, env) { super(ctx, env);", module);
         Assert.Contains("this._count = 0;", module);
     }
+
+    [Theory]
+    [InlineData("invalid-name")]
+    [InlineData("class")]
+    public void RejectsInvalidJavascriptExportNames(string name)
+    {
+        var error = Assert.Throws<NotSupportedException>(() => Compile($$"""
+            using Workers;
+            [WorkerEntrypoint("{{name}}")]
+            public sealed class Entry : WorkerEntrypoint { public string Ping() => "ok"; }
+            """));
+
+        Assert.Contains("WRK117", error.Message);
+    }
+
+    [Theory]
+    [InlineData("public static string Ping() => \"ok\";")]
+    [InlineData("public string Name { get; } = \"ok\";")]
+    public void RejectsGeneratedClassMembersThatWouldHaveTheWrongJavascriptShape(string member)
+    {
+        var error = Assert.Throws<NotSupportedException>(() => Compile($$"""
+            using Workers;
+            [WorkerEntrypoint("Entry")]
+            public sealed class Entry : WorkerEntrypoint { {{member}} }
+            """));
+
+        Assert.Contains("WRK116", error.Message);
+    }
 }

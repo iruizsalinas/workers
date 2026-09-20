@@ -15,6 +15,8 @@ internal sealed partial class JavaScriptEmitter
                 _output.AppendLine(";");
                 break;
             case LocalDeclarationStatementSyntax local:
+                if (!local.UsingKeyword.IsKind(SyntaxKind.None))
+                    throw Unsupported("WRK108", local);
                 foreach (var variable in local.Declaration.Variables)
                     _output.Append(indent).Append("let ").Append(UserIdentifier(_model.GetDeclaredSymbol(variable)!, variable.Identifier))
                         .Append(variable.Initializer is null ? "" : " = " + Expression(variable.Initializer.Value)).AppendLine(";");
@@ -36,7 +38,7 @@ internal sealed partial class JavaScriptEmitter
                 else if (IsDictionary(_model.GetTypeInfo(loop.Expression).Type))
                     enumerable = $"Object.entries({enumerable})";
                 _output.Append(indent)
-                    .Append("for (const ")
+                    .Append(loop.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword) ? "for await (const " : "for (const ")
                     .Append(UserIdentifier(_model.GetDeclaredSymbol(loop)!, loop.Identifier))
                     .Append(" of ")
                     .Append(enumerable)

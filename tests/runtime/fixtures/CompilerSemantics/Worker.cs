@@ -7,6 +7,9 @@ public static class Worker
     [Fetch]
     public static Response Fetch(Request request, Env environment, Context context)
     {
+        if (request.Path == "/differential")
+            return Response.Json(CoreSemantics.Run());
+
         if (request.Path == "/collections")
         {
             var values = new List<int> { 2, 4, 6 };

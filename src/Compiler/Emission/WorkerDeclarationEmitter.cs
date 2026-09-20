@@ -10,22 +10,34 @@ internal sealed partial class JavaScriptEmitter
     {
         _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
         var type = _model.GetDeclaredSymbol(declaration)!;
+        ValidateGeneratedClass(declaration, _model, type.Name);
+        ThrowIfDuplicateGeneratedMethods(declaration, _model, type.Name);
         _output.Append("class ").Append(UserIdentifier(type, declaration.Identifier)).AppendLine(" {");
         var constructors = declaration.Members.OfType<ConstructorDeclarationSyntax>().ToArray();
         if (constructors.Length > 1)
             throw Unsupported("WRK109", constructors[1]);
         var constructor = constructors.SingleOrDefault();
-        if (constructor is not null)
+        var fields = declaration.Members.OfType<FieldDeclarationSyntax>().ToArray();
+        if (constructor is not null || fields.Length != 0)
         {
             _output.Append("  constructor(")
-                .Append(string.Join(", ", constructor.ParameterList.Parameters.Select(ParameterName)))
+                .Append(string.Join(", ", constructor?.ParameterList.Parameters.Select(ParameterName) ?? []))
                 .AppendLine(") {");
-            foreach (var statement in constructor.Body?.Statements ?? []) EmitStatement(statement, 2);
+            foreach (var field in fields)
+                foreach (var variable in field.Declaration.Variables)
+                    _output.Append("    this.").Append(UserIdentifier(_model.GetDeclaredSymbol(variable)!, variable.Identifier)).Append(" = ")
+                        .Append(variable.Initializer is null
+                            ? DefaultFieldValue(_model.GetTypeInfo(field.Declaration.Type).Type!, variable)
+                            : Expression(variable.Initializer.Value)).AppendLine(";");
+            if (constructor?.ExpressionBody is not null)
+                _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
+            else
+                foreach (var statement in constructor?.Body?.Statements ?? []) EmitStatement(statement, 2);
             _output.AppendLine("  }");
         }
-        foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>().Where(item => item.Modifiers.Any(SyntaxKind.PublicKeyword)))
+        foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())
         {
-            var name = LowerNativeMethodName(method.Identifier.Text);
+            var name = GeneratedInstanceMethodName(_model.GetDeclaredSymbol(method)!);
             var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterName));
             var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);
             _output.Append("  ").Append(isAsync ? "async " : "").Append(name).Append('(').Append(parameters).AppendLine(") {");
@@ -42,6 +54,7 @@ internal sealed partial class JavaScriptEmitter
     {
         var model = _compilation.GetSemanticModel(declaration.SyntaxTree);
         var symbol = model.GetDeclaredSymbol(declaration)!;
+        ValidateGeneratedClass(declaration, model, symbol.Name);
         ThrowIfDuplicateGeneratedMethods(declaration, model, symbol.Name);
         var attribute = symbol.GetAttributes().Single(item => item.AttributeClass?.ToDisplayString() == "Workers.DurableObjectAttribute");
         var exportName = attribute.ConstructorArguments.Length == 1
@@ -98,6 +111,19 @@ internal sealed partial class JavaScriptEmitter
         type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.DurableObjectAttribute")
         || type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.WorkerEntrypointAttribute")
         || type.BaseType?.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler";
+
+    private static void ValidateGeneratedClass(ClassDeclarationSyntax declaration, SemanticModel model, string typeName)
+    {
+        var unsupported = declaration.Members.FirstOrDefault(member => member switch
+        {
+            PropertyDeclarationSyntax => true,
+            FieldDeclarationSyntax field => field.Modifiers.Any(SyntaxKind.StaticKeyword),
+            MethodDeclarationSyntax method => model.GetDeclaredSymbol(method)?.IsStatic == true,
+            _ => false
+        });
+        if (unsupported is not null)
+            throw new NotSupportedException($"WRK116: '{typeName}' contains a static member or property that cannot be emitted safely: {unsupported}");
+    }
 
     private static string GeneratedInstanceMethodName(IMethodSymbol method)
     {

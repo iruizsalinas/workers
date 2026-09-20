@@ -8,9 +8,13 @@ internal sealed partial class JavaScriptEmitter
     {
         _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
         var symbol = _model.GetDeclaredSymbol(declaration)!;
+        ValidateGeneratedClass(declaration, _model, symbol.Name);
         ThrowIfDuplicateGeneratedMethods(declaration, _model, symbol.Name);
         var attribute = symbol.GetAttributes().Single(item => item.AttributeClass?.ToDisplayString() == "Workers.WorkerEntrypointAttribute");
         var exportName = attribute.ConstructorArguments.Length == 0 ? null : attribute.ConstructorArguments[0].Value?.ToString();
+        var emittedName = exportName ?? symbol.Name;
+        if (!IsLegalJavascriptIdentifier(emittedName) || JavascriptReservedWords.Contains(emittedName))
+            throw new NotSupportedException($"WRK117: '{emittedName}' is not a valid JavaScript export name.");
         var baseClass = _imports.Require("cloudflare:workers", "WorkerEntrypoint", "WorkerEntrypoint");
         _output.Append(exportName is null ? "export default class " : "export class ")
             .Append(exportName ?? symbol.Name).Append(" extends ").Append(baseClass).AppendLine(" {");

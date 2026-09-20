@@ -32,9 +32,26 @@ internal sealed partial class JavaScriptEmitter
         InterpolationSyntax { FormatClause.FormatStringToken.ValueText: "O" or "o" } item =>
             "${" + DateTimeRoundTrip(Expression(item.Expression)) + "}",
         InterpolationSyntax { FormatClause: not null } item => throw Unsupported("WRK108", item),
-        InterpolationSyntax item => "${" + Expression(item.Expression) + " ?? \"\"}",
+        InterpolationSyntax item => "${" + InterpolationValue(item) + "}",
         _ => throw Unsupported("WRK108", value)
     };
+
+    private string InterpolationValue(InterpolationSyntax item)
+    {
+        var expression = Expression(item.Expression);
+        var type = _model.GetTypeInfo(item.Expression).Type;
+        var underlying = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
+            ? nullable.TypeArguments[0]
+            : type;
+        if (underlying?.SpecialType == SpecialType.System_Boolean)
+            return $"(($workers$value) => $workers$value == null ? \"\" : ($workers$value ? \"True\" : \"False\"))({expression})";
+        if (underlying?.SpecialType is SpecialType.System_String or SpecialType.System_Char
+            or >= SpecialType.System_SByte and <= SpecialType.System_Double)
+            return $"{expression} ?? \"\"";
+        if (underlying?.ToDisplayString() == "System.Guid")
+            return $"{expression} ?? \"\"";
+        throw Unsupported("WRK108", item);
+    }
 
     private static string EscapeTemplateText(string value) => value.Replace("{{", "{", StringComparison.Ordinal)
         .Replace("}}", "}", StringComparison.Ordinal).Replace("\\", "\\\\", StringComparison.Ordinal)

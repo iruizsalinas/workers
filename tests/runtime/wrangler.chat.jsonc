@@ -2,7 +2,7 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "workers-csharp-chat-room-tests",
   "main": "fixtures/ChatRoom/dist/worker.js",
-  "compatibility_date": "2026-08-15",
+  "compatibility_date": "2026-08-18",
   "durable_objects": {
     "bindings": [
       {

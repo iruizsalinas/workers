@@ -1,6 +1,7 @@
 import { createExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import compilerSemantics from "../fixtures/CompilerSemantics/dist/worker.js";
+import clrSemantics from "../generated/differential.json";
 
 const invoke = (path, method = "GET") => compilerSemantics.fetch(
   new Request(`https://worker.test${path}`, { method }),
@@ -9,6 +10,12 @@ const invoke = (path, method = "GET") => compilerSemantics.fetch(
 );
 
 describe("compiler value semantics", () => {
+  it("matches the CLR for the shared core-semantics corpus", async () => {
+    const response = await invoke("/differential");
+
+    await expect(response.json()).resolves.toEqual(clrSemantics);
+  });
+
   it("preserves collection initializer elements", async () => {
     const response = await invoke("/collections");
 

@@ -2,7 +2,7 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "workers-csharp-service-tests",
   "main": "fixtures/ServiceGateway/dist/worker.js",
-  "compatibility_date": "2026-08-15",
+  "compatibility_date": "2026-08-18",
   "services": [
     { "binding": "CORE", "service": "workers-csharp-service-tests", "entrypoint": "CoreService" },
     { "binding": "USERS", "service": "workers-csharp-service-tests", "entrypoint": "UserApi" },

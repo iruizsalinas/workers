@@ -74,7 +74,8 @@ internal sealed partial class JavaScriptEmitter
             ("IndexOf", 2) when source.ArgumentList.Arguments[1].Expression is MemberAccessExpressionSyntax comparison
                                 && comparison.Name.Identifier.Text == "Ordinal" =>
                 $"{receiver}.indexOf({arguments[0]})",
-            ("Split", 2) when source.ArgumentList.Arguments[1].Expression is MemberAccessExpressionSyntax option
+            ("Split", 2) when method?.Parameters[0].Type.SpecialType is SpecialType.System_String or SpecialType.System_Char
+                              && source.ArgumentList.Arguments[1].Expression is MemberAccessExpressionSyntax option
                               && option.Name.Identifier.Text == "RemoveEmptyEntries" =>
                 $"{receiver}.split({arguments[0]}).filter(Boolean)",
             _ => throw UnsupportedSymbol(method, source)

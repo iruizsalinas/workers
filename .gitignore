@@ -4,3 +4,4 @@ dist/
 .wrangler/
 .artifacts/
 node_modules/
+tests/runtime/generated/

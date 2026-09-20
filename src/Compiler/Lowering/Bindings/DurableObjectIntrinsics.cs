@@ -6,14 +6,16 @@ DurableObjectIntrinsics
     public static IReadOnlyDictionary<(string Type, string Method), BindingIntrinsic> Methods { get; } =
         new Dictionary<(string Type, string Method), BindingIntrinsic>
         {
-            [Key("Workers.IDurableObjectNamespace", "IdFromNameAsync")] = Direct("idFromName"),
-            [Key("Workers.IDurableObjectNamespace", "IdFromStringAsync")] = Direct("idFromString"),
-            [Key("Workers.IDurableObjectNamespace", "NewUniqueIdAsync")] = Direct("newUniqueId"),
+            [Key("Workers.IDurableObjectNamespace", "IdFromName")] = Direct("idFromName"),
+            [Key("Workers.IDurableObjectNamespace", "IdFromString")] = Direct("idFromString"),
+            [Key("Workers.IDurableObjectNamespace", "NewUniqueId")] = Direct("newUniqueId"),
+            [Key("Workers.IDurableObjectNamespace", "Jurisdiction")] = Direct("jurisdiction"),
             [Key("Workers.IDurableObjectNamespace", "Get")] = Direct("get"),
             [Key("Workers.IDurableObjectNamespace", "GetByName")] = Direct("getByName"),
             [Key("Workers.IDurableObjectStub", "InvokeAsync")] = new("", BindingIntrinsicKind.ServiceRpc),
             [Key("Workers.IDurableObjectStub", "InvokeVoidAsync")] = new("", BindingIntrinsicKind.ServiceRpc),
             [Key("Workers.DurableObjectId", "ToString")] = Direct("toString"),
+            [Key("Workers.DurableObjectId", "Equals")] = Direct("equals"),
             [Key("Workers.DurableObjectState", "WaitUntil")] = Direct("waitUntil"),
             [Key("Workers.DurableObjectState", "BlockConcurrencyWhileAsync")] = Direct("blockConcurrencyWhile"),
             [Key("Workers.DurableObjectState", "Abort")] = Direct("abort"),

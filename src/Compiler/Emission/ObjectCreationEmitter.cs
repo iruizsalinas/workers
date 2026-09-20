@@ -27,7 +27,7 @@ internal sealed partial class JavaScriptEmitter
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>" && arguments.Length == 0)
             return $"new Set([{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}])";
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Dictionary<TKey, TValue>"
-            && type.TypeArguments[0].SpecialType == SpecialType.System_String)
+            && type.TypeArguments[0].SpecialType == SpecialType.System_String && arguments.Length == 0)
             return "{ " + string.Join(", ", value.Initializer?.Expressions.Select(DictionaryProperty) ?? []) + " }";
         if (type is not null && type.BaseType?.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler")
             return type.DeclaringSyntaxReferences.Length == 1
@@ -46,9 +46,11 @@ internal sealed partial class JavaScriptEmitter
         PositionalObjectCreation(source, constructor, arguments, values => values.Count switch
         {
             1 => $"new URL({values[0]})",
-            2 when constructor?.ContainingType.ToDisplayString() == "System.Uri" =>
+            2 when constructor?.ContainingType.ToDisplayString() == "System.Uri"
+                   && constructor.Parameters[0].Type.ToDisplayString() == "System.Uri"
+                   && constructor.Parameters[1].Type.SpecialType == SpecialType.System_String =>
                 $"new URL({values[1]}, {values[0]})",
-            2 => $"new URL({values[0]}, {values[1]})",
+            2 when constructor?.ContainingType.ToDisplayString() == "Workers.Url" => $"new URL({values[0]}, {values[1]})",
             _ => throw UnsupportedSymbol(constructor, source)
         });
 

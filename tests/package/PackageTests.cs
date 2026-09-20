@@ -7,7 +7,7 @@ namespace Workers.Package.Tests;
 public sealed class PackageTests
 {
     [Fact]
-    public void Package_builds_a_consumer_worker()
+    public void Package_publishes_a_consumer_and_never_leaves_a_stale_worker()
     {
         using var workspace = TemporaryDirectory.Create();
         var repository = FindRepository();
@@ -32,11 +32,22 @@ public sealed class PackageTests
         File.WriteAllText(Path.Combine(consumer, "Consumer.csproj"), Project(package, workspace.Path));
         File.WriteAllText(Path.Combine(consumer, "Worker.cs"), Source);
 
-        RunDotNet(consumer, "build", "-c", "Release", "--packages", Path.Combine(workspace.Path, "packages"));
+        var packages = Path.Combine(workspace.Path, "packages");
+        RunDotNet(consumer, "publish", "-c", "Release", "--packages", packages);
 
         var module = Path.Combine(consumer, "dist", "worker.js");
         Assert.True(File.Exists(module));
         Assert.Contains("Hello from package", File.ReadAllText(module), StringComparison.Ordinal);
+
+        File.WriteAllText(Path.Combine(consumer, "Worker.cs"), Source.Replace("Response.Text", "Response.DoesNotExist", StringComparison.Ordinal));
+        RunDotNetFailure(consumer, "build", "-c", "Release", "--packages", packages);
+        Assert.False(File.Exists(module), "A failed compilation must not leave the previous Worker artifact deployable.");
+
+        File.WriteAllText(Path.Combine(consumer, "Worker.cs"), Source);
+        RunDotNet(consumer, "build", "-c", "Release", "--packages", packages);
+        Assert.True(File.Exists(module));
+        RunDotNet(consumer, "clean", "-c", "Release");
+        Assert.False(File.Exists(module), "Cleaning the consumer must remove its generated Worker artifact.");
     }
 
     private static string Project(string package, string source) => $$"""
@@ -75,6 +86,18 @@ public sealed class PackageTests
 
     private static void RunDotNet(string directory, params string[] arguments)
     {
+        var (exitCode, output) = ExecuteDotNet(directory, arguments);
+        Assert.True(exitCode == 0, $"dotnet {string.Join(' ', arguments)} failed:{Environment.NewLine}{output}");
+    }
+
+    private static void RunDotNetFailure(string directory, params string[] arguments)
+    {
+        var (exitCode, output) = ExecuteDotNet(directory, arguments);
+        Assert.True(exitCode != 0, $"dotnet {string.Join(' ', arguments)} unexpectedly succeeded:{Environment.NewLine}{output}");
+    }
+
+    private static (int ExitCode, string Output) ExecuteDotNet(string directory, params string[] arguments)
+    {
         var start = new ProcessStartInfo("dotnet")
         {
             WorkingDirectory = directory,
@@ -90,7 +113,7 @@ public sealed class PackageTests
         var error = process.StandardError.ReadToEnd();
         process.WaitForExit();
 
-        Assert.True(process.ExitCode == 0, $"dotnet {string.Join(' ', arguments)} failed:{Environment.NewLine}{output}{error}");
+        return (process.ExitCode, output + error);
     }
 
     private sealed class TemporaryDirectory : IDisposable

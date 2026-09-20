@@ -16,10 +16,10 @@ internal sealed partial class JavaScriptEmitter
             $"-{Expression(value.Operand)}",
         PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.UnaryPlusExpression) =>
             $"+{Expression(value.Operand)}",
-        PostfixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PostIncrementExpression) =>
-            $"{Expression(value.Operand)}++",
-        PostfixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PostDecrementExpression) =>
-            $"{Expression(value.Operand)}--",
+        PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PreIncrementExpression) => NumericMutation(value, 1, postfix: false),
+        PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PreDecrementExpression) => NumericMutation(value, -1, postfix: false),
+        PostfixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PostIncrementExpression) => NumericMutation(value, 1, postfix: true),
+        PostfixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PostDecrementExpression) => NumericMutation(value, -1, postfix: true),
         PostfixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.SuppressNullableWarningExpression) =>
             Expression(value.Operand),
         AwaitExpressionSyntax value => $"await {Expression(value.Expression)}",
@@ -27,8 +27,8 @@ internal sealed partial class JavaScriptEmitter
         ConditionalExpressionSyntax value => $"{Expression(value.Condition)} ? {Expression(value.WhenTrue)} : {Expression(value.WhenFalse)}",
         ConditionalAccessExpressionSyntax value => ConditionalAccess(value),
         AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.SimpleAssignmentExpression) => $"{Expression(value.Left)} = {Expression(value.Right)}",
-        AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.AddAssignmentExpression) => $"{Expression(value.Left)} += {Expression(value.Right)}",
-        AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.SubtractAssignmentExpression) => $"{Expression(value.Left)} -= {Expression(value.Right)}",
+        AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.AddAssignmentExpression) => CompoundMutation(value, "+"),
+        AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.SubtractAssignmentExpression) => CompoundMutation(value, "-"),
         IsPatternExpressionSyntax value => IsPattern(value),
         MemberAccessExpressionSyntax value => Member(value),
         InvocationExpressionSyntax value => Invocation(value),
@@ -45,6 +45,44 @@ internal sealed partial class JavaScriptEmitter
             $"{AsyncPrefix(value.AsyncKeyword)}{ParameterName(value.Parameter)} => {Expression(value.ExpressionBody)}",
         SimpleLambdaExpressionSyntax value when value.Block is not null => Lambda(value),
         _ => throw Unsupported("WRK101", expression)
+    };
+
+    private string NumericMutation(ExpressionSyntax value, int delta, bool postfix)
+    {
+        var operand = value switch
+        {
+            PrefixUnaryExpressionSyntax prefix => prefix.Operand,
+            PostfixUnaryExpressionSyntax postfixValue => postfixValue.Operand,
+            _ => throw new InvalidOperationException()
+        };
+        if (operand is not IdentifierNameSyntax)
+            throw Unsupported("WRK108", value);
+        var type = _model.GetTypeInfo(operand).Type?.SpecialType ?? SpecialType.None;
+        var target = Expression(operand);
+        var updated = NumericResult($"$workers$value {(delta > 0 ? "+" : "-")} 1", type, value);
+        return postfix
+            ? $"(($workers$value) => {{ {target} = {updated}; return $workers$value; }})({target})"
+            : $"({target} = {NumericResult($"{target} {(delta > 0 ? "+" : "-")} 1", type, value)})";
+    }
+
+    private string CompoundMutation(AssignmentExpressionSyntax value, string operation)
+    {
+        if (value.Left is not IdentifierNameSyntax)
+            throw Unsupported("WRK108", value);
+        var type = _model.GetTypeInfo(value).Type?.SpecialType ?? SpecialType.None;
+        var target = Expression(value.Left);
+        if (type == SpecialType.System_String && operation == "+")
+            return $"({target} = ({target} ?? \"\") + ({Expression(value.Right)} ?? \"\"))";
+        return $"({target} = {NumericResult($"{target} {operation} {Expression(value.Right)}", type, value)})";
+    }
+
+    private static string NumericResult(string expression, SpecialType type, SyntaxNode source) => type switch
+    {
+        SpecialType.System_Int32 => $"({expression}) | 0",
+        SpecialType.System_UInt32 => $"({expression}) >>> 0",
+        SpecialType.System_Single => $"Math.fround({expression})",
+        SpecialType.System_Double => $"({expression})",
+        _ => throw Unsupported("WRK108", source)
     };
 
     private string Lambda(ParenthesizedLambdaExpressionSyntax value)

@@ -36,16 +36,17 @@ internal sealed partial class JavaScriptEmitter
             ("System.Console", "WriteLine") when arguments.Length == 1 => $"console.log({arguments[0]})",
             ("System.Guid", "NewGuid") => "globalThis.crypto.randomUUID()",
             ("Workers.Performance", "Now") => "performance.now()",
-            ("System.Uri", "UnescapeDataString") => $"decodeURIComponent({arguments[0]})",
-            ("System.Uri", "EscapeDataString") => $"{_helpers.Require(JavaScriptHelper.EscapeDataString)}({arguments[0]})",
-            ("System.Convert", "FromHexString") => $"{_helpers.Require(JavaScriptHelper.HexDecode)}({arguments[0]})",
-            ("System.Convert", "ToHexString") => $"Array.from({arguments[0]}, byte => byte.toString(16).padStart(2, \"0\")).join(\"\").toUpperCase()",
-            ("System.Convert", "ToBase64String") => $"{_helpers.Require(JavaScriptHelper.Base64)}({arguments[0]})",
-            ("System.Convert", "FromBase64String") => Base64Decode(arguments[0]),
-            ("System.Text.Encoding", "GetBytes") => $"new TextEncoder().encode({arguments[0]})",
-            ("int", "Parse") => $"{_helpers.Require(JavaScriptHelper.IntParse)}({arguments[0]})",
+            ("System.Uri", "UnescapeDataString") when HasParameters(method, SpecialType.System_String) => $"decodeURIComponent({arguments[0]})",
+            ("System.Uri", "EscapeDataString") when HasParameters(method, SpecialType.System_String) => $"{_helpers.Require(JavaScriptHelper.EscapeDataString)}({arguments[0]})",
+            ("System.Convert", "FromHexString") when HasParameters(method, SpecialType.System_String) => $"{_helpers.Require(JavaScriptHelper.HexDecode)}({arguments[0]})",
+            ("System.Convert", "ToHexString") when arguments.Length == 1 && method?.Parameters[0].Type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte } => $"Array.from({arguments[0]}, byte => byte.toString(16).padStart(2, \"0\")).join(\"\").toUpperCase()",
+            ("System.Convert", "ToBase64String") when arguments.Length == 1 && method?.Parameters[0].Type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte } => $"{_helpers.Require(JavaScriptHelper.Base64)}({arguments[0]})",
+            ("System.Convert", "FromBase64String") when HasParameters(method, SpecialType.System_String) => Base64Decode(arguments[0]),
+            ("System.Text.Encoding", "GetBytes") when HasParameters(method, SpecialType.System_String) && IsUtf8EncodingInvocation(invocation) => $"new TextEncoder().encode({arguments[0]})",
+            ("int", "Parse") when HasParameters(method, SpecialType.System_String) => $"{_helpers.Require(JavaScriptHelper.IntParse)}({arguments[0]})",
             ("System.Math", "Min" or "Max") => $"Math.{name!.ToLowerInvariant()}({string.Join(", ", arguments)})",
-            ("System.Text.RegularExpressions.Regex", "IsMatch") => $"new RegExp({arguments[1]}).test({arguments[0]})",
+            ("System.Text.RegularExpressions.Regex", "IsMatch") when method?.IsStatic == true && arguments.Length == 2 =>
+                $"new RegExp({arguments[1]}).test({arguments[0]})",
             ("Workers.Timers", "SetTimeout") => $"setTimeout({arguments[0]}, {arguments[1]})",
             ("Workers.Timers", "ClearTimeout") => $"clearTimeout({arguments[0]})",
             ("Workers.Body", "Text" or "FromBytes") => arguments[0],
@@ -55,6 +56,19 @@ internal sealed partial class JavaScriptEmitter
         };
         return result.Length != 0;
     }
+
+    private static bool HasParameters(IMethodSymbol? method, params SpecialType[] types) =>
+        method is not null && method.Parameters.Select(parameter => parameter.Type.SpecialType).SequenceEqual(types);
+
+    private bool IsUtf8EncodingInvocation(InvocationExpressionSyntax invocation) =>
+        invocation.Expression is MemberAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax receiver }
+        && _model.GetSymbolInfo(receiver).Symbol is IPropertySymbol
+        {
+            IsStatic: true,
+            Name: "UTF8",
+            ContainingType: { } containingType
+        }
+        && containingType.ToDisplayString() == "System.Text.Encoding";
 
     private string Base64Decode(string value)
     {

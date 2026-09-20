@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\..\differential\Semantics.cs" Link="Semantics.cs" />
     <ProjectReference Include="..\..\..\..\src\Workers.csproj" />
     <ProjectReference Include="..\..\..\..\src\Compiler\Compiler.csproj"
                       ReferenceOutputAssembly="false"

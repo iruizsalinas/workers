@@ -153,7 +153,7 @@ public sealed class ModernControlFlowTests
             """);
 
         Assert.Contains("Uint8Array.from([...left, ...right])", module);
-        Assert.Contains("for (let index = 0; index < all.length; index++)", module);
+        Assert.Contains("for (let index = 0; index < all.length; (($workers$value) =>", module);
         Assert.Contains("continue;", module);
     }
 
