@@ -116,4 +116,40 @@ public sealed class ArithmeticTests
 
         Assert.Contains("return Math.fround(left + right);", module);
     }
+
+    [Fact]
+    public void PreservesUnaryNumericSemantics()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx) =>
+                    Response.Json(new { integer = Negate(int.MinValue), single = NegateSingle(0.1f) });
+
+                private static int Negate(int value) => -value;
+                private static float NegateSingle(float value) => -value;
+            }
+            """);
+
+        Assert.Contains("return (-value) | 0;", module);
+        Assert.Contains("return Math.fround(-value);", module);
+    }
+
+    [Fact]
+    public void RejectsUnsupportedWideUnaryArithmetic()
+    {
+        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx) => Response.Text(Negate(1u).ToString());
+                private static long Negate(uint value) => -value;
+            }
+            """));
+
+        Assert.Contains("WRK108", error.Message);
+    }
 }

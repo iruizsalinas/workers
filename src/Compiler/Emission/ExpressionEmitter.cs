@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
@@ -13,9 +14,9 @@ internal sealed partial class JavaScriptEmitter
         PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.LogicalNotExpression) =>
             $"!({Expression(value.Operand)})",
         PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.UnaryMinusExpression) =>
-            $"-{Expression(value.Operand)}",
+            UnaryNumeric(value, "-"),
         PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.UnaryPlusExpression) =>
-            $"+{Expression(value.Operand)}",
+            UnaryNumeric(value, "+"),
         PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PreIncrementExpression) => NumericMutation(value, 1, postfix: false),
         PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PreDecrementExpression) => NumericMutation(value, -1, postfix: false),
         PostfixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PostIncrementExpression) => NumericMutation(value, 1, postfix: true),
@@ -46,6 +47,15 @@ internal sealed partial class JavaScriptEmitter
         SimpleLambdaExpressionSyntax value when value.Block is not null => Lambda(value),
         _ => throw Unsupported("WRK101", expression)
     };
+
+    private string UnaryNumeric(PrefixUnaryExpressionSyntax value, string operation)
+    {
+        var unary = _model.GetOperation(value) as IUnaryOperation;
+        if (unary?.OperatorMethod is not null)
+            throw UnsupportedSymbol(unary.OperatorMethod, value);
+        var type = unary?.Type?.SpecialType ?? SpecialType.None;
+        return NumericResult($"{operation}{Expression(value.Operand)}", type, value);
+    }
 
     private string NumericMutation(ExpressionSyntax value, int delta, bool postfix)
     {
