@@ -195,6 +195,9 @@ internal sealed partial class JavaScriptEmitter
             "WebSocketErrorAsync" => "webSocketError",
             var value => LowerNativeMethodName(value)
         };
+        if (method.DeclaredAccessibility == Accessibility.Public && name == "constructor")
+            throw new NotSupportedException(
+                $"WRK118: Method '{method.ToDisplayString()}' compiles to the reserved JavaScript class method name 'constructor'.");
         return method.DeclaredAccessibility == Accessibility.Public ? name : "#" + name;
     }
 

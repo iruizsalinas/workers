@@ -119,4 +119,78 @@ public sealed class GeneratedClassValidationTests
 
         Assert.StartsWith("WRK116:", error.Message);
     }
+
+    [Theory]
+    [InlineData("constructor")]
+    [InlineData("Constructor")]
+    [InlineData("ConstructorAsync")]
+    public void RejectsPublicMethodsThatNormalizeToConstructor(string methodName)
+    {
+        var returnType = methodName.EndsWith("Async", StringComparison.Ordinal) ? "Task" : "void";
+        var body = returnType == "Task" ? " => Task.CompletedTask;" : " { }";
+        var error = Assert.Throws<NotSupportedException>(() => Compile($$"""
+            using Workers;
+            [DurableObject("Example")]
+            public class Example
+            {
+                public {{returnType}} {{methodName}}(){{body}}
+            }
+            """));
+
+        Assert.StartsWith("WRK118:", error.Message);
+        Assert.Contains("reserved JavaScript class method name 'constructor'", error.Message);
+    }
+
+    [Fact]
+    public void AllowsPrivateConstructorNamedHelpers()
+    {
+        var module = Compile("""
+            using Workers;
+            [DurableObject("Example")]
+            public class Example
+            {
+                private void constructor() { }
+                public void Run() => constructor();
+            }
+            """);
+
+        Assert.Contains("#constructor()", module);
+        Assert.Contains("this.#constructor()", module);
+    }
+
+    [Fact]
+    public void RejectsConstructorNamedWorkerEntrypointMethods()
+    {
+        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+            using Workers;
+            [WorkerEntrypoint("Example")]
+            public class Example : WorkerEntrypoint
+            {
+                public void constructor() { }
+            }
+            """));
+
+        Assert.StartsWith("WRK118:", error.Message);
+    }
+
+    [Fact]
+    public void RejectsConstructorNamedHtmlHandlerMethods()
+    {
+        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+            using Workers;
+            public class Handler : HtmlElementHandler
+            {
+                public void constructor() { }
+                public override ValueTask ElementAsync(HtmlElement element) => ValueTask.CompletedTask;
+            }
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) =>
+                    new HtmlRewriter().On("p", new Handler()).Transform(Response.Html("<p>x</p>"));
+            }
+            """));
+
+        Assert.StartsWith("WRK118:", error.Message);
+    }
 }
