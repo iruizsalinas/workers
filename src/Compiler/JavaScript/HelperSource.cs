@@ -17,6 +17,7 @@ internal static class HelperSource
         JavaScriptHelper.IntParse => IntParse(name),
         JavaScriptHelper.HexDecode => HexDecode(name),
         JavaScriptHelper.EscapeDataString => EscapeDataString(name),
+        JavaScriptHelper.JsonElementToString => JsonElementToString(name),
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 
@@ -219,6 +220,16 @@ internal static class HelperSource
         function {{name("escapeDataString")}}(value) {
           return encodeURIComponent(value).replace(/[!'()*]/g, character =>
             `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+        }
+
+        """;
+
+    private static string JsonElementToString(Func<string, string> name) => $$"""
+        function {{name("jsonElementToString")}}(value) {
+          if (value == null) return "";
+          if (typeof value === "string") return value;
+          if (typeof value === "boolean") return value ? "True" : "False";
+          return JSON.stringify(value);
         }
 
         """;

@@ -73,6 +73,28 @@ public sealed class TextTests
     }
 
     [Fact]
+    public void UsesJsonElementValueKindFormattingForToString()
+    {
+        var module = Compile("""
+            using System.Text.Json;
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                {
+                    var value = await request.JsonAsync<JsonElement>();
+                    return Response.Text(value.ToString());
+                }
+            }
+            """);
+
+        Assert.Contains("jsonElementToString(value)", module);
+        Assert.Contains("if (typeof value === \"string\") return value;", module);
+        Assert.Contains("if (typeof value === \"boolean\") return value ? \"True\" : \"False\";", module);
+    }
+
+    [Fact]
     public void UsesNativeUtf8Base64UriAndStringOperations()
     {
         var module = Compile("""

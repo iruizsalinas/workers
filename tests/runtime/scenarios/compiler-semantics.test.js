@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import compilerSemantics from "../fixtures/CompilerSemantics/dist/worker.js";
 import clrSemantics from "../generated/differential.json";
 
-const invoke = (path, method = "GET") => compilerSemantics.fetch(
-  new Request(`https://worker.test${path}`, { method }),
+const invoke = (path, init = {}) => compilerSemantics.fetch(
+  new Request(`https://worker.test${path}`, typeof init === "string" ? { method: init } : init),
   {},
   createExecutionContext(),
 );
@@ -68,5 +68,19 @@ describe("compiler value semantics", () => {
 
     expect(result.interpolated).toBe(result.explicitFormat);
     expect(result.interpolated).toMatch(/\.\d{7}\+00:00$/);
+  });
+
+  it.each([
+    ["string", "hello", "hello"],
+    ["boolean", true, "True"],
+    ["null", null, ""],
+    ["object", { answer: 42 }, '{"answer":42}'],
+  ])("formats a JSON %s like JsonElement.ToString", async (_kind, input, expected) => {
+    const response = await invoke("/json-element-text", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+
+    await expect(response.text()).resolves.toBe(expected);
   });
 });

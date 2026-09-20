@@ -1,11 +1,12 @@
 using Workers;
+using System.Text.Json;
 
 namespace CompilerSemantics;
 
 public static class Worker
 {
     [Fetch]
-    public static Response Fetch(Request request, Env environment, Context context)
+    public static async Task<Response> Fetch(Request request, Env environment, Context context)
     {
         if (request.Path == "/differential")
             return Response.Json(CoreSemantics.Run());
@@ -97,6 +98,12 @@ public static class Worker
                 interpolated = $"{timestamp:O}",
                 explicitFormat = timestamp.ToString("O")
             });
+        }
+
+        if (request.Path == "/json-element-text")
+        {
+            var value = await request.JsonAsync<JsonElement>();
+            return Response.Text(value.ToString());
         }
 
         return Response.Text("Not found", status: 404);

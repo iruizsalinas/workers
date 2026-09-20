@@ -22,7 +22,7 @@ internal sealed partial class JavaScriptEmitter
             "System.Uri" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             "Workers.Url" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             "System.Text.Json.JsonElement" when name == "ToString" && arguments.Length == 0 =>
-                $"JSON.stringify({receiver})",
+                $"{_helpers.Require(JavaScriptHelper.JsonElementToString)}({receiver})",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
                    && name == "Add" && arguments.Length == 1 => $"{receiver}.push({arguments[0]})",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>"

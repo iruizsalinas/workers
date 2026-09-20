@@ -1,7 +1,7 @@
 internal enum JavaScriptHelper
 {
     WithHeader, Delay, Stream, Socket, Digest, WebSocketEvents, IntegerDivide, IntegerRemainder,
-    RandomNext, SetAdd, Base64, RpcArguments, IntParse, HexDecode, EscapeDataString
+    RandomNext, SetAdd, Base64, RpcArguments, IntParse, HexDecode, EscapeDataString, JsonElementToString
 }
 
 internal sealed class HelperRegistry(GeneratedNameAllocator names)
@@ -38,6 +38,7 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.IntParse => "intParse",
         JavaScriptHelper.HexDecode => "hexDecode",
         JavaScriptHelper.EscapeDataString => "escapeDataString",
+        JavaScriptHelper.JsonElementToString => "jsonElementToString",
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 }
