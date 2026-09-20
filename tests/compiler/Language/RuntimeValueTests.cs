@@ -61,13 +61,13 @@ public sealed class RuntimeValueTests
                 public static Response Fetch(Request request, Env env, Context context)
                 {
                     DateTimeOffset? value = DateTimeOffset.UtcNow;
-                    return Response.Json(new { day = value?.Day });
+                    return Response.Json(new { offset = value?.Offset });
                 }
             }
             """));
 
         Assert.StartsWith("WRK105:", error.Message);
-        Assert.Contains("System.DateTimeOffset.Day", error.Message);
+        Assert.Contains("System.DateTimeOffset.Offset", error.Message);
     }
 
     [Fact]

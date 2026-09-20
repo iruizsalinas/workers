@@ -112,8 +112,14 @@ internal sealed partial class JavaScriptEmitter
                 DateTimeRoundTrip(receiver),
             "AddDays" when arguments.Length == 1 =>
                 $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 86400000)",
+            "AddHours" when arguments.Length == 1 =>
+                $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 3600000)",
+            "AddMinutes" when arguments.Length == 1 =>
+                $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 60000)",
             "AddSeconds" when arguments.Length == 1 =>
                 $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 1000)",
+            "AddMilliseconds" when arguments.Length == 1 =>
+                $"new Date(new Date({receiver}).getTime() + ({arguments[0]}))",
             "ToUnixTimeMilliseconds" when arguments.Length == 0 => $"new Date({receiver}).getTime()",
             _ => throw UnsupportedSymbol(method, source)
         };

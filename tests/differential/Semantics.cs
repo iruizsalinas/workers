@@ -10,7 +10,18 @@ public sealed record CoreSemanticsResult(
     int CharacterLiteralDifference,
     int CharacterVariableAdd,
     int CharacterVariableDifference,
-    int LoopTotal);
+    int LoopTotal,
+    int CalendarYear,
+    int CalendarMonth,
+    int CalendarDay,
+    DayOfWeek CalendarDayOfWeek,
+    int CalendarHour,
+    int CalendarMinute,
+    int CalendarSecond,
+    int CalendarMillisecond,
+    bool EqualInstants,
+    bool OrderedInstants,
+    string AddedInstant);
 
 public static class CoreSemantics
 {
@@ -29,7 +40,13 @@ public static class CoreSemantics
         var total = 0;
         for (var index = 0; index < 4; index++)
             total += index;
+        var instant = new DateTimeOffset(2024, 2, 29, 23, 58, 57, 123, TimeSpan.Zero);
+        var sameInstant = new DateTimeOffset(2024, 2, 29, 23, 58, 57, 123, TimeSpan.Zero);
+        var laterInstant = instant.AddMinutes(2);
         return new(signed, unsigned, single, -minimum, -unarySingle == -0.1f, $"{true}:{false}", true.ToString(),
-            'A' + 1, 'B' - 'A', character + 5, character - otherCharacter, total);
+            'A' + 1, 'B' - 'A', character + 5, character - otherCharacter, total,
+            instant.Year, instant.Month, instant.Day, instant.DayOfWeek, instant.Hour, instant.Minute,
+            instant.Second, instant.Millisecond, instant == sameInstant, instant < laterInstant,
+            laterInstant.ToString("O"));
     }
 }

@@ -10,6 +10,8 @@ internal sealed partial class JavaScriptEmitter
         var type = constructor?.ContainingType;
         var arguments = value.ArgumentList?.Arguments.ToArray() ?? [];
         var typeName = type?.ToDisplayString();
+        if (typeName == "System.DateTimeOffset")
+            return CreateDateTimeOffset(value, constructor, arguments);
         if (typeName is "Workers.Request" or "Workers.Response")
             return PositionalObjectCreation(value, constructor, arguments,
                 values => $"new {type!.Name}({string.Join(", ", values)})");
@@ -42,6 +44,32 @@ internal sealed partial class JavaScriptEmitter
         if (type is not null && IsUserInstanceType(type))
             return UserObject(value, constructor, type, arguments);
         throw UnsupportedSymbol(constructor, value);
+    }
+
+    private string CreateDateTimeOffset(
+        SyntaxNode source,
+        IMethodSymbol? constructor,
+        ArgumentSyntax[] arguments)
+    {
+        if (constructor is null || constructor.Parameters.Length is not (7 or 8)
+            || constructor.Parameters[^1].Name != "offset"
+            || constructor.Parameters[^1].Type.ToDisplayString() != "System.TimeSpan")
+            throw UnsupportedSymbol(constructor, source);
+
+        var offset = arguments.Select((argument, index) => new
+            {
+                Argument = argument,
+                Parameter = ArgumentParameter(constructor, argument, index)
+            })
+            .SingleOrDefault(item => item.Parameter.Name == "offset")?.Argument.Expression;
+        var offsetSymbol = offset is null ? null : _model.GetSymbolInfo(offset).Symbol;
+        if (offsetSymbol is null || !offsetSymbol.IsStatic || offsetSymbol.Name != "Zero"
+            || offsetSymbol.ContainingType?.ToDisplayString() != "System.TimeSpan")
+            throw Unsupported("WRK108", offset ?? source);
+
+        var helper = _helpers.Require(JavaScriptHelper.DateTimeOffset);
+        return PositionalObjectCreation(source, constructor, arguments, values =>
+            $"{helper}({string.Join(", ", values.Take(values.Count - 1))})");
     }
 
     private string UserObject(

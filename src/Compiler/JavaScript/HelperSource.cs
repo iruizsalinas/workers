@@ -18,6 +18,7 @@ internal static class HelperSource
         JavaScriptHelper.HexDecode => HexDecode(name),
         JavaScriptHelper.EscapeDataString => EscapeDataString(name),
         JavaScriptHelper.JsonElementToString => JsonElementToString(name),
+        JavaScriptHelper.DateTimeOffset => DateTimeOffset(name),
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 
@@ -230,6 +231,23 @@ internal static class HelperSource
           if (typeof value === "string") return value;
           if (typeof value === "boolean") return value ? "True" : "False";
           return JSON.stringify(value);
+        }
+
+        """;
+
+    private static string DateTimeOffset(Func<string, string> name) => $$"""
+        function {{name("dateTimeOffset")}}(year, month, day, hour, minute, second, millisecond = 0) {
+          const value = new Date(0);
+          value.setUTCFullYear(year, month - 1, day);
+          value.setUTCHours(hour, minute, second, millisecond);
+          if (year < 1 || year > 9999
+              || value.getUTCFullYear() !== year || value.getUTCMonth() !== month - 1
+              || value.getUTCDate() !== day || value.getUTCHours() !== hour
+              || value.getUTCMinutes() !== minute || value.getUTCSeconds() !== second
+              || value.getUTCMilliseconds() !== millisecond) {
+            throw new RangeError("Invalid DateTimeOffset components.");
+          }
+          return value;
         }
 
         """;

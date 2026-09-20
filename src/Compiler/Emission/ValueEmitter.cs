@@ -12,6 +12,11 @@ internal sealed partial class JavaScriptEmitter
         var property = symbol as IPropertySymbol;
         if (property is { IsStatic: true, Name: "UtcNow" }
             && property.ContainingType.ToDisplayString() == "System.DateTimeOffset") return "new Date()";
+        if (symbol is { IsStatic: true, Name: "Zero", ContainingType: { } timeSpanType }
+            && timeSpanType.ToDisplayString() == "System.TimeSpan") return "0";
+        if (property is { IsStatic: false, ContainingType: { } dateTimeType }
+            && dateTimeType.ToDisplayString() == "System.DateTimeOffset")
+            return DateTimeOffsetMember(member, property);
         if (property?.ContainingType.ToDisplayString() == "System.Random" && property.Name == "Shared") return "Math";
         if (property?.ContainingType.ToDisplayString() == "Workers.CacheStorage" && property.Name == "Default")
             return "caches.default";
@@ -140,6 +145,24 @@ internal sealed partial class JavaScriptEmitter
         }
         ThrowIfUnsupportedFrameworkMember(symbol, member);
         return $"{Expression(member.Expression)}.{LowerFirst(member.Name.Identifier.Text)}";
+    }
+
+    private string DateTimeOffsetMember(MemberAccessExpressionSyntax member, IPropertySymbol property)
+    {
+        var receiver = Expression(member.Expression);
+        return property.Name switch
+        {
+            "Year" => $"new Date({receiver}).getUTCFullYear()",
+            "Month" => $"new Date({receiver}).getUTCMonth() + 1",
+            "Day" => $"new Date({receiver}).getUTCDate()",
+            "DayOfWeek" => $"new Date({receiver}).getUTCDay()",
+            "Hour" => $"new Date({receiver}).getUTCHours()",
+            "Minute" => $"new Date({receiver}).getUTCMinutes()",
+            "Second" => $"new Date({receiver}).getUTCSeconds()",
+            "Millisecond" => $"new Date({receiver}).getUTCMilliseconds()",
+            "Date" => $"new Date(new Date({receiver}).setUTCHours(0, 0, 0, 0))",
+            _ => throw UnsupportedSymbol(property, member)
+        };
     }
 
     private string FormEntryMember(MemberAccessExpressionSyntax member, IPropertySymbol property)

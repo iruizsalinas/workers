@@ -41,4 +41,78 @@ public sealed class DateTimeTests
         Assert.StartsWith("WRK105:", error.Message);
     }
 
+    [Fact]
+    public void LowersUtcCalendarConstructionComponentsAndArithmetic()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx)
+                {
+                    var value = new DateTimeOffset(2024, 2, 29, 23, 58, 57, 123, TimeSpan.Zero);
+                    var next = value.AddHours(1).AddMinutes(2).AddMilliseconds(3);
+                    return Response.Json(new
+                    {
+                        value.Year, value.Month, value.Day, value.DayOfWeek,
+                        value.Hour, value.Minute, value.Second, value.Millisecond,
+                        date = value.Date,
+                        next
+                    });
+                }
+            }
+            """);
+
+        Assert.Contains("function $workers$dateTimeOffset(year, month, day, hour, minute, second, millisecond = 0)", module);
+        Assert.Contains("$workers$dateTimeOffset(2024, 2, 29, 23, 58, 57, 123)", module);
+        Assert.Contains("new Date(value).getUTCFullYear()", module);
+        Assert.Contains("new Date(value).getUTCMonth() + 1", module);
+        Assert.Contains("new Date(value).getUTCDay()", module);
+        Assert.Contains("new Date(new Date(value).setUTCHours(0, 0, 0, 0))", module);
+        Assert.Contains("* 3600000", module);
+        Assert.Contains("* 60000", module);
+    }
+
+    [Fact]
+    public void DateTimeOffsetComparisonsUseInstantValuesAndPreserveEvaluationOrder()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx)
+                {
+                    var first = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+                    var second = new DateTimeOffset(2024, 1, 2, 0, 0, 0, TimeSpan.Zero);
+                    return Response.Json(new { equal = first == second, ordered = first < second });
+                }
+            }
+            """);
+
+        Assert.Contains(".getTime() === new Date(", module);
+        Assert.Contains(".getTime() < new Date(", module);
+        Assert.Equal(2, module.Split(")(first, second)").Length - 1);
+    }
+
+    [Fact]
+    public void RejectsDateTimeOffsetConstructorsWithNonZeroOffsets()
+    {
+        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx)
+                {
+                    var value = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.FromHours(2));
+                    return Response.Json(value);
+                }
+            }
+            """));
+
+        Assert.StartsWith("WRK108:", error.Message);
+    }
+
 }

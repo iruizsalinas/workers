@@ -8,6 +8,11 @@ internal sealed partial class JavaScriptEmitter
     private string Binary(BinaryExpressionSyntax expression)
     {
         var operation = _model.GetOperation(expression) as IBinaryOperation;
+        if (IsDateTimeOffset(operation?.LeftOperand.Type) && IsDateTimeOffset(operation?.RightOperand.Type)
+            && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression
+                or SyntaxKind.LessThanExpression or SyntaxKind.LessThanOrEqualExpression
+                or SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression)
+            return DateTimeOffsetComparison(expression);
         if (operation?.OperatorMethod is not null)
             throw UnsupportedSymbol(operation.OperatorMethod, expression);
         var type = operation?.Type?.SpecialType ?? SpecialType.None;
@@ -71,6 +76,18 @@ internal sealed partial class JavaScriptEmitter
 
         return $"{left} {BinaryOperator(expression.Kind())} {right}";
     }
+
+    private string DateTimeOffsetComparison(BinaryExpressionSyntax expression)
+    {
+        var key = $"date-time-comparison:{expression.SyntaxTree.FilePath}:{expression.SpanStart}";
+        var left = _names.Get($"{key}:left", "left");
+        var right = _names.Get($"{key}:right", "right");
+        return $"(({left}, {right}) => new Date({left}).getTime() {BinaryOperator(expression.Kind())} " +
+               $"new Date({right}).getTime())({Expression(expression.Left)}, {Expression(expression.Right)})";
+    }
+
+    private static bool IsDateTimeOffset(ITypeSymbol? type) =>
+        type?.ToDisplayString() == "System.DateTimeOffset";
 
     private string BinaryOperand(ExpressionSyntax operand, bool numeric)
     {
