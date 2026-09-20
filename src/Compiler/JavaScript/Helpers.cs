@@ -4,7 +4,7 @@ internal enum JavaScriptHelper
     RandomNext, SetAdd, Base64, RpcArguments, IntParse, HexDecode, EscapeDataString, JsonElementToString,
     DateTimeOffset, DateTimeAddMonths, DateTimeFromUnixTime, DateTimeCompare, DateTimeDayOfYear,
     DateTimeIsLeapYear, DateTimeDaysInMonth, DateTimeAddMilliseconds,
-    LinqWhere, LinqSelect, LinqSkip, LinqTake, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains,
+    LinqValues, LinqWhere, LinqSelect, LinqSkip, LinqTake, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains,
     LinqFirst, LinqLast, LinqSingle, LinqToArray
 }
 
@@ -17,6 +17,8 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
         _required.Add(helper);
         if (helper == JavaScriptHelper.DateTimeDaysInMonth)
             _required.Add(JavaScriptHelper.DateTimeIsLeapYear);
+        if (helper.IsLinqOperator())
+            _required.Add(JavaScriptHelper.LinqValues);
         return Name(helper.EntryPoint());
     }
 
@@ -53,6 +55,7 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.DateTimeIsLeapYear => "dateTimeIsLeapYear",
         JavaScriptHelper.DateTimeDaysInMonth => "dateTimeDaysInMonth",
         JavaScriptHelper.DateTimeAddMilliseconds => "dateTimeAddMilliseconds",
+        JavaScriptHelper.LinqValues => "linqValues",
         JavaScriptHelper.LinqWhere => "linqWhere",
         JavaScriptHelper.LinqSelect => "linqSelect",
         JavaScriptHelper.LinqSkip => "linqSkip",
@@ -68,4 +71,7 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.LinqToArray => "linqToArray",
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
+
+    internal static bool IsLinqOperator(this JavaScriptHelper helper) => helper is
+        >= JavaScriptHelper.LinqWhere and <= JavaScriptHelper.LinqToArray;
 }

@@ -26,6 +26,7 @@ internal static class HelperSource
         JavaScriptHelper.DateTimeIsLeapYear => DateTimeIsLeapYear(name),
         JavaScriptHelper.DateTimeDaysInMonth => DateTimeDaysInMonth(name),
         JavaScriptHelper.DateTimeAddMilliseconds => DateTimeAddMilliseconds(name),
+        JavaScriptHelper.LinqValues => LinqValues(name),
         JavaScriptHelper.LinqWhere => LinqWhere(name),
         JavaScriptHelper.LinqSelect => LinqSelect(name),
         JavaScriptHelper.LinqSkip => LinqSkip(name),
@@ -356,7 +357,7 @@ internal static class HelperSource
           if (source == null || predicate == null) throw new TypeError("LINQ argument cannot be null.");
           return { *[Symbol.iterator]() {
             let index = 0;
-            for (const value of source) if (predicate(value, index++)) yield value;
+            for (const value of {{name("linqValues")}}(source)) if (predicate(value, index++)) yield value;
           }
           };
         }
@@ -368,7 +369,7 @@ internal static class HelperSource
           if (source == null || selector == null) throw new TypeError("LINQ argument cannot be null.");
           return { *[Symbol.iterator]() {
             let index = 0;
-            for (const value of source) yield selector(value, index++);
+            for (const value of {{name("linqValues")}}(source)) yield selector(value, index++);
           }
           };
         }
@@ -380,7 +381,7 @@ internal static class HelperSource
           if (source == null) throw new TypeError("LINQ source cannot be null.");
           return { *[Symbol.iterator]() {
             let remaining = Math.max(0, count);
-            for (const value of source) if (remaining > 0) remaining--; else yield value;
+            for (const value of {{name("linqValues")}}(source)) if (remaining > 0) remaining--; else yield value;
           }
           };
         }
@@ -393,7 +394,7 @@ internal static class HelperSource
           return { *[Symbol.iterator]() {
             let remaining = count;
             if (remaining <= 0) return;
-            for (const value of source) {
+            for (const value of {{name("linqValues")}}(source)) {
               yield value;
               if (--remaining === 0) return;
             }
@@ -406,7 +407,9 @@ internal static class HelperSource
     private static string LinqConcat(Func<string, string> name) => $$"""
         function {{name("linqConcat")}}(first, second) {
           if (first == null || second == null) throw new TypeError("LINQ source cannot be null.");
-          return { *[Symbol.iterator]() { yield* first; yield* second; }
+          return { *[Symbol.iterator]() {
+            yield* {{name("linqValues")}}(first); yield* {{name("linqValues")}}(second);
+          }
           };
         }
 
@@ -417,7 +420,8 @@ internal static class HelperSource
           if (source == null || (hasPredicate && predicate == null))
             throw new TypeError("LINQ argument cannot be null.");
           let index = 0;
-          for (const value of source) if (predicate === null || predicate(value, index++)) return true;
+          for (const value of {{name("linqValues")}}(source))
+            if (predicate === null || predicate(value, index++)) return true;
           return false;
         }
 
@@ -427,7 +431,7 @@ internal static class HelperSource
         function {{name("linqAll")}}(source, predicate) {
           if (source == null || predicate == null) throw new TypeError("LINQ argument cannot be null.");
           let index = 0;
-          for (const value of source) if (!predicate(value, index++)) return false;
+          for (const value of {{name("linqValues")}}(source)) if (!predicate(value, index++)) return false;
           return true;
         }
 
@@ -438,7 +442,8 @@ internal static class HelperSource
           if (source == null || (hasPredicate && predicate == null))
             throw new TypeError("LINQ argument cannot be null.");
           let count = 0, index = 0;
-          for (const value of source) if (predicate === null || predicate(value, index++)) {
+          for (const value of {{name("linqValues")}}(source))
+            if (predicate === null || predicate(value, index++)) {
             if (count === 2147483647) throw new RangeError("Enumerable count overflow.");
             count++;
           }
@@ -450,7 +455,7 @@ internal static class HelperSource
     private static string LinqContains(Func<string, string> name) => $$"""
         function {{name("linqContains")}}(source, target) {
           if (source == null) throw new TypeError("LINQ source cannot be null.");
-          for (const value of source)
+          for (const value of {{name("linqValues")}}(source))
             if (value === target || (value !== value && target !== target)) return true;
           return false;
         }
@@ -462,7 +467,7 @@ internal static class HelperSource
           if (source == null || (hasPredicate && predicate == null))
             throw new TypeError("LINQ argument cannot be null.");
           let index = 0;
-          for (const value of source)
+          for (const value of {{name("linqValues")}}(source))
             if (predicate === null || predicate(value, index++)) return value;
           if (orDefault) return defaultValue;
           throw new RangeError("Sequence contains no matching element.");
@@ -475,7 +480,8 @@ internal static class HelperSource
           if (source == null || (hasPredicate && predicate == null))
             throw new TypeError("LINQ argument cannot be null.");
           let found = false, result = defaultValue, index = 0;
-          for (const value of source) if (predicate === null || predicate(value, index++)) {
+          for (const value of {{name("linqValues")}}(source))
+            if (predicate === null || predicate(value, index++)) {
             found = true; result = value;
           }
           if (found || orDefault) return result;
@@ -489,7 +495,8 @@ internal static class HelperSource
           if (source == null || (hasPredicate && predicate == null))
             throw new TypeError("LINQ argument cannot be null.");
           let found = false, result = defaultValue, index = 0;
-          for (const value of source) if (predicate === null || predicate(value, index++)) {
+          for (const value of {{name("linqValues")}}(source))
+            if (predicate === null || predicate(value, index++)) {
             if (found) throw new RangeError("Sequence contains more than one matching element.");
             found = true; result = value;
           }
@@ -502,7 +509,18 @@ internal static class HelperSource
     private static string LinqToArray(Func<string, string> name) => $$"""
         function {{name("linqToArray")}}(source) {
           if (source == null) throw new TypeError("LINQ source cannot be null.");
-          return Array.from(source);
+          return Array.from({{name("linqValues")}}(source));
+        }
+
+        """;
+
+    private static string LinqValues(Func<string, string> name) => $$"""
+        function* {{name("linqValues")}}(source) {
+          if (typeof source === "string") {
+            for (let index = 0; index < source.length; index++) yield source[index];
+            return;
+          }
+          yield* source;
         }
 
         """;

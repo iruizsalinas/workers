@@ -95,6 +95,28 @@ public sealed class LinqTests
         Assert.DoesNotContain("function $workers$linqToArray", module);
     }
 
+    [Fact]
+    public void EnumeratesStringsAsUtf16Characters()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) =>
+                    Response.Json(new { count = "😀".Count(), values = "😀".ToArray() });
+            }
+            """);
+
+        Assert.Contains("function* $workers$linqValues(source)", module);
+        Assert.Contains("index < source.length", module);
+        Assert.Contains("yield source[index]", module);
+        Assert.Contains("$workers$linqCount(", module);
+        Assert.Contains(", null, false)", module);
+        Assert.Contains("$workers$linqToArray(", module);
+        Assert.Contains("Array.from($workers$linqValues(source))", module);
+    }
+
     [Theory]
     [InlineData("values.Contains(new Item(1))")]
     [InlineData("values.Contains(new Item(1), EqualityComparer<Item>.Default)")]

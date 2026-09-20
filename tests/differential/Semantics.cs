@@ -56,7 +56,9 @@ public sealed record CoreSemanticsResult(
     int LinqLast,
     int LinqSingle,
     int LinqIntDefault,
-    bool LinqBoolDefault);
+    bool LinqBoolDefault,
+    int LinqStringCount,
+    int[] LinqStringValues);
 
 public static class CoreSemantics
 {
@@ -109,7 +111,8 @@ public static class CoreSemantics
             lazyQuery.Count() + lazyQuery.Count(), linqSource.Any(value => value > 4),
             linqSource.All(value => value > 0), linqSource.Count(value => value % 2 == 1),
             linqSource.Contains(3), linqSource.First(), linqSource.Last(),
-            linqSource.Single(value => value == 2), emptyInts.FirstOrDefault(), emptyBools.LastOrDefault());
+            linqSource.Single(value => value == 2), emptyInts.FirstOrDefault(), emptyBools.LastOrDefault(),
+            "😀".Count(), "😀".Select(character => character + 0).ToArray());
     }
 }
 
