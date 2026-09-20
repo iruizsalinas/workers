@@ -77,6 +77,24 @@ public sealed class WorkerEntrypointTests
         Assert.Contains("this._count = 0;", module);
     }
 
+    [Fact]
+    public void PreservesNamedInstanceArgumentOrderAndSourceEvaluationOrder()
+    {
+        var module = Compile("""
+            using Workers;
+            [WorkerEntrypoint("Counter")]
+            public sealed class Counter : WorkerEntrypoint
+            {
+                private int _next;
+                private int Next() => _next++;
+                private string Pair(int a, int b) => $"{a}:{b}";
+                public string Run() => Pair(b: Next(), a: Next());
+            }
+            """);
+
+        Assert.Contains("(($workers$arg1, $workers$arg2) => this.#pair($workers$arg2, $workers$arg1))(this.#next(), this.#next())", module);
+    }
+
     [Theory]
     [InlineData("invalid-name")]
     [InlineData("class")]

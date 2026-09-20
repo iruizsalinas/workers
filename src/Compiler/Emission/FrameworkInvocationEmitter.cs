@@ -71,15 +71,33 @@ internal sealed partial class JavaScriptEmitter
             ("Substring", 1) => $"{receiver}.slice({arguments[0]})",
             ("Substring", 2) => $"{receiver}.slice({arguments[0]}, {arguments[0]} + {arguments[1]})",
             ("Replace", 2) => $"{receiver}.replaceAll({arguments[0]}, {arguments[1]})",
-            ("IndexOf", 2) when source.ArgumentList.Arguments[1].Expression is MemberAccessExpressionSyntax comparison
+            ("IndexOf", 2) when InvocationArgument(source, method, "comparisonType") is MemberAccessExpressionSyntax comparison
                                 && comparison.Name.Identifier.Text == "Ordinal" =>
                 $"{receiver}.indexOf({arguments[0]})",
             ("Split", 2) when method?.Parameters[0].Type.SpecialType is SpecialType.System_String or SpecialType.System_Char
-                              && source.ArgumentList.Arguments[1].Expression is MemberAccessExpressionSyntax option
+                              && InvocationArgument(source, method, "options") is MemberAccessExpressionSyntax option
                               && option.Name.Identifier.Text == "RemoveEmptyEntries" =>
                 $"{receiver}.split({arguments[0]}).filter(Boolean)",
             _ => throw UnsupportedSymbol(method, source)
         };
+
+    private static ExpressionSyntax? InvocationArgument(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol? method,
+        string parameterName)
+    {
+        if (method is null)
+            return null;
+        var ordinal = method.Parameters.FirstOrDefault(parameter => parameter.Name == parameterName)?.Ordinal;
+        if (ordinal is null)
+            return null;
+        return invocation.ArgumentList.Arguments.Select((argument, position) => new
+            {
+                Argument = argument,
+                Parameter = InvocationParameter(method, argument, position)
+            })
+            .FirstOrDefault(item => item.Parameter.Ordinal == ordinal)?.Argument.Expression;
+    }
 
     private string DateTimeInvocation(
         InvocationExpressionSyntax source,

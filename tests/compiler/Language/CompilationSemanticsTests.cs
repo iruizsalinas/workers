@@ -3,6 +3,42 @@ namespace Workers.Compiler.Tests;
 public sealed class CompilationSemanticsTests
 {
     [Fact]
+    public void ReordersNamedArgumentsWithoutChangingSourceEvaluationOrder()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) =>
+                    Response.Text(Pair(b: Math.Max(val1: 1, val2: 2), a: 3));
+
+                private static string Pair(int a = 10, int b = 20) => $"{a}:{b}";
+            }
+            """);
+
+        Assert.Contains("(($workers$arg1$2, $workers$arg2$2) => $workers$cs$Worker$Pair$0($workers$arg2$2, $workers$arg1$2))", module);
+        Assert.Contains("(($workers$arg1, $workers$arg2) => Math.max($workers$arg1, $workers$arg2))(1, 2)", module);
+    }
+
+    [Fact]
+    public void PreservesOptionalDefaultsForUserMethodsWithNamedArguments()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) => Response.Text(Pair(b: 2));
+                private static string Pair(int a = 10, int b = 20) => $"{a}:{b}";
+            }
+            """);
+
+        Assert.Contains("$workers$cs$Worker$Pair$0(10, $workers$arg1)", module);
+        Assert.Contains("function $workers$cs$Worker$Pair$0(a = 10, b = 20)", module);
+    }
+
+    [Fact]
     public void PreservesListInitializersAndCoalescingPrecedence()
     {
         var module = Compile("""

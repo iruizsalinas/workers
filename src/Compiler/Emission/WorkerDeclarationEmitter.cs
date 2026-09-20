@@ -193,9 +193,6 @@ internal sealed partial class JavaScriptEmitter
 
     private string EmitUserInvocation(IMethodSymbol method, InvocationExpressionSyntax invocation, IReadOnlyList<string> arguments)
     {
-        if (invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
-            || arguments.Count != method.Parameters.Length)
-            throw UnsupportedSymbol(method, invocation);
         return $"{QueueUserMethod(method, invocation)}({string.Join(", ", arguments)})";
     }
 
@@ -207,7 +204,8 @@ internal sealed partial class JavaScriptEmitter
             if (!_emittedUserMethods.Add(symbol)) continue;
             var declaration = (MethodDeclarationSyntax)symbol.DeclaringSyntaxReferences.Single().GetSyntax();
             _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
-            var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(ParameterName));
+            var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(parameter =>
+                parameter.Default is null ? ParameterName(parameter) : $"{ParameterName(parameter)} = {Expression(parameter.Default.Value)}"));
             var isAsync = declaration.Modifiers.Any(SyntaxKind.AsyncKeyword);
             var isIterator = symbol.ReturnType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IAsyncEnumerable<T>";
             _output.Append(isAsync ? "async " : "").Append(isIterator ? "function* " : "function ")

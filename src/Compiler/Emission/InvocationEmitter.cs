@@ -5,8 +5,29 @@ internal sealed partial class JavaScriptEmitter
 {
     private string Invocation(InvocationExpressionSyntax invocation)
     {
-        var arguments = invocation.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)).ToArray();
         var method = _model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+        var arguments = invocation.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)).ToArray();
+        var member = invocation.Expression as MemberAccessExpressionSyntax;
+        var isBindingIntrinsic = method is not null && BindingIntrinsicRegistry.TryGet(method, out _);
+        var isResponse = method?.ContainingType.ToDisplayString() == "Workers.Response";
+        if (method is not null && invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
+            && !isBindingIntrinsic && !isResponse)
+        {
+            var receiver = member is null || method.IsStatic ? null : Expression(member.Expression);
+            return EmitNormalizedInvocation(invocation, method, receiver,
+                (normalizedReceiver, normalizedArguments) =>
+                    InvocationCore(invocation, method, normalizedArguments, member, normalizedReceiver));
+        }
+        return InvocationCore(invocation, method, arguments, member);
+    }
+
+    private string InvocationCore(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol? method,
+        string[] arguments,
+        MemberAccessExpressionSyntax? member,
+        string? receiverOverride = null)
+    {
         var containingType = method?.ContainingType.ToDisplayString();
         var methodName = method?.Name;
         if (containingType is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask" && methodName == "FromResult")
@@ -19,14 +40,55 @@ internal sealed partial class JavaScriptEmitter
             return $"{_helpers.Require(JavaScriptHelper.Delay)}({arguments[0]})";
         }
         if (TryEmitStaticInvocation(invocation, method, containingType, methodName, arguments, out var result)) return result;
-        if (invocation.Expression is MemberAccessExpressionSyntax member)
-            return MemberInvocation(invocation, member, method, containingType, arguments);
+        if (member is not null)
+            return MemberInvocation(invocation, member, method, containingType, arguments, receiverOverride);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
             return $"this.{GeneratedInstanceMethodName(method)}({string.Join(", ", arguments)})";
         if (method is not null && method.DeclaringSyntaxReferences.Length != 0) return EmitUserInvocation(method, invocation, arguments);
         if (method is not null) throw UnsupportedSymbol(method, invocation);
         return $"{Expression(invocation.Expression)}({string.Join(", ", arguments)})";
     }
+
+    private string EmitNormalizedInvocation(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method,
+        string? receiver,
+        Func<string?, string[], string> emit)
+    {
+        var sourceArguments = invocation.ArgumentList.Arguments
+            .Select(argument => Expression(argument.Expression)).ToArray();
+        var key = $"invocation:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}";
+        var receiverTemporary = receiver is null ? null : _names.Get(key + ":receiver", "receiver");
+        var temporaries = sourceArguments.Select((_, index) =>
+            _names.Get($"{key}:argument:{index}", $"arg{index + 1}")).ToArray();
+        var supplied = invocation.ArgumentList.Arguments.Select((argument, index) =>
+            (Parameter: InvocationParameter(method, argument, index), Value: temporaries[index])).ToArray();
+        var lastOrdinal = supplied.Max(argument => argument.Parameter.Ordinal);
+        var ordered = new List<string>();
+        foreach (var parameter in method.Parameters.Take(lastOrdinal + 1))
+        {
+            var values = supplied.Where(argument =>
+                SymbolEqualityComparer.Default.Equals(argument.Parameter, parameter)).Select(argument => argument.Value).ToArray();
+            if (values.Length != 0)
+            {
+                ordered.AddRange(values);
+                continue;
+            }
+            if (!parameter.HasExplicitDefaultValue)
+                throw UnsupportedSymbol(method, invocation);
+            ordered.Add(LiteralConstant(parameter.ExplicitDefaultValue, invocation));
+        }
+
+        var lambdaParameters = receiverTemporary is null ? temporaries : [receiverTemporary, .. temporaries];
+        var sourceValues = receiver is null ? sourceArguments : [receiver, .. sourceArguments];
+        return $"(({string.Join(", ", lambdaParameters)}) => {emit(receiverTemporary, ordered.ToArray())})"
+            + $"({string.Join(", ", sourceValues)})";
+    }
+
+    private static IParameterSymbol InvocationParameter(IMethodSymbol method, ArgumentSyntax argument, int position) =>
+        argument.NameColon is { } name
+            ? method.Parameters.Single(parameter => parameter.Name == name.Name.Identifier.ValueText)
+            : method.Parameters[Math.Min(position, method.Parameters.Length - 1)];
 
     private bool TryEmitStaticInvocation(InvocationExpressionSyntax invocation, IMethodSymbol? method, string? type, string? name, string[] arguments, out string result)
     {
@@ -92,14 +154,20 @@ internal sealed partial class JavaScriptEmitter
         || type is INamedTypeSymbol named && named.AllInterfaces.Any(item =>
             item.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>");
 
-    private string MemberInvocation(InvocationExpressionSyntax invocation, MemberAccessExpressionSyntax member, IMethodSymbol? method, string? type, string[] arguments)
+    private string MemberInvocation(
+        InvocationExpressionSyntax invocation,
+        MemberAccessExpressionSyntax member,
+        IMethodSymbol? method,
+        string? type,
+        string[] arguments,
+        string? receiverOverride = null)
     {
         var name = member.Name.Identifier.Text;
         if (type == "System.IO.TextWriter" && name == "WriteLine"
             && _model.GetSymbolInfo(member.Expression).Symbol is IPropertySymbol { ContainingType: { } consoleType, Name: "Error" }
             && consoleType.ToDisplayString() == "System.Console")
             return arguments.Length == 1 ? $"console.error({arguments[0]})" : throw UnsupportedSymbol(method, invocation);
-        var receiver = Expression(member.Expression);
+        var receiver = receiverOverride ?? Expression(member.Expression);
         if (TryEmitFrameworkInvocation(invocation, method, receiver, name, arguments, out var framework)) return framework;
         if (type == "Workers.Env" && EnvironmentBindings.Contains(name)) return $"{receiver}[{arguments[0]}]";
         if (type == "Workers.CacheStorage" && name == "OpenAsync") return $"caches.open({arguments[0]})";

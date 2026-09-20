@@ -141,6 +141,7 @@ public sealed class RuntimeApiTests
                 {
                     var socket = WebSocketPair.Create().Server;
                     socket.Close(reason: "done", code: 1000);
+                    env.Kv("DATA").PutTextAsync(value: "hello", key: "message");
                     return Response.Empty();
                 }
             }
@@ -148,6 +149,8 @@ public sealed class RuntimeApiTests
 
         Assert.Contains(".close($workers$arg2, $workers$arg1)", module);
         Assert.Contains(", \"done\", 1000)", module);
+        Assert.Contains(".put($workers$arg2$2, $workers$arg1$2)", module);
+        Assert.Contains(", \"hello\", \"message\")", module);
     }
 
     [Fact]
