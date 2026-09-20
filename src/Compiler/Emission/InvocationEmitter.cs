@@ -43,6 +43,11 @@ internal sealed partial class JavaScriptEmitter
             return MemberInvocation(invocation, member, method, containingType, arguments, receiverOverride);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
             return $"this.{GeneratedInstanceMethodName(method)}({string.Join(", ", arguments)})";
+        if (method is { IsStatic: false } && IsUserInstanceType(method.ContainingType))
+        {
+            QueueUserType(method.ContainingType, invocation);
+            return $"this.{UserInstanceMethodName(method)}({string.Join(", ", arguments)})";
+        }
         if (method is not null && method.DeclaringSyntaxReferences.Length != 0) return EmitUserInvocation(method, invocation, arguments);
         if (method is not null) throw UnsupportedSymbol(method, invocation);
         return $"{Expression(invocation.Expression)}({string.Join(", ", arguments)})";
@@ -184,6 +189,11 @@ internal sealed partial class JavaScriptEmitter
         if (method is not null && BindingIntrinsicRegistry.TryGet(method, out var intrinsic)) return EmitBindingIntrinsic(receiver, invocation, method, intrinsic);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
             return $"{receiver}.{GeneratedInstanceMethodName(method)}({string.Join(", ", arguments)})";
+        if (method is { IsStatic: false } && IsUserInstanceType(method.ContainingType))
+        {
+            QueueUserType(method.ContainingType, invocation);
+            return $"{receiver}.{UserInstanceMethodName(method)}({string.Join(", ", arguments)})";
+        }
         if (method is not null && method.DeclaringSyntaxReferences.Length != 0) return EmitUserInvocation(method, invocation, arguments);
         throw UnsupportedSymbol(method, invocation);
     }

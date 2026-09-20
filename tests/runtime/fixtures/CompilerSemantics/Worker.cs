@@ -123,6 +123,23 @@ public static class Worker
             return Response.Json(new { events, header = response.Headers.Get("x-order") });
         }
 
+        if (request.Path == "/user-types")
+        {
+            var counter = new Counter(2) { Label = "items" };
+            var person = new Person(Last: "Lovelace", First: "Ada") { Age = 36 };
+            return Response.Json(new
+            {
+                value = counter.Add(3),
+                counter.Doubled,
+                counter.Label,
+                person.FullName,
+                greeting = person.Greet("Hello"),
+                person.Age,
+                counter,
+                person
+            });
+        }
+
         return Response.Text("Not found", status: 404);
     }
 
@@ -152,6 +169,22 @@ public static class Worker
 }
 
 public sealed record Parcel(string Label, int Count);
+
+public sealed class Counter
+{
+    private int _value;
+    public string Label { get; init; } = "counter";
+    public int Doubled => _value * 2;
+    public Counter(int initial) { _value = initial; }
+    public int Add(int amount = 1) { _value += amount; return _value; }
+}
+
+public sealed record Person(string First, string Last)
+{
+    public int Age { get; init; }
+    public string FullName => $"{First} {Last}";
+    public string Greet(string prefix) => $"{prefix}, {FullName}";
+}
 
 public enum ParcelState
 {

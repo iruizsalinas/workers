@@ -37,10 +37,44 @@ internal sealed partial class JavaScriptEmitter
                 : throw UnsupportedSymbol(constructor, value);
         if (type is not null && BindingIntrinsicRegistry.IsStructuralType(type))
             return StructuralObject(value, constructor, arguments);
-        if (type is { IsRecord: true } && type.DeclaringSyntaxReferences.Length != 0)
-            return RecordObject(constructor!, arguments);
+        if (type is { IsRecord: true } && IsUserInstanceType(type) && !RequiresUserClass(type))
+            return RecordObject(value, constructor!, arguments);
+        if (type is not null && IsUserInstanceType(type))
+            return UserObject(value, constructor, type, arguments);
         throw UnsupportedSymbol(constructor, value);
     }
+
+    private string UserObject(
+        BaseObjectCreationExpressionSyntax source,
+        IMethodSymbol? constructor,
+        INamedTypeSymbol type,
+        ArgumentSyntax[] arguments)
+    {
+        var typeName = QueueUserType(type, source);
+        var creation = PositionalObjectCreation(source, constructor, arguments,
+            values => $"new {typeName}({string.Join(", ", values)})");
+        if (source.Initializer is null || source.Initializer.Expressions.Count == 0)
+            return creation;
+
+        var temporary = _names.Get(
+            $"object-initializer:{source.SyntaxTree.FilePath}:{source.SpanStart}",
+            "value");
+        var assignments = source.Initializer.Expressions.Select(expression => expression switch
+        {
+            AssignmentExpressionSyntax assignment when assignment.Left is IdentifierNameSyntax =>
+                $"{temporary}.{UserInitializerMemberName(assignment.Left)} = {Expression(assignment.Right)};",
+            _ => throw Unsupported("WRK106", expression)
+        });
+        return $"(({temporary}) => {{ {string.Join(" ", assignments)} return {temporary}; }})({creation})";
+    }
+
+    private string UserInitializerMemberName(ExpressionSyntax expression) =>
+        _model.GetSymbolInfo(expression).Symbol switch
+        {
+            IPropertySymbol property => LowerFirst(property.Name),
+            IFieldSymbol field => UserIdentifier(field, field.Name),
+            var symbol => throw UnsupportedSymbol(symbol, expression)
+        };
 
     private string CreateUrl(SyntaxNode source, IMethodSymbol? constructor, ArgumentSyntax[] arguments) =>
         PositionalObjectCreation(source, constructor, arguments, values => values.Count switch
@@ -69,16 +103,27 @@ internal sealed partial class JavaScriptEmitter
         return "{ " + string.Join(", ", properties) + " }";
     }
 
-    private string RecordObject(IMethodSymbol constructor, ArgumentSyntax[] arguments)
+    private string RecordObject(
+        BaseObjectCreationExpressionSyntax source,
+        IMethodSymbol constructor,
+        ArgumentSyntax[] arguments)
     {
         var supplied = arguments.Select((argument, index) =>
             (Parameter: ArgumentParameter(constructor, argument, index), Value: Expression(argument.Expression))).ToArray();
-        var properties = supplied.Select(argument => $"{LowerFirst(argument.Parameter.Name)}: {argument.Value}").ToList();
-        var source = constructor.DeclaringSyntaxReferences.Single().GetSyntax();
+        var properties = supplied.Select(argument =>
+            $"{LowerFirst(argument.Parameter.Name)}: {argument.Value}").ToList();
         properties.AddRange(constructor.Parameters
             .Where(parameter => parameter.HasExplicitDefaultValue
                                 && supplied.All(argument => !SymbolEqualityComparer.Default.Equals(argument.Parameter, parameter)))
-            .Select(parameter => $"{LowerFirst(parameter.Name)}: {LiteralConstant(parameter.ExplicitDefaultValue, source)}"));
+            .Select(parameter =>
+                $"{LowerFirst(parameter.Name)}: {LiteralConstant(parameter.ExplicitDefaultValue, source)}"));
+        if (source.Initializer is not null)
+            properties.AddRange(source.Initializer.Expressions.Select(expression => expression switch
+            {
+                AssignmentExpressionSyntax assignment when assignment.Left is IdentifierNameSyntax =>
+                    $"{UserInitializerMemberName(assignment.Left)}: {Expression(assignment.Right)}",
+                _ => throw Unsupported("WRK106", expression)
+            }));
         return "{ " + string.Join(", ", properties) + " }";
     }
 

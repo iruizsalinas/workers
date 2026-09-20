@@ -132,6 +132,12 @@ internal sealed partial class JavaScriptEmitter
             && (collection.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyCollection<T>"
                 || collection.AllInterfaces.Any(item => item.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyCollection<T>")))
             return $"{Expression(member.Expression)}.length";
+        if (symbol?.ContainingType is { } userType && IsUserInstanceType(userType) && RequiresUserClass(userType))
+        {
+            QueueUserType(userType, member);
+            if (symbol is IFieldSymbol userField)
+                return $"{Expression(member.Expression)}.{UserIdentifier(userField, userField.Name)}";
+        }
         ThrowIfUnsupportedFrameworkMember(symbol, member);
         return $"{Expression(member.Expression)}.{LowerFirst(member.Name.Identifier.Text)}";
     }
@@ -180,6 +186,8 @@ internal sealed partial class JavaScriptEmitter
     {
         IPropertySymbol { ContainingType: { } type, Name: var name }
             when type.ToDisplayString() == "Workers.WorkerEntrypoint" => name == "Environment" ? "this.env" : "this.ctx",
+        IPropertySymbol { IsStatic: false } property when IsUserInstanceType(property.ContainingType) =>
+            $"this.{LowerFirst(property.Name)}",
         IFieldSymbol { IsStatic: false } field => $"this.{UserIdentifier(field, field.Name)}",
         IFieldSymbol { IsStatic: true, HasConstantValue: true } field => LiteralConstant(field.ConstantValue, value),
         IFieldSymbol { IsStatic: true } => throw Unsupported("WRK110", value),

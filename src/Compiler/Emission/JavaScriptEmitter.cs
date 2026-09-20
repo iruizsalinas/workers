@@ -13,6 +13,10 @@ internal sealed partial class JavaScriptEmitter
     private readonly Dictionary<IMethodSymbol, string> _userMethods = new(SymbolEqualityComparer.Default);
     private readonly Queue<IMethodSymbol> _pendingUserMethods = new();
     private readonly HashSet<IMethodSymbol> _emittedUserMethods = new(SymbolEqualityComparer.Default);
+    private readonly Dictionary<INamedTypeSymbol, string> _userTypes = new(SymbolEqualityComparer.Default);
+    private readonly Queue<INamedTypeSymbol> _pendingUserTypes = new();
+    private readonly HashSet<INamedTypeSymbol> _emittedUserTypes = new(SymbolEqualityComparer.Default);
+    private readonly Dictionary<IMethodSymbol, string> _userInstanceMethods = new(SymbolEqualityComparer.Default);
     private readonly Stack<string> _caughtExceptions = new();
     private SemanticModel _model = null!;
     private JavaScriptEmitter(CSharpCompilation compilation)
@@ -36,7 +40,7 @@ internal sealed partial class JavaScriptEmitter
             emitter.EmitWorkerEntrypoint(workerEntrypoint);
         foreach (var handler in program.Events)
             emitter.EmitHandler(handler.Name, handler.Method);
-        emitter.EmitUserMethods();
+        emitter.EmitUserCode();
 
         emitter._output.Append(emitter._helpers.Emit());
 

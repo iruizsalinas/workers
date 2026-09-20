@@ -98,4 +98,24 @@ describe("compiler value semantics", () => {
       header: "set",
     });
   });
+
+  it("runs user classes, records, initializers, methods, and computed properties", async () => {
+    const response = await invoke("/user-types");
+
+    await expect(response.json()).resolves.toEqual({
+      value: 5,
+      doubled: 10,
+      label: "items",
+      fullName: "Ada Lovelace",
+      greeting: "Hello, Ada Lovelace",
+      age: 36,
+      counter: { label: "items", doubled: 10 },
+      person: {
+        first: "Ada",
+        last: "Lovelace",
+        age: 36,
+        fullName: "Ada Lovelace",
+      },
+    });
+  });
 });
