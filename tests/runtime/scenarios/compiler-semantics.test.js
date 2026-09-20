@@ -83,4 +83,10 @@ describe("compiler value semantics", () => {
 
     await expect(response.text()).resolves.toBe(expected);
   });
+
+  it("executes synchronous C# iterators as JavaScript generators", async () => {
+    const response = await invoke("/sync-iterator");
+
+    await expect(response.json()).resolves.toEqual({ total: 3 });
+  });
 });

@@ -271,4 +271,29 @@ public sealed class RuntimeApiTests
         Assert.Contains("new HTMLRewriter()).transform", module);
     }
 
+    [Fact]
+    public void EmitsHtmlHandlerIteratorMethodsAsGenerators()
+    {
+        var module = Compile("""
+            using Workers;
+            public sealed class Handler : HtmlElementHandler
+            {
+                private IEnumerable<int> Values()
+                {
+                    yield return 1;
+                }
+
+                public override ValueTask ElementAsync(HtmlElement element) => ValueTask.CompletedTask;
+            }
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx) =>
+                    new HtmlRewriter().On("p", new Handler()).Transform(Response.Html("<p>x</p>"));
+            }
+            """);
+
+        Assert.Contains("*#values()", module);
+    }
+
 }

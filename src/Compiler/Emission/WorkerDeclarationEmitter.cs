@@ -40,7 +40,9 @@ internal sealed partial class JavaScriptEmitter
             var name = GeneratedInstanceMethodName(_model.GetDeclaredSymbol(method)!);
             var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterDeclaration));
             var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);
-            _output.Append("  ").Append(isAsync ? "async " : "").Append(name).Append('(').Append(parameters).AppendLine(") {");
+            var isIterator = IsIterator(method);
+            _output.Append("  ").Append(isAsync ? "async " : "").Append(isIterator ? "*" : "")
+                .Append(name).Append('(').Append(parameters).AppendLine(") {");
             if (method.ExpressionBody is not null)
                 _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
             else
@@ -97,7 +99,9 @@ internal sealed partial class JavaScriptEmitter
             var name = GeneratedInstanceMethodName(model.GetDeclaredSymbol(method)!);
             var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterDeclaration));
             var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);
-            _output.Append("  ").Append(isAsync ? "async " : "").Append(name).Append('(').Append(parameters).AppendLine(") {");
+            var isIterator = IsIterator(method);
+            _output.Append("  ").Append(isAsync ? "async " : "").Append(isIterator ? "*" : "")
+                .Append(name).Append('(').Append(parameters).AppendLine(") {");
             if (method.ExpressionBody is not null)
                 _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
             else
@@ -111,6 +115,11 @@ internal sealed partial class JavaScriptEmitter
         type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.DurableObjectAttribute")
         || type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.WorkerEntrypointAttribute")
         || type.BaseType?.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler";
+
+    private static bool IsIterator(MethodDeclarationSyntax method) =>
+        method.DescendantNodes(node => node is not AnonymousFunctionExpressionSyntax and not LocalFunctionStatementSyntax)
+            .OfType<YieldStatementSyntax>()
+            .Any();
 
     private string ParameterDeclaration(ParameterSyntax parameter) =>
         parameter.Default is null
@@ -211,7 +220,7 @@ internal sealed partial class JavaScriptEmitter
             _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
             var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(ParameterDeclaration));
             var isAsync = declaration.Modifiers.Any(SyntaxKind.AsyncKeyword);
-            var isIterator = symbol.ReturnType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IAsyncEnumerable<T>";
+            var isIterator = IsIterator(declaration);
             _output.Append(isAsync ? "async " : "").Append(isIterator ? "function* " : "function ")
                 .Append(_userMethods[symbol]).Append('(').Append(parameters).AppendLine(") {");
             if (declaration.ExpressionBody is not null)

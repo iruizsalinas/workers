@@ -63,4 +63,22 @@ public sealed class DurableObjectTests
         Assert.Contains("return this.add();", module);
     }
 
+    [Fact]
+    public void EmitsIteratorMethodsAsGenerators()
+    {
+        var module = Compile("""
+            using Workers;
+            [DurableObject("Counter")]
+            public sealed class Counter
+            {
+                private IEnumerable<int> Values()
+                {
+                    yield return 1;
+                }
+            }
+            """);
+
+        Assert.Contains("*#values()", module);
+    }
+
 }

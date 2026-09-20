@@ -61,6 +61,25 @@ public sealed class WorkerEntrypointTests
     }
 
     [Fact]
+    public void EmitsIteratorMethodsAsGenerators()
+    {
+        var module = Compile("""
+            using Workers;
+            [WorkerEntrypoint("Users")]
+            public sealed class Users : WorkerEntrypoint
+            {
+                private async IAsyncEnumerable<int> ValuesAsync()
+                {
+                    await Task.CompletedTask;
+                    yield return 1;
+                }
+            }
+            """);
+
+        Assert.Contains("async *#values()", module);
+    }
+
+    [Fact]
     public void InitializesEntrypointInstanceState()
     {
         var module = Compile("""

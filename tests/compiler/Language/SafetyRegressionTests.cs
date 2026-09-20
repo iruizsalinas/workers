@@ -27,8 +27,37 @@ public sealed class SafetyRegressionTests
             """);
 
         Assert.Contains("for await (const value of", module);
+        Assert.Contains("async function* $workers$cs$Worker$Values$0()", module);
         Assert.Contains("| 0", module);
         Assert.Contains("\"True\" : \"False\"", module);
+    }
+
+    [Fact]
+    public void EmitsSynchronousIteratorMethodsAsGenerators()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var total = 0;
+                    foreach (var value in Values()) total += value;
+                    return Response.Json(new { total });
+                }
+
+                private static IEnumerable<int> Values()
+                {
+                    yield return 1;
+                    yield return 2;
+                }
+            }
+            """);
+
+        Assert.Contains("function* $workers$cs$Worker$Values$0()", module);
+        Assert.Contains("yield 1;", module);
+        Assert.Contains("yield 2;", module);
     }
 
     [Fact]

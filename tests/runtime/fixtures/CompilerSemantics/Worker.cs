@@ -106,7 +106,21 @@ public static class Worker
             return Response.Text(value.ToString());
         }
 
+        if (request.Path == "/sync-iterator")
+        {
+            var total = 0;
+            foreach (var value in Values())
+                total += value;
+            return Response.Json(new { total });
+        }
+
         return Response.Text("Not found", status: 404);
+    }
+
+    private static IEnumerable<int> Values()
+    {
+        yield return 1;
+        yield return 2;
     }
 }
 

@@ -44,6 +44,7 @@ internal sealed partial class JavaScriptEmitter
             var methodSymbol = _model.GetDeclaredSymbol(method)!;
             var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterDeclaration));
             _output.Append("  ").Append(method.Modifiers.Any(SyntaxKind.AsyncKeyword) ? "async " : "")
+                .Append(IsIterator(method) ? "*" : "")
                 .Append(GeneratedInstanceMethodName(methodSymbol))
                 .Append('(').Append(parameters).AppendLine(") {");
             if (method.ExpressionBody is not null)
