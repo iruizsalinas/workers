@@ -57,6 +57,35 @@ public sealed class RuntimeApiTests
     }
 
     [Fact]
+    public void PreservesNamedResponseInstanceEvaluationOrder()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var events = new List<string>();
+                    return GetResponse(events).WithHeader(
+                        value: GetValue(events),
+                        name: GetName(events));
+                }
+
+                private static Response GetResponse(List<string> events) { events.Add("receiver"); return Response.Empty(); }
+                private static string GetValue(List<string> events) { events.Add("value"); return "set"; }
+                private static string GetName(List<string> events) { events.Add("name"); return "x-order"; }
+            }
+            """);
+
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) =>", module);
+        Assert.Contains("$workers$withHeader($workers$receiver, $workers$arg2, $workers$arg1)", module);
+        Assert.Matches(
+            @"\)\(\$workers\$cs\$Worker\$GetResponse\$\d+\(events\), \$workers\$cs\$Worker\$GetValue\$\d+\(events\), \$workers\$cs\$Worker\$GetName\$\d+\(events\)\)",
+            module);
+    }
+
+    [Fact]
     public void PreservesResponseInitializationOptions()
     {
         var module = Compile("""

@@ -89,4 +89,13 @@ describe("compiler value semantics", () => {
 
     await expect(response.json()).resolves.toEqual({ total: 3 });
   });
+
+  it("preserves receiver-first evaluation for named Response instance calls", async () => {
+    const response = await invoke("/response-order");
+
+    await expect(response.json()).resolves.toEqual({
+      events: ["receiver", "value", "name"],
+      header: "set",
+    });
+  });
 });

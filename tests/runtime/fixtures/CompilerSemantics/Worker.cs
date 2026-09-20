@@ -114,6 +114,15 @@ public static class Worker
             return Response.Json(new { total });
         }
 
+        if (request.Path == "/response-order")
+        {
+            var events = new List<string>();
+            var response = GetResponse(events).WithHeader(
+                value: GetValue(events),
+                name: GetName(events));
+            return Response.Json(new { events, header = response.Headers.Get("x-order") });
+        }
+
         return Response.Text("Not found", status: 404);
     }
 
@@ -121,6 +130,24 @@ public static class Worker
     {
         yield return 1;
         yield return 2;
+    }
+
+    private static Response GetResponse(List<string> events)
+    {
+        events.Add("receiver");
+        return Response.Empty();
+    }
+
+    private static string GetValue(List<string> events)
+    {
+        events.Add("value");
+        return "set";
+    }
+
+    private static string GetName(List<string> events)
+    {
+        events.Add("name");
+        return "x-order";
     }
 }
 

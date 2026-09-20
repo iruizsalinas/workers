@@ -9,9 +9,8 @@ internal sealed partial class JavaScriptEmitter
         var arguments = invocation.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)).ToArray();
         var member = invocation.Expression as MemberAccessExpressionSyntax;
         var isBindingIntrinsic = method is not null && BindingIntrinsicRegistry.TryGet(method, out _);
-        var isResponse = method?.ContainingType.ToDisplayString() == "Workers.Response";
         if (method is not null && invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
-            && !isBindingIntrinsic && !isResponse)
+            && !isBindingIntrinsic)
         {
             var receiver = member is null || method.IsStatic ? null : Expression(member.Expression);
             return EmitNormalizedInvocation(invocation, method, receiver,
@@ -39,7 +38,7 @@ internal sealed partial class JavaScriptEmitter
             if (arguments.Length != 1) throw UnsupportedSymbol(method, invocation);
             return $"{_helpers.Require(JavaScriptHelper.Delay)}({arguments[0]})";
         }
-        if (TryEmitStaticInvocation(invocation, method, containingType, methodName, arguments, out var result)) return result;
+        if (TryEmitStaticInvocation(invocation, method, containingType, methodName, arguments, receiverOverride, out var result)) return result;
         if (member is not null)
             return MemberInvocation(invocation, member, method, containingType, arguments, receiverOverride);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
@@ -90,7 +89,14 @@ internal sealed partial class JavaScriptEmitter
             ? method.Parameters.Single(parameter => parameter.Name == name.Name.Identifier.ValueText)
             : method.Parameters[Math.Min(position, method.Parameters.Length - 1)];
 
-    private bool TryEmitStaticInvocation(InvocationExpressionSyntax invocation, IMethodSymbol? method, string? type, string? name, string[] arguments, out string result)
+    private bool TryEmitStaticInvocation(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol? method,
+        string? type,
+        string? name,
+        string[] arguments,
+        string? receiverOverride,
+        out string result)
     {
         result = (type, name) switch
         {
@@ -113,7 +119,7 @@ internal sealed partial class JavaScriptEmitter
             ("Workers.Timers", "ClearTimeout") => $"clearTimeout({arguments[0]})",
             ("Workers.Body", "Text" or "FromBytes") => arguments[0],
             ("Workers.Body", "Json") => $"JSON.stringify({arguments[0]})",
-            ("Workers.Response", _) => EmitResponseInvocation(invocation, method!, name!, arguments),
+            ("Workers.Response", _) => ResponseInvocation(invocation, method!, name!, arguments, receiverOverride),
             _ => ""
         };
         return result.Length != 0;
@@ -182,32 +188,12 @@ internal sealed partial class JavaScriptEmitter
         throw UnsupportedSymbol(method, invocation);
     }
 
-    private string EmitResponseInvocation(
+    private string ResponseInvocation(
         InvocationExpressionSyntax invocation,
-        IMethodSymbol method,
+        IMethodSymbol? method,
         string name,
-        string[] sourceArguments)
-    {
-        if (!invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null))
-            return ResponseInvocation(invocation, method, name, sourceArguments);
-
-        var temporaries = sourceArguments.Select((_, index) =>
-            _names.Get($"argument:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}:{index}", $"arg{index + 1}")).ToArray();
-        var parameterOrdinals = invocation.ArgumentList.Arguments.Select((syntax, index) => syntax.NameColon is null
-            ? index
-            : method.Parameters.Single(candidate => candidate.Name == syntax.NameColon.Name.Identifier.ValueText).Ordinal).ToArray();
-        var arguments = new string[parameterOrdinals.Max() + 1];
-        for (var index = 0; index < temporaries.Length; index++)
-            arguments[parameterOrdinals[index]] = temporaries[index];
-        for (var index = 0; index < arguments.Length; index++)
-            if (arguments[index] is null)
-                arguments[index] = LiteralConstant(method.Parameters[index].ExplicitDefaultValue, invocation);
-
-        var body = ResponseInvocation(invocation, method, name, arguments);
-        return $"(({string.Join(", ", temporaries)}) => {body})({string.Join(", ", sourceArguments)})";
-    }
-
-    private string ResponseInvocation(InvocationExpressionSyntax invocation, IMethodSymbol? method, string name, string[] arguments) => name switch
+        string[] arguments,
+        string? receiverOverride) => name switch
     {
         "Text" => Response(arguments, "text"),
         "Html" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2, "{ \"content-type\": \"text/html; charset=utf-8\" }")})",
@@ -219,9 +205,9 @@ internal sealed partial class JavaScriptEmitter
         "FromStream" when method?.Parameters.Length >= 2 && method.Parameters[1].Type.ToDisplayString() == "Workers.Headers" => $"new Response({arguments[0]}, {{ status: {(arguments.Length > 2 ? arguments[2] : "200")}, headers: {arguments[1]} }})",
         "FromStream" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})",
         "WebSocket" => $"new Response(null, {{ status: 101, webSocket: {arguments[0]} }})",
-        "WithHeader" => HeaderMutation(invocation, arguments, "set"),
-        "AppendHeader" => HeaderMutation(invocation, arguments, "append"),
-        "WithoutHeader" => HeaderMutation(invocation, arguments, "delete"),
+        "WithHeader" => HeaderMutation(invocation, arguments, "set", receiverOverride),
+        "AppendHeader" => HeaderMutation(invocation, arguments, "append", receiverOverride),
+        "WithoutHeader" => HeaderMutation(invocation, arguments, "delete", receiverOverride),
         _ => ""
     };
 
@@ -231,10 +217,14 @@ internal sealed partial class JavaScriptEmitter
         return $"(({body}) => new Response({body}.body ?? {body}{ResponseInit(arguments, 1, 2)}))({arguments[0]})";
     }
 
-    private string HeaderMutation(InvocationExpressionSyntax invocation, string[] arguments, string operation)
+    private string HeaderMutation(
+        InvocationExpressionSyntax invocation,
+        string[] arguments,
+        string operation,
+        string? receiverOverride)
     {
         var helper = _helpers.Require(JavaScriptHelper.WithHeader);
-        var receiver = Expression(((MemberAccessExpressionSyntax)invocation.Expression).Expression);
+        var receiver = receiverOverride ?? Expression(((MemberAccessExpressionSyntax)invocation.Expression).Expression);
         return operation switch
         {
             "set" => $"{helper}({receiver}, {arguments[0]}, {arguments[1]})",
