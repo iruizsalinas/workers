@@ -2,7 +2,7 @@ internal enum JavaScriptHelper
 {
     WithHeader, Delay, Stream, Socket, Digest, WebSocketEvents, IntegerDivide, IntegerRemainder,
     RandomNext, SetAdd, Base64, RpcArguments, IntParse, HexDecode, EscapeDataString, JsonElementToString,
-    DateTimeOffset, DateTimeAddMonths, DateTimeFromUnixTime
+    DateTimeOffset, DateTimeAddMonths, DateTimeFromUnixTime, DateTimeCalendar
 }
 
 internal sealed class HelperRegistry(GeneratedNameAllocator names)
@@ -43,6 +43,7 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.DateTimeOffset => "dateTimeOffset",
         JavaScriptHelper.DateTimeAddMonths => "dateTimeAddMonths",
         JavaScriptHelper.DateTimeFromUnixTime => "dateTimeFromUnixTime",
+        JavaScriptHelper.DateTimeCalendar => "dateTimeCompare",
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 }

@@ -127,8 +127,18 @@ internal sealed partial class JavaScriptEmitter
                 $"new Date(new Date({receiver}).getTime() + ({arguments[0]}) * 1000)",
             "AddMilliseconds" when arguments.Length == 1 =>
                 $"new Date(new Date({receiver}).getTime() + ({arguments[0]}))",
+            "CompareTo" when arguments.Length == 1 && HasSameDateParameter(method) =>
+                DateTimeCalendarInvocation("dateTimeCompare", [receiver, arguments[0]]),
+            "Equals" when arguments.Length == 1 && HasSameDateParameter(method) =>
+                $"{DateTimeCalendarInvocation("dateTimeCompare", [receiver, arguments[0]])} === 0",
+            "ToUniversalTime" when arguments.Length == 0
+                                   && method?.ContainingType.ToDisplayString() == "System.DateTimeOffset" =>
+                $"new Date({receiver})",
             "ToUnixTimeMilliseconds" when arguments.Length == 0 => $"new Date({receiver}).getTime()",
             "ToUnixTimeSeconds" when arguments.Length == 0 => $"Math.floor(new Date({receiver}).getTime() / 1000)",
             _ => throw UnsupportedSymbol(method, source)
         };
+
+    private static bool HasSameDateParameter(IMethodSymbol? method) => method is { Parameters.Length: 1 }
+        && SymbolEqualityComparer.Default.Equals(method.ContainingType, method.Parameters[0].Type);
 }

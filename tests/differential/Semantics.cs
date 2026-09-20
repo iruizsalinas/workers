@@ -34,7 +34,18 @@ public sealed record CoreSemanticsResult(
     bool EqualDates,
     string DateRoundTrip,
     string DateInterpolation,
-    string OffsetInterpolation);
+    string OffsetInterpolation,
+    int OffsetDayOfYear,
+    int DateDayOfYear,
+    bool LeapYear,
+    int LeapFebruaryDays,
+    int OffsetStaticCompare,
+    int DateStaticCompare,
+    int InstanceCompare,
+    bool InstanceEquals,
+    bool UnixEpochIsZero,
+    string UnspecifiedDateTime,
+    string UniversalTime);
 
 public static class CoreSemantics
 {
@@ -70,7 +81,12 @@ public static class CoreSemantics
             monthEnd.AddMonths(1).ToString("O"), leapDay.AddYears(1).ToString("O"),
             DateTimeOffset.FromUnixTimeMilliseconds(-1).ToUnixTimeSeconds() == -1,
             DateTimeOffset.FromUnixTimeSeconds(-1).ToUnixTimeMilliseconds() == -1000,
-            date.Year, date.DayOfWeek, date == sameDate, date.ToString("O"), $"{date:O}", $"{leapDay:O}");
+            date.Year, date.DayOfWeek, date == sameDate, date.ToString("O"), $"{date:O}", $"{leapDay:O}",
+            leapDay.DayOfYear, date.DayOfYear, DateTime.IsLeapYear(2024), DateTime.DaysInMonth(2024, 2),
+            DateTimeOffset.Compare(instant, laterInstant), DateTime.Compare(date, sameDate),
+            instant.CompareTo(laterInstant), instant.Equals(sameInstant),
+            DateTimeOffset.UnixEpoch.ToUnixTimeMilliseconds() == 0,
+            leapDay.DateTime.ToString("O"), leapDay.ToUniversalTime().ToString("O"));
     }
 }
 

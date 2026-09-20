@@ -110,6 +110,14 @@ internal sealed partial class JavaScriptEmitter
                 $"{_helpers.Require(JavaScriptHelper.DateTimeFromUnixTime)}({arguments[0]}, false)",
             ("System.DateTimeOffset", "FromUnixTimeSeconds") when arguments.Length == 1 =>
                 $"{_helpers.Require(JavaScriptHelper.DateTimeFromUnixTime)}({arguments[0]}, true)",
+            ("System.DateTime", "IsLeapYear") when arguments.Length == 1 =>
+                DateTimeCalendarInvocation("dateTimeIsLeapYear", arguments),
+            ("System.DateTime", "DaysInMonth") when arguments.Length == 2 =>
+                DateTimeCalendarInvocation("dateTimeDaysInMonth", arguments),
+            ("System.DateTime", "Compare") when arguments.Length == 2 =>
+                DateTimeCalendarInvocation("dateTimeCompare", arguments),
+            ("System.DateTimeOffset", "Compare") when arguments.Length == 2 =>
+                DateTimeCalendarInvocation("dateTimeCompare", arguments),
             ("System.Console", "WriteLine") when arguments.Length == 1 => $"console.log({arguments[0]})",
             ("System.Guid", "NewGuid") => "globalThis.crypto.randomUUID()",
             ("Workers.Performance", "Now") => "performance.now()",
@@ -136,6 +144,12 @@ internal sealed partial class JavaScriptEmitter
 
     private static bool HasParameters(IMethodSymbol? method, params SpecialType[] types) =>
         method is not null && method.Parameters.Select(parameter => parameter.Type.SpecialType).SequenceEqual(types);
+
+    private string DateTimeCalendarInvocation(string helperName, IReadOnlyList<string> arguments)
+    {
+        _helpers.Require(JavaScriptHelper.DateTimeCalendar);
+        return $"{_helpers.Name(helperName)}({string.Join(", ", arguments)})";
+    }
 
     private bool IsUtf8EncodingInvocation(InvocationExpressionSyntax invocation) =>
         invocation.Expression is MemberAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax receiver }

@@ -21,6 +21,7 @@ internal static class HelperSource
         JavaScriptHelper.DateTimeOffset => DateTimeOffset(name),
         JavaScriptHelper.DateTimeAddMonths => DateTimeAddMonths(name),
         JavaScriptHelper.DateTimeFromUnixTime => DateTimeFromUnixTime(name),
+        JavaScriptHelper.DateTimeCalendar => DateTimeCalendar(name),
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };
 
@@ -279,6 +280,31 @@ internal static class HelperSource
           if (!Number.isInteger(value) || value < minimum || value > maximum)
             throw new RangeError("Unix time is out of range.");
           return new Date(seconds ? value * 1000 : value);
+        }
+
+        """;
+
+    private static string DateTimeCalendar(Func<string, string> name) => $$"""
+        function {{name("dateTimeCompare")}}(left, right) {
+          const difference = new Date(left).getTime() - new Date(right).getTime();
+          return difference < 0 ? -1 : difference > 0 ? 1 : 0;
+        }
+        function {{name("dateTimeDayOfYear")}}(input) {
+          const value = new Date(input), start = new Date(0);
+          start.setUTCFullYear(value.getUTCFullYear(), 0, 1);
+          start.setUTCHours(0, 0, 0, 0);
+          return Math.floor((value.getTime() - start.getTime()) / 86400000) + 1;
+        }
+        function {{name("dateTimeIsLeapYear")}}(year) {
+          if (!Number.isInteger(year) || year < 1 || year > 9999)
+            throw new RangeError("Year must be between 1 and 9999.");
+          return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+        }
+        function {{name("dateTimeDaysInMonth")}}(year, month) {
+          if (!Number.isInteger(month) || month < 1 || month > 12)
+            throw new RangeError("Month must be between 1 and 12.");
+          return [31, {{name("dateTimeIsLeapYear")}}(year) ? 29 : 28, 31, 30, 31, 30,
+            31, 31, 30, 31, 30, 31][month - 1];
         }
 
         """;
