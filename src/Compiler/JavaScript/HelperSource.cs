@@ -45,6 +45,18 @@ internal static class HelperSource
         JavaScriptHelper.LinqDistinctBy => LinqDistinctBy(name),
         JavaScriptHelper.LinqSequenceEqual => LinqSequenceEqual(name),
         JavaScriptHelper.LinqOrder => LinqOrder(name),
+        JavaScriptHelper.LinqGroupBy => LinqGroupBy(name),
+        JavaScriptHelper.LinqToDictionary => LinqToDictionary(name),
+        JavaScriptHelper.LinqToLookup => LinqToLookup(name),
+        JavaScriptHelper.LinqNumericAggregate => LinqNumericAggregate(name),
+        JavaScriptHelper.LinqAggregate => LinqAggregate(name),
+        JavaScriptHelper.LinqExtremum => LinqExtremum(name),
+        JavaScriptHelper.LinqSet => LinqSet(name),
+        JavaScriptHelper.LinqReverse => LinqReverse(name),
+        JavaScriptHelper.LinqDefaultIfEmpty => LinqDefaultIfEmpty(name),
+        JavaScriptHelper.LinqChunk => LinqChunk(name),
+        JavaScriptHelper.LinqZip => LinqZip(name),
+        JavaScriptHelper.LinqJoin => LinqJoin(name),
         JavaScriptHelper.LinqElementAt => LinqElementAt(name),
         JavaScriptHelper.LinqFirst => LinqFirst(name),
         JavaScriptHelper.LinqLast => LinqLast(name),
@@ -635,6 +647,241 @@ internal static class HelperSource
 
         """;
 
+    private static string LinqGroupBy(Func<string, string> name) => $$"""
+        function {{name("linqGroupBy")}}(source, keySelector, elementSelector) {
+          if (source == null || keySelector == null) throw new TypeError("LINQ argument cannot be null.");
+          return { *[Symbol.iterator]() {
+            const groups = new Map();
+            for (const value of {{name("linqValues")}}(source)) {
+              const key = keySelector(value);
+              let group = groups.get(key);
+              if (group === undefined) {
+                group = [];
+                group.key = key;
+                groups.set(key, group);
+              }
+              group.push(elementSelector == null ? value : elementSelector(value));
+            }
+            yield* groups.values();
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqToDictionary(Func<string, string> name) => $$"""
+        function {{name("linqToDictionary")}}(source, keySelector, elementSelector) {
+          if (source == null || keySelector == null) throw new TypeError("LINQ argument cannot be null.");
+          const result = Object.create(null);
+          for (const value of {{name("linqValues")}}(source)) {
+            const key = keySelector(value);
+            if (key == null) throw new TypeError("Dictionary key cannot be null.");
+            if (Object.hasOwn(result, key)) throw new TypeError("An item with the same key has already been added.");
+            result[key] = elementSelector == null ? value : elementSelector(value);
+          }
+          return result;
+        }
+
+        """;
+
+    private static string LinqToLookup(Func<string, string> name) => $$"""
+        function {{name("linqToLookup")}}(source, keySelector, elementSelector) {
+          if (source == null || keySelector == null) throw new TypeError("LINQ argument cannot be null.");
+          const groups = new Map();
+          for (const value of {{name("linqValues")}}(source)) {
+            const key = keySelector(value);
+            let group = groups.get(key);
+            if (group === undefined) {
+              group = [];
+              group.key = key;
+              groups.set(key, group);
+            }
+            group.push(elementSelector == null ? value : elementSelector(value));
+          }
+          const empty = [];
+          return {
+            count: groups.size,
+            contains: key => groups.has(key),
+            get: key => groups.get(key) ?? empty,
+            *[Symbol.iterator]() { yield* groups.values(); }
+          };
+        }
+
+        """;
+
+    private static string LinqNumericAggregate(Func<string, string> name) => $$"""
+        function {{name("linqNumericAggregate")}}(source, operation, selector, kind, nullable) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          let total = 0, count = 0;
+          for (const item of {{name("linqValues")}}(source)) {
+            const value = selector == null ? item : selector(item);
+            if (value == null && nullable) continue;
+            total += value;
+            count++;
+            if (kind === 0 && (total < -2147483648 || total > 2147483647))
+              throw new RangeError("Arithmetic operation resulted in an overflow.");
+          }
+          if (operation === 1 && count === 0) {
+            if (nullable) return null;
+            throw new TypeError("Sequence contains no elements.");
+          }
+          const result = operation === 0 ? total : total / count;
+          return kind === 0 ? result | 0 : kind === 1 ? Math.fround(result) : result;
+        }
+
+        """;
+
+    private static string LinqExtremum(Func<string, string> name) => $$"""
+        function {{name("linqExtremumCompare")}}(left, right, kind) {
+          if (left == null || right == null) return left == null ? (right == null ? 0 : -1) : 1;
+          if (kind === 2) { left = new Date(left).getTime(); right = new Date(right).getTime(); }
+          else if (kind === 1) { left = left.charCodeAt(0); right = right.charCodeAt(0); }
+          if (left === right) return 0;
+          if (typeof left === "number" && Number.isNaN(left)) return Number.isNaN(right) ? 0 : -1;
+          if (typeof right === "number" && Number.isNaN(right)) return 1;
+          return left < right ? -1 : 1;
+        }
+        function {{name("linqExtremum")}}(source, selector, maximum, kind, canBeNull, by, returnKey) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          let found = false, result = null, resultKey = null;
+          for (const value of {{name("linqValues")}}(source)) {
+            const key = selector == null ? value : selector(value);
+            if (!by && key == null) continue;
+            if (!found || (maximum ? 1 : -1) * {{name("linqExtremumCompare")}}(key, resultKey, kind) > 0) {
+              found = true; result = value; resultKey = key;
+            }
+          }
+          if (found) return returnKey ? resultKey : result;
+          if (canBeNull) return null;
+          throw new TypeError("Sequence contains no elements.");
+        }
+
+        """;
+
+    private static string LinqSet(Func<string, string> name) => $$"""
+        function {{name("linqSet")}}(first, second, keySelector, operation, secondContainsKeys) {
+          if (first == null || second == null) throw new TypeError("LINQ source cannot be null.");
+          const key = keySelector == null ? value => value : keySelector;
+          return { *[Symbol.iterator]() {
+            if (operation === 0) {
+              const seen = new Set();
+              for (const source of [first, second]) for (const value of {{name("linqValues")}}(source))
+                if (!seen.has(key(value))) { seen.add(key(value)); yield value; }
+              return;
+            }
+            const other = new Set(Array.from({{name("linqValues")}}(second),
+              secondContainsKeys ? value => value : key));
+            const yielded = new Set();
+            for (const value of {{name("linqValues")}}(first)) {
+              const itemKey = key(value);
+              if ((operation === 1 ? other.has(itemKey) : !other.has(itemKey)) && !yielded.has(itemKey)) {
+                yielded.add(itemKey); yield value;
+              }
+            }
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqReverse(Func<string, string> name) => $$"""
+        function {{name("linqReverse")}}(source) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          return { *[Symbol.iterator]() {
+            const values = Array.from({{name("linqValues")}}(source));
+            for (let index = values.length - 1; index >= 0; index--) yield values[index];
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqDefaultIfEmpty(Func<string, string> name) => $$"""
+        function {{name("linqDefaultIfEmpty")}}(source, defaultValue) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          return { *[Symbol.iterator]() {
+            let found = false;
+            for (const value of {{name("linqValues")}}(source)) { found = true; yield value; }
+            if (!found) yield defaultValue;
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqChunk(Func<string, string> name) => $$"""
+        function {{name("linqChunk")}}(source, size) {
+          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          if (size < 1) throw new RangeError("Chunk size must be positive.");
+          return { *[Symbol.iterator]() {
+            let chunk = [];
+            for (const value of {{name("linqValues")}}(source)) {
+              chunk.push(value);
+              if (chunk.length === size) { yield chunk; chunk = []; }
+            }
+            if (chunk.length !== 0) yield chunk;
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqZip(Func<string, string> name) => $$"""
+        function {{name("linqZip")}}(first, second, selector) {
+          if (first == null || second == null || selector == null) throw new TypeError("LINQ argument cannot be null.");
+          return { *[Symbol.iterator]() {
+            const left = {{name("linqValues")}}(first), right = {{name("linqValues")}}(second);
+            while (true) {
+              const leftItem = left.next(), rightItem = right.next();
+              if (leftItem.done || rightItem.done) return;
+              yield selector(leftItem.value, rightItem.value);
+            }
+          }
+          };
+        }
+
+        """;
+
+    private static string LinqAggregate(Func<string, string> name) => $$"""
+        function {{name("linqAggregate")}}(source, accumulator, seed, hasSeed, resultSelector) {
+          if (source == null || accumulator == null) throw new TypeError("LINQ argument cannot be null.");
+          const iterator = {{name("linqValues")}}(source);
+          let result = seed;
+          if (!hasSeed) {
+            const first = iterator.next();
+            if (first.done) throw new TypeError("Sequence contains no elements.");
+            result = first.value;
+          }
+          for (let item = iterator.next(); !item.done; item = iterator.next())
+            result = accumulator(result, item.value);
+          return resultSelector == null ? result : resultSelector(result);
+        }
+
+        """;
+
+    private static string LinqJoin(Func<string, string> name) => $$"""
+        function {{name("linqJoin")}}(outer, inner, outerKey, innerKey, selector, grouped) {
+          if (outer == null || inner == null || outerKey == null || innerKey == null || selector == null)
+            throw new TypeError("LINQ argument cannot be null.");
+          return { *[Symbol.iterator]() {
+            const lookup = new Map();
+            for (const value of {{name("linqValues")}}(inner)) {
+              const key = innerKey(value);
+              let values = lookup.get(key);
+              if (values === undefined) lookup.set(key, values = []);
+              values.push(value);
+            }
+            for (const value of {{name("linqValues")}}(outer)) {
+              const matches = lookup.get(outerKey(value)) ?? [];
+              if (grouped) yield selector(value, matches);
+              else for (const match of matches) yield selector(value, match);
+            }
+          }
+          };
+        }
+
+        """;
+
     private static string LinqElementAt(Func<string, string> name) => $$"""
         function {{name("linqElementAt")}}(source, index, defaultValue, orDefault) {
           if (source == null) throw new TypeError("LINQ source cannot be null.");
@@ -707,7 +954,11 @@ internal static class HelperSource
             for (let index = 0; index < source.length; index++) yield source[index];
             return;
           }
-          yield* source;
+          if (source[Symbol.iterator] != null) {
+            yield* source;
+            return;
+          }
+          yield* Object.entries(source);
         }
 
         """;

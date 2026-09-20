@@ -70,7 +70,32 @@ public sealed record CoreSemanticsResult(
     int[] LinqOrdered,
     int[] LinqNullableOrdered,
     int[] LinqDateOrdered,
-    char[] LinqCharOrdered);
+    char[] LinqCharOrdered,
+    int[] LinqGroupCounts,
+    Dictionary<string, int> LinqDictionary,
+    int LinqDictionaryValueSum,
+    int[] LinqLookupValues,
+    bool LinqLookupContains,
+    int LinqLookupCount,
+    int LinqSum,
+    double LinqAverage,
+    int LinqMinimum,
+    int LinqMaximum,
+    int LinqMinBy,
+    int LinqMaxBy,
+    int[] LinqUnion,
+    int[] LinqIntersect,
+    int[] LinqExcept,
+    int[] LinqUnionBy,
+    int[] LinqIntersectBy,
+    int[] LinqExceptBy,
+    int[] LinqReverse,
+    int[] LinqDefaultIfEmpty,
+    int[][] LinqChunks,
+    int[] LinqZip,
+    int LinqAggregate,
+    int[] LinqJoin,
+    int[] LinqGroupJoin);
 
 public static class CoreSemantics
 {
@@ -120,6 +145,11 @@ public static class CoreSemantics
         List<DateSortItem> dateItems = [
             new DateSortItem(laterInstant, 1), new DateSortItem(instant, 2)
         ];
+        List<AggregateItem> aggregateItems = [
+            new AggregateItem("a", 1, 3), new AggregateItem("a", 2, 1), new AggregateItem("b", 3, 2)
+        ];
+        var lookup = aggregateItems.ToLookup(item => item.Group, item => item.Value);
+        var dictionary = words.ToDictionary(word => word, word => word.Length);
         return new(signed, unsigned, single, -minimum, -unarySingle == -0.1f, $"{true}:{false}", true.ToString(),
             'A' + 1, 'B' - 'A', character + 5, character - otherCharacter, total,
             instant.Year, instant.Month, instant.Day, instant.DayOfWeek, instant.Hour, instant.Minute,
@@ -149,7 +179,29 @@ public static class CoreSemantics
             orderedItems.Select(item => item.Id).ToArray(),
             nullableItems.OrderBy(item => item.Key).Select(item => item.Id).ToArray(),
             dateItems.OrderBy(item => item.Instant).Select(item => item.Id).ToArray(),
-            new List<char> { 'B', 'A', 'C' }.OrderBy(character => character).ToArray());
+            new List<char> { 'B', 'A', 'C' }.OrderBy(character => character).ToArray(),
+            aggregateItems.GroupBy(item => item.Group).Select(group => group.Count()).ToArray(),
+            dictionary, dictionary.Sum(pair => pair.Value),
+            lookup["a"].ToArray(), lookup.Contains("b"), lookup.Count,
+            linqSource.Sum(), linqSource.Average(), linqSource.Min(), linqSource.Max(),
+            aggregateItems.MinBy(item => item.Score)!.Id, aggregateItems.MaxBy(item => item.Score)!.Id,
+            repeated.Union(new List<int> { 3, 4 }).ToArray(),
+            repeated.Intersect(new List<int> { 3, 1, 5 }).ToArray(),
+            repeated.Except(new List<int> { 2 }).ToArray(),
+            aggregateItems.UnionBy(new List<AggregateItem> { new AggregateItem("c", 4, 4) },
+                item => item.Group).Select(item => item.Id).ToArray(),
+            aggregateItems.IntersectBy(new List<string> { "a" }, item => item.Group)
+                .Select(item => item.Id).ToArray(),
+            aggregateItems.ExceptBy(new List<string> { "a" }, item => item.Group)
+                .Select(item => item.Id).ToArray(),
+            Enumerable.Reverse(linqSource).ToArray(), emptyInts.DefaultIfEmpty().ToArray(),
+            linqSource.Chunk(2).ToArray(),
+            linqSource.Zip(new List<int> { 10, 20 }, (left, right) => left + right).ToArray(),
+            linqSource.Aggregate(10, (sum, value) => sum + value, sum => sum * 2),
+            aggregateItems.Join(new List<string> { "a", "b" }, item => item.Group, group => group,
+                (item, group) => item.Id).ToArray(),
+            aggregateItems.GroupJoin(new List<string> { "a", "a", "b" }, item => item.Group, group => group,
+                (item, groups) => groups.Count()).ToArray());
     }
 }
 
@@ -168,3 +220,7 @@ public sealed class PropertyCollision
 public sealed record SortItem(int Group, int Score, int Id);
 public sealed record NullableSortItem(int? Key, int Id);
 public sealed record DateSortItem(DateTimeOffset Instant, int Id);
+public sealed record AggregateItem(string Group, int Id, int Score)
+{
+    public int Value => Id * 10;
+}

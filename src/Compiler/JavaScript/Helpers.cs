@@ -6,7 +6,9 @@ internal enum JavaScriptHelper
     DateTimeIsLeapYear, DateTimeDaysInMonth, DateTimeAddMilliseconds,
     LinqValues, LinqWhere, LinqSelect, LinqSelectMany, LinqAppend, LinqPrepend, LinqSkip, LinqTake,
     LinqSkipWhile, LinqTakeWhile, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains, LinqDistinct,
-    LinqDistinctBy, LinqSequenceEqual, LinqOrder, LinqElementAt, LinqFirst, LinqLast, LinqSingle, LinqToArray
+    LinqDistinctBy, LinqSequenceEqual, LinqOrder, LinqGroupBy, LinqToDictionary, LinqToLookup,
+    LinqNumericAggregate, LinqAggregate, LinqExtremum, LinqSet, LinqReverse, LinqDefaultIfEmpty, LinqChunk, LinqZip,
+    LinqJoin, LinqElementAt, LinqFirst, LinqLast, LinqSingle, LinqToArray
 }
 
 internal sealed class HelperRegistry(GeneratedNameAllocator names)
@@ -75,6 +77,18 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.LinqDistinctBy => "linqDistinctBy",
         JavaScriptHelper.LinqSequenceEqual => "linqSequenceEqual",
         JavaScriptHelper.LinqOrder => "linqOrder",
+        JavaScriptHelper.LinqGroupBy => "linqGroupBy",
+        JavaScriptHelper.LinqToDictionary => "linqToDictionary",
+        JavaScriptHelper.LinqToLookup => "linqToLookup",
+        JavaScriptHelper.LinqNumericAggregate => "linqNumericAggregate",
+        JavaScriptHelper.LinqAggregate => "linqAggregate",
+        JavaScriptHelper.LinqExtremum => "linqExtremum",
+        JavaScriptHelper.LinqSet => "linqSet",
+        JavaScriptHelper.LinqReverse => "linqReverse",
+        JavaScriptHelper.LinqDefaultIfEmpty => "linqDefaultIfEmpty",
+        JavaScriptHelper.LinqChunk => "linqChunk",
+        JavaScriptHelper.LinqZip => "linqZip",
+        JavaScriptHelper.LinqJoin => "linqJoin",
         JavaScriptHelper.LinqElementAt => "linqElementAt",
         JavaScriptHelper.LinqFirst => "linqFirst",
         JavaScriptHelper.LinqLast => "linqLast",

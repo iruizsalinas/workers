@@ -122,6 +122,11 @@ public static class Worker
             var multipleRejected = false;
             var nullSourceRejected = false;
             var indexRejected = false;
+            var emptyAggregateRejected = false;
+            var emptyAverageRejected = false;
+            var duplicateKeyRejected = false;
+            var invalidChunkRejected = false;
+            var sumOverflowRejected = false;
             try
             {
                 empty.First();
@@ -155,7 +160,21 @@ public static class Worker
             {
                 indexRejected = true;
             }
-            return Response.Json(new { emptyRejected, multipleRejected, nullSourceRejected, indexRejected });
+            try { empty.Aggregate((left, right) => left + right); }
+            catch (Exception) { emptyAggregateRejected = true; }
+            try { empty.Average(); }
+            catch (Exception) { emptyAverageRejected = true; }
+            try { multiple.ToDictionary(value => "same"); }
+            catch (Exception) { duplicateKeyRejected = true; }
+            try { multiple.Chunk(0); }
+            catch (Exception) { invalidChunkRejected = true; }
+            try { new List<int> { int.MaxValue, 1 }.Sum(); }
+            catch (Exception) { sumOverflowRejected = true; }
+            return Response.Json(new {
+                emptyRejected, multipleRejected, nullSourceRejected, indexRejected,
+                emptyAggregateRejected, emptyAverageRejected, duplicateKeyRejected,
+                invalidChunkRejected, sumOverflowRejected
+            });
         }
 
         if (request.Path == "/json-element-text")

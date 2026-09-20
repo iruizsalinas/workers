@@ -118,6 +118,12 @@ internal sealed partial class JavaScriptEmitter
             return $"{Expression(member.Expression)}.length";
         if (property?.ContainingType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
             return $"{Expression(member.Expression)}[{(property.Name == "Key" ? 0 : 1)}]";
+        if (property is { Name: "Key" }
+            && property.ContainingType.OriginalDefinition.ToDisplayString() == "System.Linq.IGrouping<TKey, TElement>")
+            return $"{Expression(member.Expression)}.key";
+        if (property is { Name: "Count" }
+            && property.ContainingType.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>")
+            return $"{Expression(member.Expression)}.count";
         if (property?.ContainingType.ToDisplayString() == "Workers.Response" && property.Name == "IsSuccessStatusCode")
             return $"{Expression(member.Expression)}.ok";
         if (property?.ContainingType.ToDisplayString() == "Workers.WorkerEntrypoint")

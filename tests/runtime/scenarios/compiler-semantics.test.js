@@ -84,6 +84,11 @@ describe("compiler value semantics", () => {
       multipleRejected: true,
       nullSourceRejected: true,
       indexRejected: true,
+      emptyAggregateRejected: true,
+      emptyAverageRejected: true,
+      duplicateKeyRejected: true,
+      invalidChunkRejected: true,
+      sumOverflowRejected: true,
     });
   });
 

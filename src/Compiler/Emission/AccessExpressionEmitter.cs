@@ -38,6 +38,9 @@ internal sealed partial class JavaScriptEmitter
     private string ElementAccess(ElementAccessExpressionSyntax value)
     {
         var receiver = Expression(value.Expression);
+        if (_model.GetTypeInfo(value.Expression).Type is INamedTypeSymbol lookup
+            && lookup.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>")
+            return $"{receiver}.get({string.Join(", ", value.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))})";
         if (BindingIntrinsicRegistry.IsQueueMessageBatch(_model.GetTypeInfo(value.Expression).Type))
             receiver += ".messages";
         return $"{receiver}[{string.Join(", ", value.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))}]";

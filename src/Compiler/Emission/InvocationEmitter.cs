@@ -31,6 +31,10 @@ internal sealed partial class JavaScriptEmitter
         var methodName = method?.Name;
         if (IsEnumerableMethod(method))
             return LinqInvocation(invocation, method!, arguments, member, receiverOverride);
+        if (methodName == "Contains"
+            && method?.ContainingType.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>"
+            && member is not null && arguments.Length == 1)
+            return $"{receiverOverride ?? Expression(member.Expression)}.contains({arguments[0]})";
         if (containingType is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask" && methodName == "FromResult")
             return $"Promise.resolve({arguments[0]})";
         if (containingType == "System.Threading.Tasks.Task" && methodName == "WhenAll")
