@@ -111,6 +111,11 @@ describe("compiler value semantics", () => {
       substringRejected: true,
       nullSearchRejected: true,
       emptyReplacementRejected: true,
+      removeRejected: true,
+      insertRejected: true,
+      paddingRejected: true,
+      characterRangeRejected: true,
+      searchRangeRejected: true,
     });
   });
 

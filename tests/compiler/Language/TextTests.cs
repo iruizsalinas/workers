@@ -122,7 +122,7 @@ public sealed class TextTests
         Assert.Contains("stringReplace(decoded, \"\\u002B\", \" \")", module);
         Assert.Contains("encodeURIComponent(", module);
         Assert.Contains("escaped.toUpperCase()", module);
-        Assert.Contains("upper.indexOf(\"%\")", module);
+        Assert.Contains("$workers$stringOrdinal(upper, \"%\", false, 4", module);
         Assert.Contains("new Request(new URL(\"/accepted\", new URL(request.url).origin), request)", module);
     }
 
@@ -251,6 +251,74 @@ public sealed class TextTests
                 """));
             Assert.StartsWith("WRK105:", error.Message);
         }
+    }
+
+    [Fact]
+    public void EmitsInvariantStringQueriesAndTransformations()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    List<string> values = ["one", "two"];
+                    var text = "  Alpha-Beta  ";
+                    return Response.Json(new {
+                        empty = string.Empty, nullOrEmpty = string.IsNullOrEmpty(null),
+                        white = string.IsNullOrWhiteSpace(" \t"),
+                        joined = string.Join(",", values), concatenated = string.Concat(values),
+                        joinedParams = string.Join("-", "a", "b"),
+                        concatenatedValues = string.Concat("a", null, "b"),
+                        equal = string.Equals("Alpha", "alpha", StringComparison.OrdinalIgnoreCase),
+                        contains = text.Contains("alpha", StringComparison.OrdinalIgnoreCase),
+                        starts = text.StartsWith("  alpha", StringComparison.OrdinalIgnoreCase),
+                        ends = text.EndsWith("  ", StringComparison.Ordinal),
+                        index = text.IndexOf("beta", StringComparison.OrdinalIgnoreCase),
+                        last = text.LastIndexOf("a", StringComparison.OrdinalIgnoreCase),
+                        removed = text.Remove(0, 2), inserted = text.Insert(2, "new"),
+                        left = "x".PadLeft(3, '0'), right = "x".PadRight(3),
+                        characters = "😀".ToCharArray(),
+                        slice = text.ToCharArray(2, 5),
+                        pieces = " one , , two ".Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    });
+                }
+            }
+            """);
+
+        Assert.Contains("$workers$stringIsNullOrEmpty(null)", module);
+        Assert.Contains("$workers$stringIsNullOrWhiteSpace(", module);
+        Assert.Contains("$workers$stringJoin(\",\", values)", module);
+        Assert.Contains("$workers$stringOrdinal(", module);
+        Assert.Contains("$workers$stringRemove(", module);
+        Assert.Contains("$workers$stringInsert(", module);
+        Assert.Contains("$workers$stringPad(", module);
+        Assert.Contains("$workers$stringToCharArray(", module);
+        Assert.Contains("$workers$stringSplit(", module);
+    }
+
+    [Theory]
+    [InlineData("value.Equals(\"a\", StringComparison.CurrentCulture)")]
+    [InlineData("value.Contains(\"a\", StringComparison.InvariantCultureIgnoreCase)")]
+    [InlineData("value.Replace(\"a\", \"b\", StringComparison.OrdinalIgnoreCase)")]
+    [InlineData("value.Split(\",\", StringSplitOptions.None)")]
+    public void RejectsCultureSensitiveOrBroadStringOverloads(string operation)
+    {
+        var error = Assert.Throws<NotSupportedException>(() => Compile($$"""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var value = "alpha";
+                    return Response.Json({{operation}});
+                }
+            }
+            """));
+
+        Assert.StartsWith("WRK105:", error.Message);
     }
 
 }

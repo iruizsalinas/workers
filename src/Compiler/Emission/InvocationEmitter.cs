@@ -142,6 +142,7 @@ internal sealed partial class JavaScriptEmitter
             ("System.Text.Encoding", "GetBytes") when HasParameters(method, SpecialType.System_String) && IsUtf8EncodingInvocation(invocation) => $"new TextEncoder().encode({arguments[0]})",
             ("int", "Parse") when HasParameters(method, SpecialType.System_String) => $"{_helpers.Require(JavaScriptHelper.IntParse)}({arguments[0]})",
             ("System.Math", "Min" or "Max") => $"Math.{name!.ToLowerInvariant()}({string.Join(", ", arguments)})",
+            ("string", _) when method?.IsStatic == true => StringStaticInvocation(invocation, method, name!, arguments),
             ("System.Text.RegularExpressions.Regex", "IsMatch") when method?.IsStatic == true && arguments.Length == 2 =>
                 RegexIsMatch(invocation, method, arguments),
             ("Workers.Timers", "SetTimeout") => $"setTimeout({arguments[0]}, {arguments[1]})",

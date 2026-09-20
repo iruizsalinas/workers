@@ -200,6 +200,11 @@ public static class Worker
             var substringRejected = false;
             var nullSearchRejected = false;
             var emptyReplacementRejected = false;
+            var removeRejected = false;
+            var insertRejected = false;
+            var paddingRejected = false;
+            var characterRangeRejected = false;
+            var searchRangeRejected = false;
             string? missing = null;
             try { await Task.Delay(-2); }
             catch (Exception) { delayRejected = true; }
@@ -209,8 +214,19 @@ public static class Worker
             catch (Exception) { nullSearchRejected = true; }
             try { "value".Replace("", "replacement"); }
             catch (Exception) { emptyReplacementRejected = true; }
+            try { "value".Remove(6); }
+            catch (Exception) { removeRejected = true; }
+            try { "value".Insert(-1, "x"); }
+            catch (Exception) { insertRejected = true; }
+            try { "value".PadLeft(-1); }
+            catch (Exception) { paddingRejected = true; }
+            try { "value".ToCharArray(3, 5); }
+            catch (Exception) { characterRangeRejected = true; }
+            try { "value".IndexOf("a", 4, 2, StringComparison.Ordinal); }
+            catch (Exception) { searchRangeRejected = true; }
             return Response.Json(new {
-                delayRejected, substringRejected, nullSearchRejected, emptyReplacementRejected
+                delayRejected, substringRejected, nullSearchRejected, emptyReplacementRejected,
+                removeRejected, insertRejected, paddingRejected, characterRangeRejected, searchRangeRejected
             });
         }
 

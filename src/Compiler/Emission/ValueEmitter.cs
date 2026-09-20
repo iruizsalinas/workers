@@ -29,6 +29,11 @@ internal sealed partial class JavaScriptEmitter
         if (symbol is IFieldSymbol { ContainingType: { } comparisonType, Name: "Ordinal" }
             && comparisonType.ToDisplayString() == "System.StringComparison")
             return "\"ordinal\"";
+        if (symbol is IFieldSymbol { ContainingType: { } ignoreCaseType, Name: "OrdinalIgnoreCase" }
+            && ignoreCaseType.ToDisplayString() == "System.StringComparison")
+            return "\"ordinalIgnoreCase\"";
+        if (symbol is IFieldSymbol { IsStatic: true, Name: "Empty", ContainingType.SpecialType: SpecialType.System_String })
+            return "\"\"";
         if (symbol is IFieldSymbol { ContainingType: { } enumType } field
             && enumType.ToDisplayString() == "Workers.DigestAlgorithm")
             return field.Name switch

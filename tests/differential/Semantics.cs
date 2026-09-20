@@ -110,7 +110,22 @@ public sealed record CoreSemanticsResult(
     double DateSpanDifference,
     string DateSpanAddition,
     int?[] LinqNullableDistinct,
-    int[] LinqNullableGroupCounts);
+    int[] LinqNullableGroupCounts,
+    string StringEmpty,
+    bool StringNullOrEmpty,
+    bool StringWhiteSpace,
+    string StringJoined,
+    string StringConcatenated,
+    bool StringOrdinalIgnoreCase,
+    bool StringNoExpansion,
+    bool StringContainsIgnoreCase,
+    int StringIndex,
+    int StringLastIndex,
+    string StringRemoved,
+    string StringInserted,
+    string StringPadded,
+    int[] StringCharacters,
+    string[] StringSplit);
 
 public static class CoreSemantics
 {
@@ -226,7 +241,17 @@ public static class CoreSemantics
             (spanEnd - instant).TotalMilliseconds, spanEnd.ToString("O"),
             new List<int?> { 1, null, 1, null }.Distinct().ToArray(),
             new List<int?> { 1, null, 1 }.GroupBy(value => value)
-                .Select(group => group.Count()).ToArray());
+                .Select(group => group.Count()).ToArray(),
+            string.Empty, string.IsNullOrEmpty(null), string.IsNullOrWhiteSpace(" \t\u0085"),
+            string.Join(",", words), string.Concat(words),
+            string.Equals("Café", "CAFÉ", StringComparison.OrdinalIgnoreCase),
+            string.Equals("Straße", "STRASSE", StringComparison.OrdinalIgnoreCase),
+            "Alpha-Beta".Contains("BETA", StringComparison.OrdinalIgnoreCase),
+            "Alpha-Beta".IndexOf("beta", StringComparison.OrdinalIgnoreCase),
+            "Alpha-Beta".LastIndexOf("a", StringComparison.OrdinalIgnoreCase),
+            "Alpha-Beta".Remove(5, 1), "Alpha".Insert(5, "-Beta"), "7".PadLeft(3, '0'),
+            "😀".ToCharArray().Select(character => character + 0).ToArray(),
+            " one , , two ".Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
 }
 
