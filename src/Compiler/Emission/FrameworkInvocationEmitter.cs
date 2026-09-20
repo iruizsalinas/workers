@@ -188,7 +188,7 @@ internal sealed partial class JavaScriptEmitter
         string name,
         string[] arguments) => (name, arguments.Length) switch
         {
-            ("Trim", 0) => $"{receiver}.trim()",
+            ("Trim", 0) => HelperInvocation(JavaScriptHelper.StringTrim, [receiver]),
             ("ToLowerInvariant", 0) => $"{receiver}.toLowerCase()",
             ("ToUpperInvariant", 0) => $"{receiver}.toUpperCase()",
             ("Contains", 1) when method?.Parameters[0].Type.SpecialType == SpecialType.System_String =>
@@ -208,9 +208,9 @@ internal sealed partial class JavaScriptEmitter
             ("Replace", 3) when StringComparisonMode(source, method) == false =>
                 HelperInvocation(JavaScriptHelper.StringReplace, [receiver, arguments[0], arguments[1]]),
             ("Equals", 1) when method?.Parameters[0].Type.SpecialType == SpecialType.System_String =>
-                StringOrdinal(receiver, arguments[0], ignoreCase: false, operation: 0),
+                StringOrdinal(receiver, arguments[0], ignoreCase: false, operation: 6),
             ("Equals", 2) when StringComparisonMode(source, method) is { } equalsIgnoreCase =>
-                StringOrdinal(receiver, arguments[0], equalsIgnoreCase, operation: 0),
+                StringOrdinal(receiver, arguments[0], equalsIgnoreCase, operation: 6),
             ("Contains", 2) when StringComparisonMode(source, method) is { } containsIgnoreCase =>
                 StringOrdinal(receiver, arguments[0], containsIgnoreCase, operation: 1),
             ("StartsWith", 2) when StringComparisonMode(source, method) is { } startsIgnoreCase =>

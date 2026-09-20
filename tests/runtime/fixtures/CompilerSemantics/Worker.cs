@@ -214,6 +214,8 @@ public static class Worker
             var roundRejected = false;
             var signRejected = false;
             var guidParseRejected = false;
+            var nullInstanceEqualsRejected = false;
+            var equalsEvents = new List<string>();
             string? missing = null;
             try { await Task.Delay(-2); }
             catch (Exception) { delayRejected = true; }
@@ -249,11 +251,18 @@ public static class Worker
             catch (Exception) { signRejected = true; }
             try { Guid.Parse("not-a-guid"); }
             catch (Exception) { guidParseRejected = true; }
+            try { missing!.Equals(EvaluateEqualsArgument(equalsEvents)); }
+            catch (Exception) { nullInstanceEqualsRejected = true; }
             return Response.Json(new {
                 delayRejected, substringRejected, nullSearchRejected, emptyReplacementRejected,
                 removeRejected, insertRejected, paddingRejected, characterRangeRejected, searchRangeRejected,
                 integerParseRejected, unsignedParseRejected, booleanParseRejected, absoluteRejected,
-                clampRejected, roundRejected, signRejected, guidParseRejected
+                clampRejected, roundRejected, signRejected, guidParseRejected,
+                nullInstanceEqualsRejected, equalsArgumentEvaluated = equalsEvents.Count == 1,
+                staticNullEquals = string.Equals(missing, null),
+                nonNullInstanceEqualsNull = "value".Equals(null),
+                clrTrim = "\u0085 value \u0085".Trim(),
+                byteOrderMarkPreserved = "\uFEFFvalue\uFEFF".Trim()
             });
         }
 
@@ -405,6 +414,12 @@ public static class Worker
     {
         events.Add("name");
         return "x-order";
+    }
+
+    private static string EvaluateEqualsArgument(List<string> events)
+    {
+        events.Add("argument");
+        return "value";
     }
 }
 

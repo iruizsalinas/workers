@@ -124,6 +124,12 @@ describe("compiler value semantics", () => {
       roundRejected: true,
       signRejected: true,
       guidParseRejected: true,
+      nullInstanceEqualsRejected: true,
+      equalsArgumentEvaluated: true,
+      staticNullEquals: true,
+      nonNullInstanceEqualsNull: false,
+      clrTrim: "value",
+      byteOrderMarkPreserved: "\uFEFFvalue\uFEFF",
     });
   });
 

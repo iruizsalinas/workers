@@ -218,6 +218,24 @@ public sealed class TextTests
     }
 
     [Fact]
+    public void UsesClrWhitespaceRulesForTrim()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) =>
+                    Response.Text("\u0085 value \uFEFF".Trim());
+            }
+            """);
+
+        Assert.Contains("stringTrim(", module);
+        Assert.Contains("\\u0085", module);
+        Assert.DoesNotContain(".trim()", module);
+    }
+
+    [Fact]
     public void AcceptsOnlyLiteralRegexPatternsFromTheCompatibleSubset()
     {
         var module = Compile("""
@@ -296,6 +314,34 @@ public sealed class TextTests
         Assert.Contains("$workers$stringPad(", module);
         Assert.Contains("$workers$stringToCharArray(", module);
         Assert.Contains("$workers$stringSplit(", module);
+    }
+
+    [Fact]
+    public void KeepsStaticStringEqualsNullSafeButRejectsNullInstanceReceivers()
+    {
+        var module = Compile("""
+            #nullable enable
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    string? missing = null;
+                    return Response.Json(new
+                    {
+                        staticResult = string.Equals(missing, null),
+                        instanceResult = missing!.Equals(null),
+                        ordinalResult = missing!.Equals(null, StringComparison.Ordinal)
+                    });
+                }
+            }
+            """);
+
+        Assert.Contains("stringOrdinal(missing, null, false, 0", module);
+        Assert.Equal(2, module.Split("stringOrdinal(missing, null, false, 6", StringSplitOptions.None).Length - 1);
+        Assert.Contains("if (source == null) throw new TypeError", module);
+        Assert.Contains("if (value == null) return false", module);
     }
 
     [Theory]

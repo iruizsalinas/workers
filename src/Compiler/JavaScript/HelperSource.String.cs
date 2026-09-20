@@ -1,5 +1,12 @@
 internal static partial class HelperSource
 {
+    private static string StringTrim(Func<string, string> name) => $$"""
+        function {{name("stringTrim")}}(source) {
+          return source.replace(/^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/gu, "");
+        }
+
+        """;
+
     private static string StringContains(Func<string, string> name) => $$"""
         function {{name("stringContains")}}(source, value) {
           if (value == null) throw new TypeError("Value cannot be null.");
@@ -74,6 +81,10 @@ internal static partial class HelperSource
           return result;
         }
         function {{name("stringOrdinal")}}(source, value, ignoreCase, operation, start, count) {
+          if (operation === 6) {
+            if (source == null) throw new TypeError("String receiver cannot be null.");
+            if (value == null) return false;
+          }
           if (operation === 0) {
             if (source == null || value == null) return source == null && value == null;
           } else if (source == null || value == null) {
@@ -83,7 +94,7 @@ internal static partial class HelperSource
             source = {{name("stringOrdinalFold")}}(source);
             value = {{name("stringOrdinalFold")}}(value);
           }
-          if (operation === 0) return source === value;
+          if (operation === 0 || operation === 6) return source === value;
           if (operation === 1) return source.includes(value);
           if (operation === 2) return source.startsWith(value);
           if (operation === 3) return source.endsWith(value);
