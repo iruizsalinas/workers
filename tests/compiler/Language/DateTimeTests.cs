@@ -178,4 +178,26 @@ public sealed class DateTimeTests
         Assert.DoesNotContain("\"0000+00:00\")", module.Split("text:")[1]);
     }
 
+    [Fact]
+    public void UsesTheFormattedTypeForRoundTripInterpolation()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx)
+                {
+                    var offset = new DateTimeOffset(2024, 2, 29, 12, 0, 0, TimeSpan.Zero);
+                    var date = offset.Date;
+                    return Response.Json(new { offset = $"{offset:O}", date = $"{date:O}" });
+                }
+            }
+            """);
+
+        var projection = module.Split("return Response.json")[1];
+        Assert.Contains("offset).toISOString().replace(/(\\.\\d{3})Z$/, \"$1\" + \"0000+00:00\")", projection);
+        Assert.Contains("date).toISOString().replace(/(\\.\\d{3})Z$/, \"$1\" + \"0000\")", projection);
+    }
+
 }

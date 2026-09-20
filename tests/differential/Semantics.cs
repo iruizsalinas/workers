@@ -32,7 +32,9 @@ public sealed record CoreSemanticsResult(
     int DateYear,
     DayOfWeek DateDayOfWeek,
     bool EqualDates,
-    string DateRoundTrip);
+    string DateRoundTrip,
+    string DateInterpolation,
+    string OffsetInterpolation);
 
 public static class CoreSemantics
 {
@@ -68,7 +70,7 @@ public static class CoreSemantics
             monthEnd.AddMonths(1).ToString("O"), leapDay.AddYears(1).ToString("O"),
             DateTimeOffset.FromUnixTimeMilliseconds(-1).ToUnixTimeSeconds() == -1,
             DateTimeOffset.FromUnixTimeSeconds(-1).ToUnixTimeMilliseconds() == -1000,
-            date.Year, date.DayOfWeek, date == sameDate, date.ToString("O"));
+            date.Year, date.DayOfWeek, date == sameDate, date.ToString("O"), $"{date:O}", $"{leapDay:O}");
     }
 }
 

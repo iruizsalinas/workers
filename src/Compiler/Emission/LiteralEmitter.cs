@@ -30,11 +30,22 @@ internal sealed partial class JavaScriptEmitter
         InterpolatedStringTextSyntax text => EscapeTemplateText(text.TextToken.ValueText),
         InterpolationSyntax { AlignmentClause: not null } item => throw Unsupported("WRK108", item),
         InterpolationSyntax { FormatClause.FormatStringToken.ValueText: "O" or "o" } item =>
-            "${" + DateTimeRoundTrip(Expression(item.Expression)) + "}",
+            DateTimeRoundTripInterpolation(item),
         InterpolationSyntax { FormatClause: not null } item => throw Unsupported("WRK108", item),
         InterpolationSyntax item => "${" + InterpolationValue(item) + "}",
         _ => throw Unsupported("WRK108", value)
     };
+
+    private string DateTimeRoundTripInterpolation(InterpolationSyntax item)
+    {
+        var type = _model.GetTypeInfo(item.Expression).Type?.ToDisplayString();
+        return type switch
+        {
+            "System.DateTime" => "${" + DateTimeRoundTrip(Expression(item.Expression), includeOffset: false) + "}",
+            "System.DateTimeOffset" => "${" + DateTimeRoundTrip(Expression(item.Expression)) + "}",
+            _ => throw Unsupported("WRK108", item)
+        };
+    }
 
     private string InterpolationValue(InterpolationSyntax item)
     {
