@@ -20,7 +20,7 @@ public sealed class TextTests
             }
             """);
 
-        Assert.Contains("intParse(\"42\")", module);
+        Assert.Contains("numericParse(\"42\", 0)", module);
         Assert.Contains("hexDecode(\"00ff\")", module);
         Assert.Contains(".join(\"\").toUpperCase()", module);
         Assert.Contains("escapeDataString(", module);

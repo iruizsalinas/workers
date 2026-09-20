@@ -34,6 +34,25 @@ internal sealed partial class JavaScriptEmitter
             return "\"ordinalIgnoreCase\"";
         if (symbol is IFieldSymbol { IsStatic: true, Name: "Empty", ContainingType.SpecialType: SpecialType.System_String })
             return "\"\"";
+        if (property is { IsStatic: true, Name: "InvariantCulture" }
+            && property.ContainingType.ToDisplayString() == "System.Globalization.CultureInfo")
+            return "\"invariant\"";
+        if (symbol is IFieldSymbol { IsStatic: true, Name: var mathName, ContainingType: { } mathType }
+            && mathType.ToDisplayString() is "System.Math" or "System.MathF"
+            && mathName is "E" or "PI" or "Tau")
+        {
+            var value = mathName switch { "E" => "Math.E", "PI" => "Math.PI", _ => "Math.PI * 2" };
+            return mathType.ToDisplayString() == "System.MathF" ? $"Math.fround({value})" : value;
+        }
+        if (symbol is IFieldSymbol { IsStatic: true, Name: var floatingName, ContainingType: { } floatingType }
+            && floatingType.SpecialType is SpecialType.System_Single or SpecialType.System_Double
+            && floatingName is "NaN" or "PositiveInfinity" or "NegativeInfinity")
+            return floatingName switch
+            {
+                "NaN" => "NaN",
+                "PositiveInfinity" => "Infinity",
+                _ => "-Infinity"
+            };
         if (symbol is IFieldSymbol { ContainingType: { } enumType } field
             && enumType.ToDisplayString() == "Workers.DigestAlgorithm")
             return field.Name switch

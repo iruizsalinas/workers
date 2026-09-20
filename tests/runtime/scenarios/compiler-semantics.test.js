@@ -116,6 +116,13 @@ describe("compiler value semantics", () => {
       paddingRejected: true,
       characterRangeRejected: true,
       searchRangeRejected: true,
+      integerParseRejected: true,
+      unsignedParseRejected: true,
+      booleanParseRejected: true,
+      absoluteRejected: true,
+      clampRejected: true,
+      roundRejected: true,
+      signRejected: true,
     });
   });
 

@@ -41,11 +41,53 @@ internal sealed partial class JavaScriptEmitter
             _ when name == "ToString" && arguments.Length == 0
                    && type?.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Decimal =>
                 $"String({receiver})",
+            _ when name == "ToString" && type?.SpecialType is SpecialType.System_Int32
+                       or SpecialType.System_UInt32 or SpecialType.System_Single or SpecialType.System_Double =>
+                NumericToString(invocation, method!, receiver, arguments),
             _ when name == "ToString" && arguments.Length == 0 && type?.SpecialType == SpecialType.System_Boolean =>
                 $"({receiver} ? \"True\" : \"False\")",
             _ => ""
         };
         return result.Length != 0;
+    }
+
+    private string NumericToString(
+        InvocationExpressionSyntax source,
+        IMethodSymbol method,
+        string receiver,
+        string[] arguments)
+    {
+        var formatExpression = InvocationArgument(source, method, "format");
+        var providerExpression = InvocationArgument(source, method, "provider");
+        var providerSymbol = providerExpression is null ? null : _model.GetSymbolInfo(providerExpression).Symbol;
+        if (arguments.Length != 2
+            || formatExpression is not LiteralExpressionSyntax formatLiteral
+            || providerSymbol is not IPropertySymbol
+            {
+                IsStatic: true,
+                Name: "InvariantCulture",
+                ContainingType: { } providerType
+            }
+            || providerType.ToDisplayString() != "System.Globalization.CultureInfo")
+            throw UnsupportedSymbol(method, source);
+        var format = formatLiteral.Token.ValueText;
+        var type = method.ContainingType.SpecialType;
+        var integral = type is SpecialType.System_Int32 or SpecialType.System_UInt32;
+        var code = format.Length == 0 ? '\0' : format[0];
+        if (integral ? code is not ('D' or 'd' or 'X' or 'x') : code is not ('F' or 'f'))
+            throw UnsupportedSymbol(method, source);
+        var digits = format.Length == 1 ? (integral ? 0 : 2)
+            : int.TryParse(format[1..], out var precision) ? precision : -1;
+        if (digits is < 0 or > 100) throw UnsupportedSymbol(method, source);
+        var kind = type switch
+        {
+            SpecialType.System_Int32 => 0,
+            SpecialType.System_UInt32 => 1,
+            SpecialType.System_Single => 2,
+            _ => 3
+        };
+        return HelperInvocation(JavaScriptHelper.NumericFormat,
+            [receiver, arguments[0], kind.ToString(), digits.ToString()]);
     }
 
     private string RandomInvocation(

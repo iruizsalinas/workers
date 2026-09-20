@@ -205,6 +205,13 @@ public static class Worker
             var paddingRejected = false;
             var characterRangeRejected = false;
             var searchRangeRejected = false;
+            var integerParseRejected = false;
+            var unsignedParseRejected = false;
+            var booleanParseRejected = false;
+            var absoluteRejected = false;
+            var clampRejected = false;
+            var roundRejected = false;
+            var signRejected = false;
             string? missing = null;
             try { await Task.Delay(-2); }
             catch (Exception) { delayRejected = true; }
@@ -224,9 +231,25 @@ public static class Worker
             catch (Exception) { characterRangeRejected = true; }
             try { "value".IndexOf("a", 4, 2, StringComparison.Ordinal); }
             catch (Exception) { searchRangeRejected = true; }
+            try { int.Parse("1x"); }
+            catch (Exception) { integerParseRejected = true; }
+            try { uint.Parse("-1"); }
+            catch (Exception) { unsignedParseRejected = true; }
+            try { bool.Parse("yes"); }
+            catch (Exception) { booleanParseRejected = true; }
+            try { Math.Abs(int.MinValue); }
+            catch (Exception) { absoluteRejected = true; }
+            try { Math.Clamp(1, 2, 1); }
+            catch (Exception) { clampRejected = true; }
+            try { Math.Round(1.0, 16); }
+            catch (Exception) { roundRejected = true; }
+            try { Math.Sign(double.NaN); }
+            catch (Exception) { signRejected = true; }
             return Response.Json(new {
                 delayRejected, substringRejected, nullSearchRejected, emptyReplacementRejected,
-                removeRejected, insertRejected, paddingRejected, characterRangeRejected, searchRangeRejected
+                removeRejected, insertRejected, paddingRejected, characterRangeRejected, searchRangeRejected,
+                integerParseRejected, unsignedParseRejected, booleanParseRejected, absoluteRejected,
+                clampRejected, roundRejected, signRejected
             });
         }
 

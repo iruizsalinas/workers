@@ -125,7 +125,25 @@ public sealed record CoreSemanticsResult(
     string StringInserted,
     string StringPadded,
     int[] StringCharacters,
-    string[] StringSplit);
+    string[] StringSplit,
+    int ParsedInteger,
+    uint ParsedUnsigned,
+    float ParsedSingle,
+    double ParsedDouble,
+    bool ParsedBoolean,
+    string FormattedDecimal,
+    string FormattedHex,
+    string FormattedFixed,
+    int MathAbsolute,
+    int MathClamped,
+    double MathRoundedEvenDown,
+    double MathRoundedEvenUp,
+    double MathRoundedDigits,
+    double MathTruncated,
+    double MathPower,
+    double MathLogarithm,
+    int MathSign,
+    float MathFloatRoot);
 
 public static class CoreSemantics
 {
@@ -251,7 +269,15 @@ public static class CoreSemantics
             "Alpha-Beta".LastIndexOf("a", StringComparison.OrdinalIgnoreCase),
             "Alpha-Beta".Remove(5, 1), "Alpha".Insert(5, "-Beta"), "7".PadLeft(3, '0'),
             "😀".ToCharArray().Select(character => character + 0).ToArray(),
-            " one , , two ".Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            " one , , two ".Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            int.Parse(" -42 "), uint.Parse("4294967295"), float.Parse("1.25e2"),
+            double.Parse("-0.5"), bool.Parse("TrUe"),
+            (-42).ToString("D5", System.Globalization.CultureInfo.InvariantCulture),
+            (-42).ToString("X", System.Globalization.CultureInfo.InvariantCulture),
+            1.25.ToString("F3", System.Globalization.CultureInfo.InvariantCulture),
+            Math.Abs(-42), Math.Clamp(12, 0, 10), Math.Round(2.5), Math.Round(3.5),
+            Math.Round(1.2345, 2), Math.Truncate(-1.9), Math.Pow(2, 8), Math.Log(8, 2),
+            Math.Sign(-2.0), MathF.Sqrt(9));
     }
 }
 

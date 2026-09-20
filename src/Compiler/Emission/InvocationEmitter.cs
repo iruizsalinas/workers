@@ -6,6 +6,14 @@ internal sealed partial class JavaScriptEmitter
     private string Invocation(InvocationExpressionSyntax invocation)
     {
         var method = _model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+        if (method?.Name == "TryParse" && method.ContainingType.SpecialType is
+            SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Int64
+            or SpecialType.System_UInt64 or SpecialType.System_Single or SpecialType.System_Double
+            or SpecialType.System_Boolean or SpecialType.System_Decimal)
+            throw UnsupportedSymbol(method, invocation);
+        if (method?.Name == "Parse" && method.ContainingType.SpecialType is
+            SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal)
+            throw UnsupportedSymbol(method, invocation);
         var arguments = invocation.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)).ToArray();
         var member = invocation.Expression as MemberAccessExpressionSyntax;
         var isBindingIntrinsic = method is not null && BindingIntrinsicRegistry.TryGet(method, out _);
@@ -140,8 +148,12 @@ internal sealed partial class JavaScriptEmitter
             ("System.Convert", "ToBase64String") when arguments.Length == 1 && method?.Parameters[0].Type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte } => $"{_helpers.Require(JavaScriptHelper.Base64)}({arguments[0]})",
             ("System.Convert", "FromBase64String") when HasParameters(method, SpecialType.System_String) => Base64Decode(arguments[0]),
             ("System.Text.Encoding", "GetBytes") when HasParameters(method, SpecialType.System_String) && IsUtf8EncodingInvocation(invocation) => $"new TextEncoder().encode({arguments[0]})",
-            ("int", "Parse") when HasParameters(method, SpecialType.System_String) => $"{_helpers.Require(JavaScriptHelper.IntParse)}({arguments[0]})",
-            ("System.Math", "Min" or "Max") => $"Math.{name!.ToLowerInvariant()}({string.Join(", ", arguments)})",
+            ("int", "Parse") when HasParameters(method, SpecialType.System_String) => NumericParse(arguments[0], 0),
+            ("uint", "Parse") when HasParameters(method, SpecialType.System_String) => NumericParse(arguments[0], 1),
+            ("float", "Parse") when HasParameters(method, SpecialType.System_String) => NumericParse(arguments[0], 2),
+            ("double", "Parse") when HasParameters(method, SpecialType.System_String) => NumericParse(arguments[0], 3),
+            ("bool", "Parse") when HasParameters(method, SpecialType.System_String) => NumericParse(arguments[0], 4),
+            ("System.Math" or "System.MathF", _) => MathInvocation(invocation, method!, name!, arguments),
             ("string", _) when method?.IsStatic == true => StringStaticInvocation(invocation, method, name!, arguments),
             ("System.Text.RegularExpressions.Regex", "IsMatch") when method?.IsStatic == true && arguments.Length == 2 =>
                 RegexIsMatch(invocation, method, arguments),
@@ -184,6 +196,55 @@ internal sealed partial class JavaScriptEmitter
     {
         _helpers.Require(JavaScriptHelper.Base64);
         return $"{_helpers.Name("base64Decode")}({value})";
+    }
+
+    private string NumericParse(string value, int kind) =>
+        $"{_helpers.Require(JavaScriptHelper.NumericParse)}({value}, {kind})";
+
+    private string MathInvocation(
+        InvocationExpressionSyntax source,
+        IMethodSymbol method,
+        string name,
+        string[] arguments)
+    {
+        var single = method.ContainingType.ToDisplayString() == "System.MathF";
+        var type = method.ReturnType.SpecialType;
+        if (type is not (SpecialType.System_Int32 or SpecialType.System_UInt32
+            or SpecialType.System_Single or SpecialType.System_Double))
+            throw UnsupportedSymbol(method, source);
+        string result = name switch
+        {
+            "Abs" when arguments.Length == 1 && type == SpecialType.System_Int32 =>
+                HelperInvocation(JavaScriptHelper.MathAbsInt, arguments),
+            "Abs" when arguments.Length == 1 => $"Math.abs({arguments[0]})",
+            "Clamp" when arguments.Length == 3 => HelperInvocation(JavaScriptHelper.MathClamp, arguments),
+            "Round" when arguments.Length == 1 =>
+                HelperInvocation(JavaScriptHelper.MathRound, [arguments[0], "0", single ? "6" : "15"]),
+            "Round" when arguments.Length == 2
+                              && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 =>
+                HelperInvocation(JavaScriptHelper.MathRound, [.. arguments, single ? "6" : "15"]),
+            "Floor" when arguments.Length == 1 => $"Math.floor({arguments[0]})",
+            "Ceiling" when arguments.Length == 1 => $"Math.ceil({arguments[0]})",
+            "Truncate" when arguments.Length == 1 => $"Math.trunc({arguments[0]})",
+            "Sign" when arguments.Length == 1 => HelperInvocation(JavaScriptHelper.MathSign, arguments),
+            "Min" when arguments.Length == 2 => $"Math.min({arguments[0]}, {arguments[1]})",
+            "Max" when arguments.Length == 2 => $"Math.max({arguments[0]}, {arguments[1]})",
+            "Pow" when arguments.Length == 2 => $"Math.pow({arguments[0]}, {arguments[1]})",
+            "Sqrt" when arguments.Length == 1 => $"Math.sqrt({arguments[0]})",
+            "Log" when arguments.Length == 1 => $"Math.log({arguments[0]})",
+            "Log" when arguments.Length == 2 => $"Math.log({arguments[0]}) / Math.log({arguments[1]})",
+            "Log10" when arguments.Length == 1 => $"Math.log10({arguments[0]})",
+            "Exp" when arguments.Length == 1 => $"Math.exp({arguments[0]})",
+            "Sin" when arguments.Length == 1 => $"Math.sin({arguments[0]})",
+            "Cos" when arguments.Length == 1 => $"Math.cos({arguments[0]})",
+            "Tan" when arguments.Length == 1 => $"Math.tan({arguments[0]})",
+            "Asin" when arguments.Length == 1 => $"Math.asin({arguments[0]})",
+            "Acos" when arguments.Length == 1 => $"Math.acos({arguments[0]})",
+            "Atan" when arguments.Length == 1 => $"Math.atan({arguments[0]})",
+            "Atan2" when arguments.Length == 2 => $"Math.atan2({arguments[0]}, {arguments[1]})",
+            _ => throw UnsupportedSymbol(method, source)
+        };
+        return single && type == SpecialType.System_Single ? $"Math.fround({result})" : result;
     }
 
     private string RegexIsMatch(

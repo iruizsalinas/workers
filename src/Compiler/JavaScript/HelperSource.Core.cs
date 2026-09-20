@@ -176,17 +176,6 @@ internal static partial class HelperSource
 
         """;
 
-    private static string IntParse(Func<string, string> name) => $$"""
-        function {{name("intParse")}}(input) {
-          const value = input.trim();
-          if (!/^[+-]?\d+$/.test(value)) throw new TypeError("Invalid Int32 value.");
-          const number = Number(value);
-          if (number < -2147483648 || number > 2147483647) throw new RangeError("Int32 overflow.");
-          return number | 0;
-        }
-
-        """;
-
     private static string HexDecode(Func<string, string> name) => $$"""
         function {{name("hexDecode")}}(value) {
           if (value.length % 2 !== 0 || !/^[0-9a-f]*$/i.test(value)) throw new TypeError("Invalid hexadecimal value.");
