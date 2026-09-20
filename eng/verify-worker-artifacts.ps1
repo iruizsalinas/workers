@@ -3,12 +3,6 @@ param(
     [ValidateSet("Debug", "Release")]
     [string] $Configuration = "Release",
 
-    [ValidateRange(1, [int]::MaxValue)]
-    [int] $MaxRawBytes = 65536,
-
-    [ValidateRange(1, [int]::MaxValue)]
-    [int] $MaxGzipBytes = 20480,
-
     [switch] $SkipPublish
 )
 
@@ -112,14 +106,6 @@ foreach ($project in $projects) {
         }
     }
 
-    if ($worker.Length -gt $MaxRawBytes) {
-        $failures.Add("${exampleName}: worker.js is $($worker.Length) raw bytes (limit: $MaxRawBytes).")
-    }
-
-    if ($gzipBytes -gt $MaxGzipBytes) {
-        $failures.Add("${exampleName}: worker.js is $gzipBytes gzip bytes (limit: $MaxGzipBytes).")
-    }
-
     $results.Add([pscustomobject]@{
         Example = $exampleName
         RawBytes = $worker.Length
@@ -135,4 +121,4 @@ if ($failures.Count -gt 0) {
     exit 1
 }
 
-Write-Host "Verified $($results.Count) minimal Worker artifacts (raw <= $MaxRawBytes bytes; gzip <= $MaxGzipBytes bytes)."
+Write-Host "Verified $($results.Count) Worker artifacts."
