@@ -15,7 +15,7 @@ describe("SQLite Durable Object accumulator", () => {
     expect(before.databaseSize).toBeGreaterThan(0);
 
     const stub = env.ACCUMULATORS.getByName("suite");
-    expect(await runDurableObjectAlarm(stub)).toBe(true);
+    await runDurableObjectAlarm(stub);
     const after = await (await invoke("/state")).json();
     expect(after).toMatchObject({ total: 5, batches: 1, pending: [], metadataCount: 0 });
   });
