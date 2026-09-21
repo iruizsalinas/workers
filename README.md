@@ -57,6 +57,8 @@ public static async Task<Response> Handle(
 
 Familiar C# APIs such as `Task`, `Console`, `Guid`, and `DateTimeOffset` are supported where they map cleanly to the Workers runtime. Unsupported language or .NET features produce a compiler diagnostic instead of shipping a compatibility runtime.
 
+See [Compatibility](./COMPATIBILITY.md) for an overview of the supported C# language, .NET API, and Cloudflare Workers profiles.
+
 ## Version 0.3
 
 Versions through `0.2.0` ran .NET on WebAssembly and supported managed assemblies and compatible NuGet packages. Every Worker also had to ship and initialize the .NET runtime, framework files, and a JavaScript interoperability adapter, resulting in large bundles, slow startup, and high CPU usage.
