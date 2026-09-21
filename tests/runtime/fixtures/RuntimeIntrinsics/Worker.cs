@@ -114,6 +114,24 @@ public static class Worker
         if (request.Path == "/body")
             return Response.FromBody(Body.Text("body-value"));
 
+        if (request.Path == "/body-form")
+        {
+            var response = Response.FromBody(Body.FromFormData(await request.FormDataAsync()));
+            var usedBefore = response.BodyUsed;
+            var form = await response.FormDataAsync();
+            var usedAfter = response.BodyUsed;
+            string? value = null;
+            foreach (var entry in form)
+                if (entry.Key == "value") value = entry.Value.Text;
+            return Response.Json(new { usedBefore, usedAfter, value });
+        }
+
+        if (request.Path == "/body-stream")
+            return Response.FromBody(Body.FromStream(request.BodyStream()!));
+
+        if (request.Path == "/body-query")
+            return Response.FromBody(Body.FromQueryParameters(request.QueryParameters));
+
         if (request.Path == "/stream")
         {
             var bytes = await request.BodyStream()!.ReadAllBytesAsync();

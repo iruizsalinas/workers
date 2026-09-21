@@ -35,6 +35,8 @@ internal static class BindingClassification
         Key("Workers.Timers", "SetTimeout"), Key("Workers.Timers", "ClearTimeout"),
         Key("Workers.TcpSocket", "Connect"), Key("Workers.WebSocketPair", "Create"),
         Key("Workers.Body", "Text"), Key("Workers.Body", "Json"), Key("Workers.Body", "FromBytes"),
+        Key("Workers.Body", "FromStream"), Key("Workers.Body", "FromFormData"),
+        Key("Workers.Body", "FromQueryParameters"),
         Key("Workers.Response", "Empty"), Key("Workers.Response", "Text"), Key("Workers.Response", "Html"),
         Key("Workers.Response", "Json"), Key("Workers.Response", "Redirect"),
         Key("Workers.Response", "FromBody"), Key("Workers.Response", "WithHeader"), Key("Workers.Response", "AppendHeader"),

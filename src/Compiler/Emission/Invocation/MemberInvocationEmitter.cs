@@ -80,7 +80,7 @@ internal sealed partial class JavaScriptEmitter
     private string ResponseFromBody(InvocationExpressionSyntax invocation, string[] arguments)
     {
         var body = _names.Get($"response-body:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}", "body");
-        return $"(({body}) => new Response({body}.body ?? {body}{ResponseInit(arguments, 1, 2)}))({arguments[0]})";
+        return $"(({body}) => new Response({body}?.body ?? {body}{ResponseInit(arguments, 1, 2)}))({arguments[0]})";
     }
 
     private string HeaderMutation(

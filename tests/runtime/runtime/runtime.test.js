@@ -42,6 +42,20 @@ describe("runtime intrinsics", () => {
     expect(response.headers.get("content-type")).toContain("text/plain");
   });
 
+  it("keeps FormData, streams, and URLSearchParams as native body values", async () => {
+    const form = new FormData();
+    form.set("value", "native");
+    const formResult = await (await invoke("/body-form", { method: "POST", body: form })).json();
+    expect(formResult).toEqual({ usedBefore: false, usedAfter: true, value: "native" });
+
+    expect(await (await invoke("/body-stream", { method: "POST", body: "streamed" })).text())
+      .toBe("streamed");
+
+    const query = await invoke("/body-query?first=one&second=two");
+    expect(new TextDecoder().decode(await query.arrayBuffer())).toBe("first=one&second=two");
+    expect(query.headers.get("content-type")).toContain("application/x-www-form-urlencoded");
+  });
+
   it("reads an entire native request ReadableStream", async () => {
     const response = await invoke("/stream", { method: "POST", body: "stream-body" });
     await expect(response.json()).resolves.toEqual({ length: 11 });

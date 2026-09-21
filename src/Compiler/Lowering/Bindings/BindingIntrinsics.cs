@@ -35,8 +35,6 @@ internal enum BindingIntrinsicKind
     SocketWrite,
     SocketWriteText,
     SocketCloseWritable,
-    BodyText,
-    BodyJson,
     WebSocketJson,
     WebSocketMessageText,
     Bytes,

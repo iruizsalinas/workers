@@ -62,7 +62,7 @@ internal sealed partial class JavaScriptEmitter
                 RegexIsMatch(invocation, method, arguments),
             ("Workers.Timers", "SetTimeout") => $"setTimeout({arguments[0]}, {arguments[1]})",
             ("Workers.Timers", "ClearTimeout") => $"clearTimeout({arguments[0]})",
-            ("Workers.Body", "Text" or "FromBytes") => arguments[0],
+            ("Workers.Body", "Text" or "FromBytes" or "FromStream" or "FromFormData" or "FromQueryParameters") => arguments[0],
             ("Workers.Body", "Json") => $"JSON.stringify({arguments[0]})",
             ("Workers.Response", _) => ResponseInvocation(invocation, method!, name!, arguments, receiverOverride),
             _ => ""

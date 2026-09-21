@@ -98,7 +98,7 @@ public sealed class HttpRuntimeTests
             }
             """);
 
-        Assert.Contains("new Response($workers$body.body ?? $workers$body, { status: 404, statusText: \"Not Found\" ?? undefined })", module);
+        Assert.Contains("new Response($workers$body?.body ?? $workers$body, { status: 404, statusText: \"Not Found\" ?? undefined })", module);
         Assert.Contains(")(\"missing\")", module);
     }
 

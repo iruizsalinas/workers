@@ -79,8 +79,6 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.SocketWrite => EmitSocketWrite(receiver, arguments[0].Value),
             BindingIntrinsicKind.SocketWriteText => EmitSocketWrite(receiver, $"new TextEncoder().encode({arguments[0].Value})"),
             BindingIntrinsicKind.SocketCloseWritable => EmitSocketCloseWritable(receiver),
-            BindingIntrinsicKind.BodyText => $"typeof {receiver} === \"string\" ? {receiver} : new TextDecoder().decode({receiver})",
-            BindingIntrinsicKind.BodyJson => $"JSON.parse(typeof {receiver} === \"string\" ? {receiver} : new TextDecoder().decode({receiver}))",
             BindingIntrinsicKind.WebSocketJson => $"{receiver}.send(JSON.stringify({arguments[0].Value}))",
             BindingIntrinsicKind.WebSocketMessageText => $"typeof {receiver} === \"string\" ? {receiver} : new TextDecoder().decode({receiver})",
             BindingIntrinsicKind.Bytes => $"{receiver}.{intrinsic.JavascriptName}().then(value => new Uint8Array(value))",

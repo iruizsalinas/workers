@@ -7,8 +7,9 @@ public sealed class Response
     public string StatusText => WorkerApi.NotExecutable<string>();
     public Headers Headers => WorkerApi.NotExecutable<Headers>();
     public Body Body => WorkerApi.NotExecutable<Body>();
+    public bool BodyUsed => WorkerApi.NotExecutable<bool>();
 
-    public ReadableStream BodyStream() => WorkerApi.NotExecutable<ReadableStream>();
+    public ReadableStream? BodyStream() => WorkerApi.NotExecutable<ReadableStream?>();
     public static Response Empty(int status = 200, string? statusText = null) => WorkerApi.NotExecutable<Response>();
     public static Response Text(string body, int status = 200, string? statusText = null) => WorkerApi.NotExecutable<Response>();
     public static Response Html(string body, int status = 200, string? statusText = null) => WorkerApi.NotExecutable<Response>();
@@ -25,6 +26,7 @@ public sealed class Response
     public Task<string> TextAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<string>>();
     public Task<ReadOnlyMemory<byte>> BytesAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<ReadOnlyMemory<byte>>>();
     public Task<T?> JsonAsync<T>(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<T?>>();
+    public Task<FormData> FormDataAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<FormData>>();
 }
 
 public enum ResponseEncodeBody
