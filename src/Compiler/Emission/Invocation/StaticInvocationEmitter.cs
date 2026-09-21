@@ -173,11 +173,14 @@ internal sealed partial class JavaScriptEmitter
         IMethodSymbol method,
         IReadOnlyList<string> arguments)
     {
-        if (invocation.ArgumentList.Arguments[1].Expression is not LiteralExpressionSyntax literal
-            || !IsCompatibleRegexPattern(literal.Token.ValueText))
+        var patternExpression = invocation.ArgumentList.Arguments
+            .Select((argument, index) => (Argument: argument, Parameter: InvocationParameter(method, argument, index)))
+            .Single(item => item.Parameter.Name == "pattern").Argument.Expression;
+        var constant = _model.GetConstantValue(patternExpression);
+        if (!constant.HasValue || constant.Value is not string pattern || !IsCompatibleRegexPattern(pattern))
             throw new NotSupportedException(
-                "WRK120: Regex.IsMatch supports only literal patterns that are compatible with JavaScript regular expressions.");
-        return $"new RegExp({arguments[1]}).test({arguments[0]})";
+                "WRK120: Regex.IsMatch supports only compile-time constant patterns that are compatible with JavaScript regular expressions.");
+        return $"new RegExp({System.Text.Json.JsonSerializer.Serialize(pattern)}).test({arguments[0]})";
     }
 
     private static bool IsCompatibleRegexPattern(string pattern) =>
