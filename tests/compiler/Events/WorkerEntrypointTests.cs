@@ -3,6 +3,23 @@ namespace Workers.Compiler.Tests;
 public sealed class WorkerEntrypointTests
 {
     [Fact]
+    public void AllowsConstantsWithoutCreatingEntrypointState()
+    {
+        var module = Compile("""
+            using Workers;
+            [WorkerEntrypoint("Constants")]
+            public sealed class Constants : WorkerEntrypoint
+            {
+                private const string Value = "ok";
+                public string Read() => Value;
+            }
+            """);
+
+        Assert.Contains("return \"ok\";", module);
+        Assert.DoesNotContain("this.Value", module);
+    }
+
+    [Fact]
     public void RemovesAsyncOnlyAsATerminalConvention()
     {
         var module = Compile("""

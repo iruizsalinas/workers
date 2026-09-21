@@ -17,7 +17,9 @@ internal sealed partial class JavaScriptEmitter
         if (constructors.Length > 1)
             throw Unsupported("WRK109", constructors[1]);
         var constructor = constructors.SingleOrDefault();
-        var fields = declaration.Members.OfType<FieldDeclarationSyntax>().ToArray();
+        var fields = declaration.Members.OfType<FieldDeclarationSyntax>()
+            .Where(field => field.Declaration.Variables.Any(variable =>
+                _model.GetDeclaredSymbol(variable) is IFieldSymbol { IsStatic: false, IsConst: false })).ToArray();
         if (constructor is not null || fields.Length != 0)
         {
             _output.Append("  constructor(")
@@ -82,7 +84,9 @@ internal sealed partial class JavaScriptEmitter
         _output.Append("  constructor(").Append(stateName).Append(", ").Append(envName).Append(") { super(")
             .Append(stateName).Append(", ").Append(envName).AppendLine(");");
         _output.Append("    this.state = ").Append(stateName).Append("; this.env = ").Append(envName).AppendLine(";");
-        foreach (var field in declaration.Members.OfType<FieldDeclarationSyntax>().Where(field => !field.Modifiers.Any(SyntaxKind.StaticKeyword)))
+        foreach (var field in declaration.Members.OfType<FieldDeclarationSyntax>().Where(field =>
+                     field.Declaration.Variables.Any(variable =>
+                         model.GetDeclaredSymbol(variable) is IFieldSymbol { IsStatic: false, IsConst: false })))
             foreach (var variable in field.Declaration.Variables)
                 _output.Append("    this.").Append(UserIdentifier(model.GetDeclaredSymbol(variable)!, variable.Identifier)).Append(" = ")
                     .Append(variable.Initializer is null

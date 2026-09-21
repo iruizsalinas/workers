@@ -12,7 +12,12 @@ public sealed class StringApiTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context) =>
-                    Response.Json(Regex.IsMatch(request.Path, "^[a-zA-Z0-9_-]+$"));
+                    Response.Json(new
+                    {
+                        slug = Regex.IsMatch(request.Path, "^[a-zA-Z0-9_-]+$"),
+                        length = Regex.IsMatch(request.Path, "^[1-9][0-9]{0,3}$"),
+                        digits = Regex.IsMatch(request.Path, "^[0-9]{1,9}$")
+                    });
             }
             """);
         Assert.Contains("new RegExp(", module);
@@ -34,7 +39,7 @@ public sealed class StringApiTests
                     }
                 }
                 """));
-            Assert.StartsWith("WRK105:", error.Message);
+            Assert.StartsWith("WRK120:", error.Message);
         }
     }
 

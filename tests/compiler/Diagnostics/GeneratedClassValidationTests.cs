@@ -9,7 +9,6 @@ public sealed class GeneratedClassValidationTests
     [InlineData("public class Counter { ~Counter() { } }")]
     [InlineData("public class Counter { public int this[int index] => index; }")]
     [InlineData("public class Counter { public event Action? Changed; }")]
-    [InlineData("public class Counter { public const int Value = 1; }")]
     [InlineData("public class Counter { static Counter() { } }")]
     public void RejectsUnsupportedDurableObjectShapes(string declaration)
     {

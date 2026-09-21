@@ -3,6 +3,41 @@ namespace Workers.Compiler.Tests;
 public sealed class DurableObjectTests
 {
     [Fact]
+    public void InlinesConstantsWithoutEmittingClassFields()
+    {
+        var module = Compile("""
+            using Workers;
+            [DurableObject("Constants")]
+            public sealed class Constants
+            {
+                private const string Name = "worker";
+                private const int Limit = 4;
+                private const bool Enabled = true;
+                private const char Marker = 'W';
+                private const Mode DefaultMode = Mode.Ready;
+
+                public Response Read() => Response.Json(new
+                {
+                    Name,
+                    qualified = Constants.Limit,
+                    Enabled,
+                    Marker,
+                    DefaultMode
+                });
+            }
+            public enum Mode { None, Ready }
+            """);
+
+        Assert.Contains("Name: \"worker\"", module);
+        Assert.Contains("qualified: 4", module);
+        Assert.Contains("Enabled: true", module);
+        Assert.Contains("Marker: \"W\"", module);
+        Assert.Contains("DefaultMode: 1", module);
+        Assert.DoesNotContain("this.Name", module);
+        Assert.DoesNotContain("this.Limit", module);
+    }
+
+    [Fact]
     public void EmitsNativeDurableObjectClassWithoutARegistry()
     {
         var module = Compile("""

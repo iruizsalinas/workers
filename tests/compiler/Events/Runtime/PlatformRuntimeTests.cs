@@ -90,13 +90,14 @@ public sealed class PlatformRuntimeTests
             using System.Threading.Tasks;
             public sealed class Handler : HtmlElementHandler
             {
+                private const string Source = "csharp";
                 private readonly string _prefix;
                 public Handler(string prefix = "data") => _prefix = prefix;
                 private string Attribute(string suffix = "worker") => $"{_prefix}-{suffix}";
 
                 public override ValueTask ElementAsync(HtmlElement element)
                 {
-                    element.SetAttribute(Attribute(), "csharp");
+                    element.SetAttribute(Attribute(), Source);
                     return ValueTask.CompletedTask;
                 }
             }
@@ -117,6 +118,7 @@ public sealed class PlatformRuntimeTests
         Assert.Contains("  element(element)", module);
         Assert.DoesNotContain("async element(element)", module);
         Assert.Contains("value.setAttribute(this.#attribute(), \"csharp\")", module);
+        Assert.DoesNotContain("this.Source", module);
         Assert.Contains("new HTMLRewriter()).transform", module);
     }
 

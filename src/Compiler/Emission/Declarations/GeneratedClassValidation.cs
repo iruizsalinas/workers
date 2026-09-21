@@ -41,7 +41,8 @@ internal sealed partial class JavaScriptEmitter
         var unsupported = declaration.Members.FirstOrDefault(member => member switch
         {
             FieldDeclarationSyntax field => field.Declaration.Variables.Any(variable =>
-                model.GetDeclaredSymbol(variable) is not IFieldSymbol { IsStatic: false, IsConst: false }),
+                model.GetDeclaredSymbol(variable) is not IFieldSymbol fieldSymbol
+                || fieldSymbol is { IsConst: false, IsStatic: true }),
             ConstructorDeclarationSyntax constructor => !IsSupportedGeneratedConstructor(model.GetDeclaredSymbol(constructor)),
             MethodDeclarationSyntax method => !IsSupportedGeneratedMethod(model.GetDeclaredSymbol(method)),
             _ => true

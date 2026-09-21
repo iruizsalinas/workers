@@ -22,7 +22,8 @@ internal sealed partial class JavaScriptEmitter
         if (constructors.Length > 1 || constructors.FirstOrDefault()?.ParameterList.Parameters.Count > 0)
             throw Unsupported("WRK109", constructors.Length > 1 ? constructors[1] : constructors[0]);
         var fields = declaration.Members.OfType<FieldDeclarationSyntax>()
-            .Where(field => !field.Modifiers.Any(SyntaxKind.StaticKeyword)).ToArray();
+            .Where(field => field.Declaration.Variables.Any(variable =>
+                _model.GetDeclaredSymbol(variable) is IFieldSymbol { IsStatic: false, IsConst: false })).ToArray();
         var constructor = constructors.SingleOrDefault();
         if (fields.Length != 0 || constructor is not null)
         {

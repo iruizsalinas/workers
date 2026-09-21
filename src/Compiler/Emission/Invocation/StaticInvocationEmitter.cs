@@ -175,7 +175,8 @@ internal sealed partial class JavaScriptEmitter
     {
         if (invocation.ArgumentList.Arguments[1].Expression is not LiteralExpressionSyntax literal
             || !IsCompatibleRegexPattern(literal.Token.ValueText))
-            throw UnsupportedSymbol(method, invocation);
+            throw new NotSupportedException(
+                "WRK120: Regex.IsMatch supports only literal patterns that are compatible with JavaScript regular expressions.");
         return $"new RegExp({arguments[1]}).test({arguments[0]})";
     }
 
