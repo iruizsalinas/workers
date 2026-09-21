@@ -415,12 +415,19 @@ public static class Worker
         {
             string? missing = null;
             var builder = new StringBuilder("start");
-            builder.Append(':').Append(missing).Append("😀").AppendLine().AppendLine("end");
+            builder.Append(':').Append(missing).Append("😀").Append(true).Append(42);
+            builder.AppendLine().AppendLine("end").Append('!', 2);
+            builder.Insert(0, "[").Replace("start", "begin").Remove(1, 1);
+            builder.AppendJoin(",", new List<string?> { "a", null, "b" });
+            builder.AppendJoin('-', "x", "y");
             var text = builder.ToString();
             var length = builder.Length;
             var sameAfterClear = builder == builder.Clear();
             builder.Append("reset");
-            return Response.Json(new { text, length, sameAfterClear, reset = builder.ToString(), resetLength = builder.Length });
+            builder.Length = 7;
+            return Response.Json(new {
+                text, length, sameAfterClear, reset = builder.ToString(), resetLength = builder.Length
+            });
         }
 
         return Response.Text("Not found", status: 404);

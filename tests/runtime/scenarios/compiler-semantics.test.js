@@ -256,11 +256,11 @@ describe("compiler value semantics", () => {
     const response = await invoke("/string-builder");
 
     await expect(response.json()).resolves.toEqual({
-      text: "start:😀\nend\n",
-      length: 13,
+      text: "[egin:😀True42\nend\n!!a,,bx-y",
+      length: 28,
       sameAfterClear: true,
-      reset: "reset",
-      resetLength: 5,
+      reset: "reset\u0000\u0000",
+      resetLength: 7,
     });
   });
 });

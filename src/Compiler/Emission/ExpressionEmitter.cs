@@ -63,7 +63,10 @@ internal sealed partial class JavaScriptEmitter
                 ContainingType: { } containingType
             }
             && containingType.ToDisplayString() == "System.Text.StringBuilder")
-            throw UnsupportedSymbol(property, value);
+        {
+            _helpers.Require(JavaScriptHelper.StringBuilder);
+            return $"{_helpers.Name("stringBuilderLength")}({Expression(member.Expression)}, {Expression(value.Right)})";
+        }
         if (value.Left is ElementAccessExpressionSyntax element && IsSequenceType(_model.GetTypeInfo(element.Expression).Type))
         {
             var index = element.ArgumentList.Arguments.Single();
