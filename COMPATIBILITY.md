@@ -12,15 +12,22 @@ This is a quick overview, not a list of every overload. If something is unsuppor
 
 ## Cloudflare Workers APIs
 
-| Area | Status |
-| --- | :---: |
-| Requests, responses, headers, bodies, forms, and streams | 🟢 |
-| Fetch, scheduled, queue, email, and tail events; Durable Object alarms | 🟢 |
-| KV, R2, D1, Cache, Hyperdrive, and Durable Objects | 🟢 |
-| Queues, service bindings, RPC, and Worker entrypoints | 🟢 |
-| WebSockets, TCP sockets, and HTML rewriting | 🟢 |
-| Analytics Engine, AI, Images, Media, Vectorize, Workflows, and rate limiting | 🟢 |
-| Secrets and version metadata | 🟢 |
+| Area | APIs | Status |
+| --- | --- | :---: |
+| HTTP | Requests, responses, headers, URLs, forms, bodies, fetch, and streams | 🟢 |
+| Events | Fetch, scheduled, queue, email, and tail handlers | 🟢 |
+| Storage | KV, R2, and Cache | 🟢 |
+| Data | D1 and Hyperdrive | 🟢 |
+| Durable Objects | Bindings, storage, alarms, SQL, WebSockets, and containers | 🟢 |
+| Messaging | Queues and email bindings | 🟢 |
+| Services | Service bindings, dynamic dispatch, RPC, and Worker entrypoints | 🟢 |
+| Networking | WebSockets and TCP sockets | 🟢 |
+| Content | HTML rewriting, Images, and Media | 🟢 |
+| AI and search | Workers AI and Vectorize | 🟢 |
+| Workflows | Workflow bindings and instances | 🟢 |
+| Analytics | Analytics Engine | 🟢 |
+| Security | Rate limiting, secrets, and Web Crypto | 🟢 |
+| Runtime | Context, timers, performance, text encoding, and version metadata | 🟢 |
 
 The API follows Cloudflare's runtime closely. A few methods are left out when workerd has no matching behavior or a C# mapping would be misleading.
 
