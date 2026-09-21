@@ -150,7 +150,17 @@ public sealed record CoreSemanticsResult(
     string BracedGuid,
     string ParenthesizedGuid,
     bool EqualGuids,
-    bool UnequalEmptyGuid);
+    bool UnequalEmptyGuid,
+    int[] ForeachStringCharacters,
+    bool BooleanAnd,
+    bool BooleanOr,
+    bool BooleanXor,
+    bool? NullableBooleanAnd,
+    bool? NullableBooleanOr,
+    bool? NullableBooleanXor,
+    int? NullableNumericSum,
+    bool NullableNumericComparison,
+    int? NullableNumericProduct);
 
 public static class CoreSemantics
 {
@@ -208,6 +218,13 @@ public static class CoreSemantics
         var span = new TimeSpan(1, 2, 3, 4, 5);
         var factorySpan = TimeSpan.FromHours(1.5).Add(TimeSpan.FromMinutes(2)).Subtract(TimeSpan.FromSeconds(30));
         var spanEnd = instant + TimeSpan.FromMinutes(2);
+        int[] foreachStringCharacters = [0, 0];
+        var foreachStringIndex = 0;
+        foreach (var value in "😀")
+            foreachStringCharacters[foreachStringIndex++] = value + 0;
+        var nullableBoolean = NullableBoolean();
+        var nullableInteger = NullableInteger();
+        int? nullableThree = 3;
         return new(signed, unsigned, single, -minimum, -unarySingle == -0.1f, $"{true}:{false}", true.ToString(),
             'A' + 1, 'B' - 'A', character + 5, character - otherCharacter, total,
             instant.Year, instant.Month, instant.Day, instant.DayOfWeek, instant.Hour, instant.Minute,
@@ -292,8 +309,14 @@ public static class CoreSemantics
             Guid.Parse("00112233-4455-6677-8899-aabbccddeeff").ToString("P"),
             Guid.Parse("00112233-4455-6677-8899-aabbccddeeff")
                 == Guid.Parse("00112233445566778899AABBCCDDEEFF"),
-            Guid.Parse("00112233-4455-6677-8899-aabbccddeeff") != Guid.Empty);
+            Guid.Parse("00112233-4455-6677-8899-aabbccddeeff") != Guid.Empty,
+            foreachStringCharacters, true & false, true | false, true ^ true,
+            false & nullableBoolean, true | nullableBoolean, true ^ nullableBoolean,
+            nullableInteger + 2, nullableInteger < 2, nullableThree * 2);
     }
+
+    private static bool? NullableBoolean() => null;
+    private static int? NullableInteger() => null;
 }
 
 public sealed class NamingCollision

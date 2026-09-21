@@ -3,6 +3,69 @@ namespace Workers.Compiler.Tests;
 public sealed class ArithmeticTests
 {
     [Fact]
+    public void KeepsNonShortCircuitBooleanOperatorsBoolean()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) =>
+                    Response.Json(new { and = true & false, or = true | false, xor = true ^ true });
+            }
+            """);
+
+        Assert.Contains("and: Boolean(true & false)", module);
+        Assert.Contains("or: Boolean(true | false)", module);
+        Assert.Contains("xor: Boolean(true ^ true)", module);
+    }
+
+    [Fact]
+    public void PreservesLiftedBooleanOperatorSemantics()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    bool? missing = null;
+                    return Response.Json(new { and = false & missing, or = true | missing, xor = true ^ missing });
+                }
+            }
+            """);
+
+        Assert.Contains("=== false", module);
+        Assert.Contains("=== true", module);
+        Assert.Contains("== null", module);
+        Assert.Contains("!==", module);
+    }
+
+    [Fact]
+    public void PreservesLiftedNullableNumericOperators()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    int? missing = null;
+                    int? value = 2;
+                    return Response.Json(new { sum = missing + value, less = missing < value, product = value * value });
+                }
+            }
+            """);
+
+        Assert.Contains("== null ||", module);
+        Assert.Contains("? null :", module);
+        Assert.Contains("? false :", module);
+        Assert.Contains("Math.imul", module);
+    }
+
+    [Fact]
     public void ChecksIntegerRemainderByZero()
     {
         var module = Compile("""
@@ -196,4 +259,3 @@ public sealed class ArithmeticTests
         Assert.Contains("WRK101", error.Message);
     }
 }
-

@@ -3,6 +3,27 @@ namespace Workers.Compiler.Tests;
 public sealed class CollectionControlFlowTests
 {
     [Fact]
+    public void EnumeratesStringsAsUtf16Characters()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var values = new List<int>();
+                    foreach (var character in "😀")
+                        values.Add(character + 0);
+                    return Response.Json(values);
+                }
+            }
+            """);
+
+        Assert.Contains("for (const character of $workers$linqValues(", module);
+    }
+
+    [Fact]
     public void UsesNativeSetSemanticsForHashSets()
     {
         var module = Compile("""

@@ -33,9 +33,12 @@ internal sealed partial class JavaScriptEmitter
                 break;
             case ForEachStatementSyntax loop:
                 var enumerable = Expression(loop.Expression);
-                if (BindingIntrinsicRegistry.IsQueueMessageBatch(_model.GetTypeInfo(loop.Expression).Type))
+                var enumerableType = _model.GetTypeInfo(loop.Expression).Type;
+                if (enumerableType?.SpecialType == SpecialType.System_String)
+                    enumerable = $"{_helpers.Require(JavaScriptHelper.LinqValues)}({enumerable})";
+                else if (BindingIntrinsicRegistry.IsQueueMessageBatch(enumerableType))
                     enumerable += ".messages";
-                else if (IsDictionary(_model.GetTypeInfo(loop.Expression).Type))
+                else if (IsDictionary(enumerableType))
                     enumerable = $"Object.entries({enumerable})";
                 _output.Append(indent)
                     .Append(loop.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword) ? "for await (const " : "for (const ")
