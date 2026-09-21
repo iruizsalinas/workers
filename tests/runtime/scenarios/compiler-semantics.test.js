@@ -31,6 +31,27 @@ describe("compiler value semantics", () => {
     });
   });
 
+  it("supports Queue and Stack ordering and empty-operation errors", async () => {
+    const response = await invoke("/queue-stack");
+
+    await expect(response.json()).resolves.toEqual({
+      queueHead: 1,
+      dequeued: 1,
+      queueOrder: [2, 3],
+      queueCount: 2,
+      queueContains: true,
+      stackHead: "new",
+      popped: "new",
+      stackOrder: ["top", "bottom"],
+      stackCount: 2,
+      stackContains: true,
+      emptyQueueRejected: true,
+      emptyStackRejected: true,
+      negativeCapacityRejected: true,
+      nullSourceRejected: true,
+    });
+  });
+
   it("binds reordered record arguments by name", async () => {
     const response = await invoke("/records");
 

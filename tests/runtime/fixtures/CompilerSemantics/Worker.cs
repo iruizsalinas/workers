@@ -43,6 +43,43 @@ public static class Worker
             return Response.Json(parcel);
         }
 
+        if (request.Path == "/queue-stack")
+        {
+            var queue = new Queue<int>(new List<int> { 1, 2 });
+            queue.Enqueue(3);
+            var queueHead = queue.Peek();
+            var dequeued = queue.Dequeue();
+            var queueOrder = queue.ToArray();
+
+            var stack = new Stack<string>(new List<string> { "bottom", "top" });
+            stack.Push("new");
+            var stackHead = stack.Peek();
+            var popped = stack.Pop();
+            var stackOrder = stack.ToArray();
+
+            var emptyQueueRejected = false;
+            var emptyStackRejected = false;
+            var negativeCapacityRejected = false;
+            var nullSourceRejected = false;
+            try { new Queue<int>().Dequeue(); }
+            catch (Exception) { emptyQueueRejected = true; }
+            try { new Stack<int>().Peek(); }
+            catch (Exception) { emptyStackRejected = true; }
+            try { new Queue<int>(-1); }
+            catch (Exception) { negativeCapacityRejected = true; }
+            IEnumerable<int>? missing = null;
+            try { new Stack<int>(missing!); }
+            catch (Exception) { nullSourceRejected = true; }
+
+            return Response.Json(new
+            {
+                queueHead, dequeued, queueOrder, queueCount = queue.Count,
+                queueContains = queue.Contains(3), stackHead, popped, stackOrder,
+                stackCount = stack.Count, stackContains = stack.Contains("bottom"),
+                emptyQueueRejected, emptyStackRejected, negativeCapacityRejected, nullSourceRejected
+            });
+        }
+
         if (request.Path == "/coalesce")
         {
             bool? configured = null;

@@ -17,6 +17,7 @@ internal static partial class HelperSource
         JavaScriptHelper.IntegerRemainder => IntegerRemainder(name),
         JavaScriptHelper.RandomNext => RandomNext(name),
         JavaScriptHelper.SetAdd => SetAdd(name),
+        JavaScriptHelper.QueueStack => QueueStack(name),
         JavaScriptHelper.Base64 => Base64(name),
         JavaScriptHelper.RpcArguments => RpcArguments(name),
         JavaScriptHelper.HexDecode => HexDecode(name),

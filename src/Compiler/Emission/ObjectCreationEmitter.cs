@@ -32,6 +32,10 @@ internal sealed partial class JavaScriptEmitter
         if (typeName is "System.Uri" or "Workers.Url") return CreateUrl(value, constructor, arguments);
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" && arguments.Length == 0)
             return $"[{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}]";
+        if (type?.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.Queue<T>" or
+            "System.Collections.Generic.Stack<T>")
+            return CreateQueueOrStack(value, constructor!, arguments,
+                type.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Stack<T>");
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>"
             && arguments.Length == 0 && SupportsLinqEquality(type.TypeArguments[0]))
             return $"new Set([{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}])";
@@ -58,6 +62,23 @@ internal sealed partial class JavaScriptEmitter
         if (type is not null && IsUserInstanceType(type))
             return UserObject(value, constructor, type, arguments);
         throw UnsupportedSymbol(constructor, value);
+    }
+
+    private string CreateQueueOrStack(
+        SyntaxNode source,
+        IMethodSymbol constructor,
+        IReadOnlyList<ArgumentSyntax> arguments,
+        bool stack)
+    {
+        var helper = _helpers.Require(JavaScriptHelper.QueueStack);
+        if (arguments.Count == 0)
+            return "[]";
+        if (arguments.Count != 1)
+            throw UnsupportedSymbol(constructor, source);
+        var argument = Expression(arguments[0].Expression);
+        return constructor.Parameters[0].Type.SpecialType == SpecialType.System_Int32
+            ? $"{helper}(null, {stack.ToString().ToLowerInvariant()}, {argument})"
+            : $"{helper}({argument}, {stack.ToString().ToLowerInvariant()}, null)";
     }
 
     private string CreateTimeSpan(

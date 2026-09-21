@@ -42,6 +42,9 @@ internal sealed partial class JavaScriptEmitter
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>"
                    && SupportsLinqEquality(type.TypeArguments[0])
                    && name == "Contains" && arguments.Length == 1 => $"{receiver}.has({arguments[0]})",
+            _ when type?.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.Queue<T>" or
+                       "System.Collections.Generic.Stack<T>" =>
+                QueueStackInvocation(invocation, method!, receiver, name, arguments),
             _ when name == "ToString" && arguments.Length == 0
                    && type?.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Decimal =>
                 $"String({receiver})",
@@ -53,6 +56,36 @@ internal sealed partial class JavaScriptEmitter
             _ => ""
         };
         return result.Length != 0;
+    }
+
+    private string QueueStackInvocation(
+        InvocationExpressionSyntax source,
+        IMethodSymbol method,
+        string receiver,
+        string name,
+        string[] arguments)
+    {
+        var stack = method.ContainingType.OriginalDefinition.ToDisplayString()
+            == "System.Collections.Generic.Stack<T>";
+        return (name, arguments.Length) switch
+        {
+            ("Enqueue", 1) when !stack => $"{receiver}.push({arguments[0]})",
+            ("Push", 1) when stack => $"{receiver}.unshift({arguments[0]})",
+            ("Dequeue", 0) when !stack => QueueStackTake(receiver, remove: true),
+            ("Pop", 0) when stack => QueueStackTake(receiver, remove: true),
+            ("Peek", 0) => QueueStackTake(receiver, remove: false),
+            ("Clear", 0) => $"{receiver}.length = 0",
+            ("Contains", 1) when SupportsLinqEquality(method.ContainingType.TypeArguments[0]) =>
+                $"{receiver}.includes({arguments[0]})",
+            ("ToArray", 0) => $"{receiver}.slice()",
+            _ => throw UnsupportedSymbol(method, source)
+        };
+    }
+
+    private string QueueStackTake(string receiver, bool remove)
+    {
+        _helpers.Require(JavaScriptHelper.QueueStack);
+        return $"{_helpers.Name("queueStackTake")}({receiver}, {remove.ToString().ToLowerInvariant()})";
     }
 
     private string StringBuilderInvocation(
