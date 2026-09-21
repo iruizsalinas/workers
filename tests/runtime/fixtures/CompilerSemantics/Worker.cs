@@ -211,6 +211,18 @@ public static class Worker
             return Response.Json(new { factoryRejected, additionRejected, negationRejected, durationRejected });
         }
 
+        if (request.Path == "/semantic-boundaries")
+        {
+            var logarithm = Math.Log(8, 1);
+            return Response.Json(new
+            {
+                tickQuantized = TimeSpan.FromMilliseconds(0.00019).TotalMilliseconds,
+                invalidLogarithm = logarithm != Math.Log(8, 1),
+                fixedMidpoint = 2.5.ToString("F0", System.Globalization.CultureInfo.InvariantCulture),
+                supplementaryOrdinal = string.Equals("𐐨", "𐐀", StringComparison.OrdinalIgnoreCase)
+            });
+        }
+
         if (request.Path == "/bcl-errors")
         {
             var delayRejected = false;
@@ -294,6 +306,12 @@ public static class Worker
             var values = root.GetProperty("values");
             var decoded = JsonSerializer.Deserialize<JsonProfile>(
                 "{\"display-name\":\"Ada\"}")!;
+            var defaultDecoded = JsonSerializer.Deserialize<DefaultJsonProfile>(
+                "{\"Name\":\"Grace\"}")!;
+            var wrongCase = JsonSerializer.Deserialize<DefaultJsonProfile>(
+                "{\"name\":\"ignored\"}")!;
+            var parcel = JsonSerializer.Deserialize<Parcel>(
+                "{\"Label\":\"box\",\"Count\":2}")!;
             var encoded = JsonSerializer.Serialize(new JsonProfile
             {
                 Name = decoded.Name,
@@ -311,6 +329,11 @@ public static class Worker
                 length = values.GetArrayLength(),
                 sum = values.EnumerateArray().Sum(value => value.GetInt32()),
                 decoded.Name,
+                defaultName = defaultDecoded.Name,
+                wrongCase = wrongCase.Name,
+                defaultEncoded = JsonSerializer.Serialize(defaultDecoded),
+                parcelLabel = parcel.Label,
+                parcelCount = parcel.Count,
                 encoded,
                 roundTripOk = roundTrip.GetProperty("ok").GetBoolean()
             });
@@ -471,6 +494,11 @@ public sealed class JsonProfile
 
     [JsonIgnore]
     public string Secret { get; init; } = "";
+}
+
+public sealed class DefaultJsonProfile
+{
+    public string Name { get; init; } = "missing";
 }
 
 public sealed record Parcel(string Label, int Count);

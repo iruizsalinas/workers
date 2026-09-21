@@ -5,7 +5,7 @@ internal static partial class HelperSource
         function {{name("timeSpan")}}(milliseconds) {
           if (!Number.isFinite(milliseconds) || Math.abs(milliseconds) > {{name("timeSpanLimit")}})
             throw new RangeError("TimeSpan value is out of range.");
-          return milliseconds;
+          return Math.trunc(milliseconds * 10000) / 10000;
         }
         function {{name("timeSpanCompare")}}(left, right) {
           return left < right ? -1 : left > right ? 1 : 0;

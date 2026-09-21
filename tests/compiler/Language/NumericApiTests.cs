@@ -63,9 +63,30 @@ public sealed class NumericApiTests
         Assert.Contains("$workers$mathAbsInt((-42) | 0)", module);
         Assert.Contains("$workers$mathClamp(12, 0, 10)", module);
         Assert.Contains("$workers$mathRound(2.5, 0, 15)", module);
-        Assert.Contains("Math.log(8) / Math.log(2)", module);
+        Assert.Contains("$workers$mathLog(8, 2)", module);
         Assert.Contains("Math.fround(Math.sqrt(9))", module);
         Assert.Contains("Math.PI * 2", module);
+    }
+
+    [Fact]
+    public void HandlesLogarithmBoundariesAndMidpointFixedFormatting()
+    {
+        var module = Compile("""
+            using System.Globalization;
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context) =>
+                    Response.Json(new {
+                        invalid = Math.Log(8, 1),
+                        fixedValue = 2.5.ToString("F0", CultureInfo.InvariantCulture)
+                    });
+            }
+            """);
+
+        Assert.Contains("if (base <= 0 || base === 1 || !Number.isFinite(base)) return NaN;", module);
+        Assert.Contains("$workers$mathRound(value, precision, kind === 2 ? 6 : 15).toFixed(precision)", module);
     }
 
     [Theory]

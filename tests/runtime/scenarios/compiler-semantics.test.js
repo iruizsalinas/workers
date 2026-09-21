@@ -112,6 +112,17 @@ describe("compiler value semantics", () => {
     });
   });
 
+  it("matches CLR numeric, TimeSpan, and supplementary Unicode boundaries", async () => {
+    const response = await invoke("/semantic-boundaries");
+
+    await expect(response.json()).resolves.toEqual({
+      tickQuantized: 0.0001,
+      invalidLogarithm: true,
+      fixedMidpoint: "2",
+      supplementaryOrdinal: true,
+    });
+  });
+
   it("matches CLR validation for delay and string operations", async () => {
     const response = await invoke("/bcl-errors");
 
@@ -171,6 +182,11 @@ describe("compiler value semantics", () => {
       length: 2,
       sum: 5,
       name: "Ada",
+      defaultName: "Grace",
+      wrongCase: "missing",
+      defaultEncoded: '{"Name":"Grace"}',
+      parcelLabel: "box",
+      parcelCount: 2,
       encoded: '{"display-name":"Ada"}',
       roundTripOk: true,
     });
@@ -230,12 +246,12 @@ describe("compiler value semantics", () => {
       fullName: "Ada Lovelace",
       greeting: "Hello, Ada Lovelace",
       age: 36,
-      counter: { label: "items", doubled: 10 },
+      counter: { Label: "items", Doubled: 10 },
       person: {
-        first: "Ada",
-        last: "Lovelace",
-        age: 36,
-        fullName: "Ada Lovelace",
+        First: "Ada",
+        Last: "Lovelace",
+        Age: 36,
+        FullName: "Ada Lovelace",
       },
     });
   });

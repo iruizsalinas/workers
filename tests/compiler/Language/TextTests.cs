@@ -319,6 +319,7 @@ public sealed class TextTests
                         joinedParams = string.Join("-", "a", "b"),
                         concatenatedValues = string.Concat("a", null, "b"),
                         equal = string.Equals("Alpha", "alpha", StringComparison.OrdinalIgnoreCase),
+                        supplementary = string.Equals("𐐨", "𐐀", StringComparison.OrdinalIgnoreCase),
                         contains = text.Contains("alpha", StringComparison.OrdinalIgnoreCase),
                         starts = text.StartsWith("  alpha", StringComparison.OrdinalIgnoreCase),
                         ends = text.EndsWith("  ", StringComparison.Ordinal),
@@ -338,6 +339,7 @@ public sealed class TextTests
         Assert.Contains("$workers$stringIsNullOrWhiteSpace(", module);
         Assert.Contains("$workers$stringJoin(\",\", values)", module);
         Assert.Contains("$workers$stringOrdinal(", module);
+        Assert.Contains("for (const character of value)", module);
         Assert.Contains("$workers$stringRemove(", module);
         Assert.Contains("$workers$stringInsert(", module);
         Assert.Contains("$workers$stringPad(", module);

@@ -35,7 +35,7 @@ public sealed class UserTypeTests
         Assert.Contains("Math.imul(this._value, 2)", module);
         Assert.Contains("$workers$value.label = \"items\";", module);
         Assert.Contains("counter.$workers$cs$Counter$add(3)", module);
-        Assert.Contains("return { label: this.label, doubled: this.doubled };", module);
+        Assert.Contains("return { Label: this.label, Doubled: this.doubled };", module);
     }
 
     [Fact]
@@ -68,8 +68,8 @@ public sealed class UserTypeTests
         Assert.Contains("$workers$value.age = 36;", module);
         Assert.Contains("get fullName()", module);
         Assert.Contains("person.$workers$cs$Person$greet(\"Hello\")", module);
-        Assert.Contains("first: this.first", module);
-        Assert.Contains("fullName: this.fullName", module);
+        Assert.Contains("First: this.first", module);
+        Assert.Contains("FullName: this.fullName", module);
     }
 
     [Theory]
@@ -175,7 +175,7 @@ public sealed class UserTypeTests
         Assert.Contains("this.value$2 = 0;", module);
         Assert.Contains("$workers$value.value = 3;", module);
         Assert.Contains("$workers$value.value$2 = 4;", module);
-        Assert.Contains("return { value: this.value, value$2: this.value$2 };", module);
+        Assert.Contains("return { Value: this.value, value: this.value$2 };", module);
     }
 
     [Fact]
@@ -199,7 +199,7 @@ public sealed class UserTypeTests
         Assert.Contains("this.toJSON$2 = null;", module);
         Assert.Contains("this.toJSON$2 == null", module);
         Assert.Contains("toJSON()", module);
-        Assert.Contains("return { value: this.value };", module);
+        Assert.Contains("return { Value: this.value };", module);
         Assert.DoesNotContain("this.toJSON =", module);
     }
 }

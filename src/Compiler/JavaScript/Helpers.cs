@@ -7,7 +7,7 @@ internal enum JavaScriptHelper
     StringTrim, StringContains, StringStartsWith, StringEndsWith, StringSubstring, StringReplace,
     StringIsNullOrEmpty, StringIsNullOrWhiteSpace, StringJoin, StringOrdinal,
     StringRemove, StringInsert, StringPad, StringToCharArray, StringSplit, StringBuilder,
-    NumericParse, NumericFormat, MathAbsInt, MathClamp, MathRound, MathSign, GuidParse, GuidFormat,
+    NumericParse, NumericFormat, MathAbsInt, MathClamp, MathRound, MathLog, MathSign, GuidParse, GuidFormat,
     DateTimeOffset, DateTimeAddMonths, DateTimeFromUnixTime, DateTimeCompare, DateTimeDayOfYear,
     DateTimeIsLeapYear, DateTimeDaysInMonth, DateTimeAddMilliseconds, TimeSpan,
     LinqValues, LinqWhere, LinqSelect, LinqSelectMany, LinqAppend, LinqPrepend, LinqSkip, LinqTake,
@@ -31,6 +31,8 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
         }
         if (helper == JavaScriptHelper.DateTimeDaysInMonth)
             _required.Add(JavaScriptHelper.DateTimeIsLeapYear);
+        if (helper == JavaScriptHelper.NumericFormat)
+            _required.Add(JavaScriptHelper.MathRound);
         if (helper.IsLinqOperator())
             _required.Add(JavaScriptHelper.LinqValues);
         return Name(helper.EntryPoint());
@@ -90,6 +92,7 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.MathAbsInt => "mathAbsInt",
         JavaScriptHelper.MathClamp => "mathClamp",
         JavaScriptHelper.MathRound => "mathRound",
+        JavaScriptHelper.MathLog => "mathLog",
         JavaScriptHelper.MathSign => "mathSign",
         JavaScriptHelper.GuidParse => "guidParse",
         JavaScriptHelper.GuidFormat => "guidFormat",

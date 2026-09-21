@@ -47,6 +47,7 @@ internal static partial class HelperSource
         JavaScriptHelper.MathAbsInt => MathAbsInt(name),
         JavaScriptHelper.MathClamp => MathClamp(name),
         JavaScriptHelper.MathRound => MathRound(name),
+        JavaScriptHelper.MathLog => MathLog(name),
         JavaScriptHelper.MathSign => MathSign(name),
         JavaScriptHelper.GuidParse => GuidParse(name),
         JavaScriptHelper.GuidFormat => GuidFormat(name),

@@ -225,16 +225,19 @@ internal sealed partial class JavaScriptEmitter
     private string JsonDeserialize(InvocationExpressionSyntax source, IMethodSymbol method, string value)
     {
         if (method.TypeArguments.FirstOrDefault() is INamedTypeSymbol resultType && IsUserInstanceType(resultType))
-            ValidateJsonAttributes(resultType);
+            RegisterJsonMaterializer(resultType, source);
         var input = method.Parameters[0].Type;
-        if (input.SpecialType == SpecialType.System_String)
-            return $"JSON.parse({value})";
-        if (input.ToDisplayString() == "System.ReadOnlySpan<byte>" || input is IArrayTypeSymbol
+        var parsed = input.SpecialType == SpecialType.System_String
+            ? $"JSON.parse({value})"
+            : input.ToDisplayString() == "System.ReadOnlySpan<byte>" || input is IArrayTypeSymbol
             {
                 ElementType.SpecialType: SpecialType.System_Byte
-            })
-            return $"JSON.parse(new TextDecoder().decode({value}))";
-        throw UnsupportedSymbol(method, source);
+            }
+                ? $"JSON.parse(new TextDecoder().decode({value}))"
+                : throw UnsupportedSymbol(method, source);
+        if (method.TypeArguments.FirstOrDefault() is INamedTypeSymbol target && IsUserInstanceType(target))
+            return $"{QueueUserType(target, source)}.$fromJSON({parsed})";
+        return parsed;
     }
 
     private string MathInvocation(
@@ -268,7 +271,7 @@ internal sealed partial class JavaScriptEmitter
             "Pow" when arguments.Length == 2 => $"Math.pow({arguments[0]}, {arguments[1]})",
             "Sqrt" when arguments.Length == 1 => $"Math.sqrt({arguments[0]})",
             "Log" when arguments.Length == 1 => $"Math.log({arguments[0]})",
-            "Log" when arguments.Length == 2 => $"Math.log({arguments[0]}) / Math.log({arguments[1]})",
+            "Log" when arguments.Length == 2 => HelperInvocation(JavaScriptHelper.MathLog, arguments),
             "Log10" when arguments.Length == 1 => $"Math.log10({arguments[0]})",
             "Exp" when arguments.Length == 1 => $"Math.exp({arguments[0]})",
             "Sin" when arguments.Length == 1 => $"Math.sin({arguments[0]})",

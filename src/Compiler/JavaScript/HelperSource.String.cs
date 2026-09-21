@@ -74,9 +74,9 @@ internal static partial class HelperSource
     private static string StringOrdinal(Func<string, string> name) => $$"""
         function {{name("stringOrdinalFold")}}(value) {
           let result = "";
-          for (let index = 0; index < value.length; index++) {
-            const character = value[index], upper = character.toUpperCase();
-            result += upper.length === 1 ? upper : character;
+          for (const character of value) {
+            const upper = character.toUpperCase();
+            result += upper.length === character.length ? upper : character;
           }
           return result;
         }

@@ -16,6 +16,7 @@ internal sealed partial class JavaScriptEmitter
     private readonly Dictionary<INamedTypeSymbol, string> _userTypes = new(SymbolEqualityComparer.Default);
     private readonly Queue<INamedTypeSymbol> _pendingUserTypes = new();
     private readonly HashSet<INamedTypeSymbol> _emittedUserTypes = new(SymbolEqualityComparer.Default);
+    private readonly HashSet<INamedTypeSymbol> _jsonMaterializedUserTypes = new(SymbolEqualityComparer.Default);
     private readonly Dictionary<IMethodSymbol, string> _userInstanceMethods = new(SymbolEqualityComparer.Default);
     private readonly Dictionary<ISymbol, string> _userMemberNames = new(SymbolEqualityComparer.Default);
     private readonly HashSet<INamedTypeSymbol> _preparedUserMemberNames = new(SymbolEqualityComparer.Default);

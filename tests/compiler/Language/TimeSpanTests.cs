@@ -32,6 +32,7 @@ public sealed class TimeSpanTests
         Assert.Contains("Math.trunc((value) / 86400000)", module);
         Assert.Contains("Math.trunc(value) % 1000", module);
         Assert.Contains("$workers$timeSpanLimit", module);
+        Assert.Contains("Math.trunc(milliseconds * 10000) / 10000", module);
     }
 
     [Fact]

@@ -96,6 +96,37 @@ public sealed class JsonApiTests
         Assert.DoesNotContain("secret: this.secret", module);
     }
 
+    [Fact]
+    public void MaterializesUserTypesUsingCaseSensitiveJsonContracts()
+    {
+        var module = Compile("""
+            using System.Text.Json;
+            using Workers;
+            public sealed class User
+            {
+                public string Name { get; init; } = "missing";
+            }
+            public sealed record Item(string Label, int Count);
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var user = JsonSerializer.Deserialize<User>("{\"Name\":\"Ada\"}")!;
+                    var item = JsonSerializer.Deserialize<Item>("{\"Label\":\"box\",\"Count\":2}")!;
+                    return Response.Json(new { encoded = JsonSerializer.Serialize(user), user.Name, item.Label, item.Count });
+                }
+            }
+            """);
+
+        Assert.Contains("$workers$User.$fromJSON(JSON.parse(", module);
+        Assert.Contains("Object.hasOwn(value, \"Name\")", module);
+        Assert.Contains("result.name = value[\"Name\"]", module);
+        Assert.Contains("return { Name: this.name };", module);
+        Assert.Contains("$workers$Item.$fromJSON(JSON.parse(", module);
+        Assert.Contains("new $workers$Item(Object.hasOwn(value, \"Label\")", module);
+    }
+
     [Theory]
     [InlineData("JsonSerializer.Serialize(new { value = 1 }, new JsonSerializerOptions())")]
     [InlineData("JsonDocument.Parse(\"{}\")")]

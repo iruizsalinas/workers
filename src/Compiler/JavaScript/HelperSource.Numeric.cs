@@ -36,7 +36,7 @@ internal static partial class HelperSource
             if (code === "D" && value < 0) result = "-" + result;
             return format[0] === "x" ? result.toLowerCase() : result.toUpperCase();
           }
-          return value.toFixed(precision);
+          return {{name("mathRound")}}(value, precision, kind === 2 ? 6 : 15).toFixed(precision);
         }
 
         """;
@@ -76,6 +76,14 @@ internal static partial class HelperSource
         function {{name("mathSign")}}(value) {
           if (Number.isNaN(value)) throw new RangeError("NaN has no sign.");
           return value < 0 ? -1 : value > 0 ? 1 : 0;
+        }
+
+        """;
+
+    private static string MathLog(Func<string, string> name) => $$"""
+        function {{name("mathLog")}}(value, base) {
+          if (base <= 0 || base === 1 || !Number.isFinite(base)) return NaN;
+          return Math.log(value) / Math.log(base);
         }
 
         """;
