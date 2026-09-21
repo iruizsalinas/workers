@@ -16,6 +16,8 @@ internal sealed partial class JavaScriptEmitter
             return CreateDateTimeOffset(value, constructor, arguments);
         if (typeName == "System.Threading.CancellationTokenSource" && arguments.Length == 0)
             return "new AbortController()";
+        if (typeName == "System.Text.StringBuilder")
+            return CreateStringBuilder(value, constructor, arguments);
         if (typeName is "Workers.Request" or "Workers.Response")
             return PositionalObjectCreation(value, constructor, arguments,
                 values => $"new {type!.Name}({string.Join(", ", values)})");
@@ -75,6 +77,19 @@ internal sealed partial class JavaScriptEmitter
                 + $" + ({values[offset + 2]}) * 1000 + ({milliseconds})";
             return $"{_helpers.Require(JavaScriptHelper.TimeSpan)}({total})";
         });
+    }
+
+    private string CreateStringBuilder(
+        SyntaxNode source,
+        IMethodSymbol? constructor,
+        ArgumentSyntax[] arguments)
+    {
+        if (constructor is null
+            || constructor.Parameters.Length > 1
+            || constructor.Parameters.Any(parameter => parameter.Type.SpecialType != SpecialType.System_String))
+            throw UnsupportedSymbol(constructor, source);
+        return PositionalObjectCreation(source, constructor, arguments, values =>
+            $"{_helpers.Require(JavaScriptHelper.StringBuilder)}({string.Join(", ", values)})");
     }
 
     private string CreateDateTimeOffset(

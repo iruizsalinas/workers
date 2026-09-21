@@ -56,6 +56,14 @@ internal sealed partial class JavaScriptEmitter
 
     private string SimpleAssignment(AssignmentExpressionSyntax value)
     {
+        if (value.Left is MemberAccessExpressionSyntax member
+            && _model.GetSymbolInfo(member).Symbol is IPropertySymbol property and
+            {
+                Name: "Length",
+                ContainingType: { } containingType
+            }
+            && containingType.ToDisplayString() == "System.Text.StringBuilder")
+            throw UnsupportedSymbol(property, value);
         if (value.Left is ElementAccessExpressionSyntax element && IsSequenceType(_model.GetTypeInfo(element.Expression).Type))
         {
             var index = element.ArgumentList.Arguments.Single();

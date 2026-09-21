@@ -251,4 +251,16 @@ describe("compiler value semantics", () => {
     expect(Object.getPrototypeOf(body)).toBe(Object.prototype);
     expect(Object.getPrototypeOf(body.model)).toBe(Object.prototype);
   });
+
+  it("runs the focused StringBuilder profile", async () => {
+    const response = await invoke("/string-builder");
+
+    await expect(response.json()).resolves.toEqual({
+      text: "start:😀\nend\n",
+      length: 13,
+      sameAfterClear: true,
+      reset: "reset",
+      resetLength: 5,
+    });
+  });
 });

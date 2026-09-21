@@ -20,6 +20,7 @@ internal sealed partial class JavaScriptEmitter
             "System.DateTimeOffset" => DateTimeInvocation(invocation, method, receiver, name, arguments),
             "System.DateTime" => DateTimeInvocation(invocation, method, receiver, name, arguments),
             "System.TimeSpan" => TimeSpanInvocation(invocation, method, receiver, name, arguments),
+            "System.Text.StringBuilder" => StringBuilderInvocation(invocation, method!, receiver, name, arguments),
             "System.Guid" => GuidInvocation(invocation, method!, receiver, name, arguments),
             "System.Text.Json.JsonElement" => JsonElementInvocation(invocation, method!, receiver, name, arguments),
             "System.Threading.CancellationToken" =>
@@ -52,6 +53,28 @@ internal sealed partial class JavaScriptEmitter
             _ => ""
         };
         return result.Length != 0;
+    }
+
+    private string StringBuilderInvocation(
+        InvocationExpressionSyntax source,
+        IMethodSymbol method,
+        string receiver,
+        string name,
+        string[] arguments)
+    {
+        _helpers.Require(JavaScriptHelper.StringBuilder);
+        return (name, arguments.Length) switch
+        {
+            ("Append", 1) when method.Parameters[0].Type.SpecialType is
+                SpecialType.System_String or SpecialType.System_Char =>
+                $"{_helpers.Name("stringBuilderAppend")}({receiver}, {arguments[0]}, false)",
+            ("AppendLine", 0) => $"{_helpers.Name("stringBuilderAppend")}({receiver}, null, true)",
+            ("AppendLine", 1) when method.Parameters[0].Type.SpecialType == SpecialType.System_String =>
+                $"{_helpers.Name("stringBuilderAppend")}({receiver}, {arguments[0]}, true)",
+            ("Clear", 0) => $"{_helpers.Name("stringBuilderClear")}({receiver})",
+            ("ToString", 0) => $"{_helpers.Name("stringBuilderText")}({receiver})",
+            _ => throw UnsupportedSymbol(method, source)
+        };
     }
 
     private string GuidInvocation(

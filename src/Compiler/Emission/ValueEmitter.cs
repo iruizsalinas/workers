@@ -191,6 +191,8 @@ internal sealed partial class JavaScriptEmitter
             return $"{Expression(member.Expression)}.kv";
         if (property?.ContainingType.ToDisplayString() == "System.Exception" && property.Name == "Message")
             return $"{Expression(member.Expression)}.message";
+        if (property?.ContainingType.ToDisplayString() == "System.Text.StringBuilder" && property.Name == "Length")
+            return $"{Expression(member.Expression)}.length";
         if (property is { Name: "Count", ContainingType: { } queueBatch }
             && BindingIntrinsicRegistry.IsQueueMessageBatch(queueBatch))
             return $"{Expression(member.Expression)}.messages.length";

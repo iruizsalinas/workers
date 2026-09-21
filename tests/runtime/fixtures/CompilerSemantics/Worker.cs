@@ -1,6 +1,7 @@
 using Workers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text;
 
 namespace CompilerSemantics;
 
@@ -408,6 +409,18 @@ public static class Worker
         {
             var model = new PrototypeSafeModel { __proto__ = "class" };
             return Response.Json(new { __proto__ = "anonymous", model });
+        }
+
+        if (request.Path == "/string-builder")
+        {
+            string? missing = null;
+            var builder = new StringBuilder("start");
+            builder.Append(':').Append(missing).Append("😀").AppendLine().AppendLine("end");
+            var text = builder.ToString();
+            var length = builder.Length;
+            var sameAfterClear = builder == builder.Clear();
+            builder.Append("reset");
+            return Response.Json(new { text, length, sameAfterClear, reset = builder.ToString(), resetLength = builder.Length });
         }
 
         return Response.Text("Not found", status: 404);
