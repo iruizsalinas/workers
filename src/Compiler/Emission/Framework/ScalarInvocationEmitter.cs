@@ -126,6 +126,13 @@ internal sealed partial class JavaScriptEmitter
     private string? DateFormatExpression(ITypeSymbol type, string format, string value)
     {
         var display = UnwrapNullable(type).ToDisplayString();
+        if (IsDateOrTimeOnly(UnwrapNullable(type)))
+        {
+            var time = IsTimeOnly(UnwrapNullable(type));
+            return format.Length == 0 || DateOrTimeOnlyPattern(format, time) is not { } pattern
+                ? null
+                : $"{RequireHelperName(JavaScriptHelper.DateFormat, time ? "timeOnlyFormat" : "dateOnlyFormat")}({value}, {JsonText(pattern)})";
+        }
         if (display is not ("System.DateTimeOffset" or "System.DateTime") || format.Length == 0) return null;
         var offset = display == "System.DateTimeOffset";
         if (format is "O" or "o")

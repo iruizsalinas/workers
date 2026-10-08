@@ -5,7 +5,10 @@ using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private string Expression(ExpressionSyntax expression) => expression switch
+    private string Expression(ExpressionSyntax expression) =>
+        ImplicitJsonNodeConversion(expression, ExpressionCore(expression));
+
+    private string ExpressionCore(ExpressionSyntax expression) => expression switch
     {
         LiteralExpressionSyntax value => Literal(value),
         DefaultExpressionSyntax value => DefaultValue(value),
@@ -86,6 +89,8 @@ internal sealed partial class JavaScriptEmitter
             _helpers.Require(JavaScriptHelper.StringBuilder);
             return $"{_helpers.Name("stringBuilderLength")}({Expression(member.Expression)}, {Expression(value.Right)})";
         }
+        if (value.Left is ElementAccessExpressionSyntax node && IsJsonNodeType(_model.GetTypeInfo(node.Expression).Type))
+            return JsonNodeElementAccess(node, Expression(value.Right));
         if (value.Left is ElementAccessExpressionSyntax element && IsSequenceType(_model.GetTypeInfo(element.Expression).Type))
         {
             var index = element.ArgumentList.Arguments.Single();
@@ -263,6 +268,8 @@ internal sealed partial class JavaScriptEmitter
     private string Collection(CollectionExpressionSyntax value)
     {
         var items = "[" + string.Join(", ", value.Elements.Select(Element)) + "]";
+        if (JsonNodeKind(_model.GetTypeInfo(value).ConvertedType) == JsonNodeArray)
+            return JsonNodeHelper("jsonArrayFrom", items);
         return _model.GetTypeInfo(value).ConvertedType is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
             ? $"Uint8Array.from({items})"
             : items;

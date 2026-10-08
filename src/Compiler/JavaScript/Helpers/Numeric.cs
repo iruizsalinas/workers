@@ -140,7 +140,7 @@ internal static partial class HelperSource
 
     // DateTime and DateTimeOffset formatting with the invariant culture. Values are UTC instants.
     private static string DateFormat(Func<string, string> name) => $$"""
-        function {{name("dateFormat")}}(value, format, offset) {
+        function {{name("dateFormat")}}(value, format, offset, ticks = 0) {
           const standard = {
             d: "MM/dd/yyyy", D: "dddd, dd MMMM yyyy", t: "HH:mm", T: "HH:mm:ss",
             f: "dddd, dd MMMM yyyy HH:mm", F: "dddd, dd MMMM yyyy HH:mm:ss",
@@ -191,7 +191,7 @@ internal static partial class HelperSource
               case "s": result += pad(second, Math.min(count, 2)); break;
               case "f": case "F": {
                 if (count > 7) throw new RangeError("Input string was not in a correct format.");
-                let fraction = (pad(millisecond, 3) + "0000").slice(0, count);
+                let fraction = (pad(millisecond, 3) + pad(ticks, 4)).slice(0, count);
                 if (character === "F") {
                   fraction = fraction.replace(/0+$/, "");
                   if (fraction.length === 0 && result.endsWith(".")) result = result.slice(0, -1);
@@ -207,6 +207,18 @@ internal static partial class HelperSource
             index += count;
           }
           return result;
+        }
+        // DateOnly and TimeOnly patterns are validated by the compiler, so they only use date or time fields.
+        function {{name("dateOnlyFormat")}}(value, format) {
+          const date = new Date(0);
+          date.setUTCFullYear(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10)));
+          return {{name("dateFormat")}}(date, format, false);
+        }
+        function {{name("timeOnlyFormat")}}(value, format) {
+          const fraction = value.length > 8 ? Number(value.slice(9)) : 0;
+          const date = new Date(Date.UTC(1970, 0, 1, Number(value.slice(0, 2)), Number(value.slice(3, 5)),
+            Number(value.slice(6, 8)), Math.floor(fraction / 10000)));
+          return {{name("dateFormat")}}(date, format, false, fraction % 10000);
         }
 
         """;

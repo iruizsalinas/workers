@@ -27,7 +27,12 @@ internal sealed partial class JavaScriptEmitter
         var access = local + value.WhenNotNull.ToFullString().Trim();
         var statement = Microsoft.CodeAnalysis.CSharp.SyntaxFactory.ParseStatement(
             $"{{ {declared} {local} = default!; {(resultType?.SpecialType == SpecialType.System_Void ? "" : "_ = ")}{access}; }}");
-        if (!_model.TryGetSpeculativeSemanticModel(value.SpanStart, statement, out var speculative))
+        // A chained x?.a?.b speculates again from inside a speculative model, which Roslyn only allows
+        // from the original model at the original position.
+        var (model, position) = _model.IsSpeculativeSemanticModel
+            ? (_model.ParentModel!, _model.OriginalPositionForSpeculation)
+            : (_model, value.SpanStart);
+        if (!model.TryGetSpeculativeSemanticModel(position, statement, out var speculative))
             throw Unsupported("WRK101", value.WhenNotNull);
         var block = (BlockSyntax)statement;
         var expression = block.Statements[1] is ExpressionStatementSyntax
@@ -54,6 +59,8 @@ internal sealed partial class JavaScriptEmitter
         string receiver)
     {
         var arguments = element.ArgumentList.Arguments;
+        if (IsJsonNodeType(_model.GetTypeInfo(access.Expression).Type))
+            return SpeculativeConditionalAccess(access, receiver);
         if (IsRegexType(_model.GetTypeInfo(access.Expression).Type, "GroupCollection"))
         {
             var groups = _names.Get($"conditional-groups:{access.SyntaxTree.FilePath}:{access.SpanStart}", "groups");
@@ -77,6 +84,8 @@ internal sealed partial class JavaScriptEmitter
     {
         var symbol = _model.GetSymbolInfo(member).Symbol;
         var receiverType = _model.GetTypeInfo(access.Expression).Type;
+        if (IsDateOrTimeOnly(symbol?.ContainingType) || IsJsonNodeType(symbol?.ContainingType) || IsJsonNodeType(receiverType))
+            return SpeculativeConditionalAccess(access, receiver);
         if (symbol?.Name == "Length"
             && (receiverType?.SpecialType == SpecialType.System_String || receiverType is IArrayTypeSymbol))
             return $"({receiver}?.length ?? null)";
@@ -97,6 +106,8 @@ internal sealed partial class JavaScriptEmitter
 
     private string ElementAccess(ElementAccessExpressionSyntax value)
     {
+        if (IsJsonNodeType(_model.GetTypeInfo(value.Expression).Type))
+            return JsonNodeElementAccess(value);
         var receiver = Expression(value.Expression);
         if (_model.GetTypeInfo(value.Expression).Type?.ToDisplayString() == "System.Text.Json.JsonElement")
         {

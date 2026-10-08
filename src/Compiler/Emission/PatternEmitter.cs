@@ -71,6 +71,8 @@ internal sealed partial class JavaScriptEmitter
         var unwrappedInput = input is null ? null : UnwrapNullable(input);
         if (unwrappedInput is not null && SymbolEqualityComparer.Default.Equals(unwrappedInput, type))
             return $"{value} != null";
+        if (JsonNodeKind(type) is var nodeKind and >= 0)
+            return nodeKind == JsonNodeAny ? $"{value} != null" : JsonNodeHelper("jsonNodeIs", value, nodeKind.ToString());
         if (type.SpecialType == SpecialType.System_String) return $"typeof {value} === \"string\"";
         if (type.SpecialType == SpecialType.System_Boolean) return $"typeof {value} === \"boolean\"";
         if (type is INamedTypeSymbol named && IsUserInstanceType(named) && (IsException(named) || RequiresUserClass(named)))

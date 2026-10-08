@@ -9,7 +9,7 @@ internal enum JavaScriptHelper
     StringRemove, StringInsert, StringPad, StringToCharArray, StringSplit, StringBuilder, Regex,
     NumericParse, NumericFormat, MathAbsInt, MathClamp, MathRound, MathLog, MathSign, GuidParse, GuidFormat,
     DateTimeOffset, DateTimeAddMonths, DateTimeFromUnixTime, DateTimeCompare, DateTimeDayOfYear,
-    DateTimeIsLeapYear, DateTimeDaysInMonth, DateTimeAddMilliseconds, TimeSpan,
+    DateTimeIsLeapYear, DateTimeDaysInMonth, DateTimeAddMilliseconds, TimeSpan, DateOnly, TimeOnly, JsonNode,
     LinqValues, LinqWhere, LinqSelect, LinqSelectMany, LinqAppend, LinqPrepend, LinqSkip, LinqTake,
     LinqSkipWhile, LinqTakeWhile, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains, LinqDistinct,
     LinqDistinctBy, LinqSequenceEqual, LinqOrder, LinqGroupBy, LinqToDictionary, LinqToLookup,
@@ -33,6 +33,12 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
             _required.Add(JavaScriptHelper.DateTimeIsLeapYear);
         if (helper == JavaScriptHelper.JsonSerializeClr)
             _required.Add(JavaScriptHelper.NumberText);
+        if (helper == JavaScriptHelper.JsonNode)
+        {
+            _required.Add(JavaScriptHelper.JsonSerializeClr);
+            _required.Add(JavaScriptHelper.NumberText);
+            _required.Add(JavaScriptHelper.JsonDeserializeValue);
+        }
         if (helper is JavaScriptHelper.CollectionMembers or JavaScriptHelper.QueueStack)
             _required.Add(JavaScriptHelper.LinqValues);
         if (helper.IsLinqOperator())
@@ -120,6 +126,9 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.DateTimeDaysInMonth => "dateTimeDaysInMonth",
         JavaScriptHelper.DateTimeAddMilliseconds => "dateTimeAddMilliseconds",
         JavaScriptHelper.TimeSpan => "timeSpan",
+        JavaScriptHelper.DateOnly => "dateOnlyCreate",
+        JavaScriptHelper.TimeOnly => "timeOnlyCreate",
+        JavaScriptHelper.JsonNode => "jsonNodeImport",
         JavaScriptHelper.LinqValues => "linqValues",
         JavaScriptHelper.LinqWhere => "linqWhere",
         JavaScriptHelper.LinqSelect => "linqSelect",

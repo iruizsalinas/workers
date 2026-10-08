@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Workers;
 
 public static class Worker
@@ -81,6 +82,48 @@ public static class Worker
             return Response.Json(RegressionScenarios.Run());
         if (request.Path == "/regex")
             return Response.Json(RegexScenarios.Run());
+        if (request.Path == "/date-time-only")
+            return Response.Json(DateTimeOnlyScenarios.Run());
+        if (request.Path == "/json-nodes")
+            return Response.Json(JsonNodeScenarios.Run());
+        if (request.Path == "/json-forward" && request.Method == "POST")
+        {
+            try
+            {
+                var body = await request.JsonAsync<JsonObject>();
+                if (body is null) return Response.Text("null", 400);
+                body["forwarded"] = true;
+                body["meta"] = new JsonObject { ["keys"] = body.Count, ["hasProto"] = body.ContainsKey("__proto__") };
+                await env.Kv("KV").PutJsonAsync("json-forward", body);
+                var stored = await env.Kv("KV").GetJsonAsync<JsonObject>("json-forward");
+                return Response.Json(new JsonObject { ["body"] = body, ["stored"] = stored!.ToJsonString() });
+            }
+            catch (Exception)
+            {
+                return Response.Text("rejected", 400);
+            }
+        }
+        if (request.Path == "/booking" && request.Method == "POST")
+        {
+            try
+            {
+                var booking = await request.JsonAsync<DateTimeOnlyScenarios.Booking>();
+                if (booking is null) return Response.Text("null", 400);
+                await env.Kv("KV").PutJsonAsync("booking", booking);
+                var stored = await env.Kv("KV").GetJsonAsync<DateTimeOnlyScenarios.Booking>("booking");
+                return Response.Json(new
+                {
+                    booking = stored,
+                    weekday = (int)booking.Day.DayOfWeek,
+                    nextWeek = booking.Day.AddDays(7),
+                    minutes = booking.End is TimeOnly end ? (end - booking.Start).TotalMinutes : -1
+                });
+            }
+            catch (Exception)
+            {
+                return Response.Text("rejected", 400);
+            }
+        }
         return Response.Text("Not found", 404);
     }
 }

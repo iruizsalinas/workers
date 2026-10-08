@@ -48,6 +48,7 @@ internal sealed partial class JavaScriptEmitter
             type = nullable.TypeArguments[0];
         if (type.ToDisplayString() is "System.DateTime" or "System.DateTimeOffset")
             return LinqOrderKeyKind.DateTime;
+        if (IsDateOrTimeOnly(type)) return LinqOrderKeyKind.Ordinal;
         if (type.SpecialType == SpecialType.System_Char) return LinqOrderKeyKind.Character;
         if (type.TypeKind == TypeKind.Enum || type.SpecialType == SpecialType.System_Boolean
             || type.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Double)

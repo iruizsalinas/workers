@@ -61,6 +61,75 @@ describe("application correctness probes", () => {
       expect(results[name]).toBe(expected);
     });
   });
+
+  describe("DateOnly and TimeOnly scenarios", () => {
+    let results;
+    beforeAll(async () => {
+      results = await (await invoke("/date-time-only")).json();
+    });
+    it.each(Object.entries(clr.dateTimeOnly))("%s agrees with the CLR", (name, expected) => {
+      expect(results[name]).toBe(expected);
+    });
+  });
+
+  describe("JsonNode scenarios", () => {
+    let results;
+    beforeAll(async () => {
+      results = await (await invoke("/json-nodes")).json();
+    });
+    it.each(Object.entries(clr.jsonNodes))("%s agrees with the CLR", (name, expected) => {
+      expect(results[name]).toBe(expected);
+    });
+  });
+});
+
+describe("JsonObject request bodies forwarded through Response.Json and KV", () => {
+  it("keeps numbers a double cannot hold and patches the payload", async () => {
+    const body = '{"id":12345678901234567890,"amount":0.10000000000000000001,"count":3,"tags":["a"]}';
+    const response = await invoke("/json-forward", body);
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).toBe('{"body":{"id":12345678901234567890,"amount":0.10000000000000000001,"count":3,"tags":["a"],'
+      + '"forwarded":true,"meta":{"keys":5,"hasProto":false}},'
+      + '"stored":"{\\"id\\":12345678901234567890,\\"amount\\":0.10000000000000000001,\\"count\\":3,\\"tags\\":[\\"a\\"],'
+      + '\\"forwarded\\":true,\\"meta\\":{\\"keys\\":5,\\"hasProto\\":false}}"}');
+  });
+
+  it("treats prototype-named keys as ordinary data", async () => {
+    const response = await invoke("/json-forward", '{"__proto__":{"admin":true},"constructor":{"prototype":{"x":1}}}');
+    const result = await response.json();
+    expect(Object.keys(result.body)).toEqual(["__proto__", "constructor", "forwarded", "meta"]);
+    expect(Object.getOwnPropertyDescriptor(result.body, "__proto__").value).toEqual({ admin: true });
+    expect(result.body.meta).toEqual({ keys: 3, hasProto: true });
+    expect({}.admin).toBeUndefined();
+  });
+
+  it.each(["[1,2]", "5", "{\"a\":", "", "{\"a\":" + "[".repeat(70) + "]".repeat(70) + "}"])("rejects %s", async (body) => {
+    const response = await invoke("/json-forward", body);
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("DateOnly and TimeOnly request bodies and KV values", () => {
+  it("reads and writes the System.Text.Json forms", async () => {
+    const response = await invoke("/booking", '{"name":"standup","day":"2026-10-08","start":"9:30","until":null,"end":"10:15:30.5"}');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      booking: { name: "standup", day: "2026-10-08", start: "09:30:00", until: null, end: "10:15:30.5000000" },
+      weekday: 4,
+      nextWeek: "2026-10-15",
+      minutes: 45 + 30.5 / 60,
+    });
+  });
+
+  it.each([
+    '{"name":"x","day":"2026-02-30","start":"09:00"}',
+    '{"name":"x","day":"2026-10-08T00:00:00","start":"09:00"}',
+    '{"name":"x","day":"2026-10-08","start":"24:00"}',
+    '{"name":"x","day":"2026-10-08","start":"1.09:00"}',
+  ])("rejects %s", async (body) => {
+    expect((await invoke("/booking", body)).status).toBe(400);
+  });
 });
 
 describe("shipment submission with nested input, D1 persistence and background KV cache", () => {

@@ -33,6 +33,14 @@ internal sealed partial class JavaScriptEmitter
                 HelperInvocation(JavaScriptHelper.DateTimeCompare, arguments),
             ("System.DateTimeOffset", "Compare") when arguments.Length == 2 =>
                 HelperInvocation(JavaScriptHelper.DateTimeCompare, arguments),
+            (_, _) when method?.IsStatic == true && IsJsonNodeType(method.ContainingType)
+                && JsonNodeStaticInvocation(invocation, method, arguments) is { } jsonNode => jsonNode,
+            ("System.Text.Json.JsonSerializer", "Deserialize") when method?.ReducedFrom is not null && arguments.Length == 0 =>
+                JsonDeserialize(invocation, method, receiverOverride ?? Expression(((MemberAccessExpressionSyntax)invocation.Expression).Expression)),
+            ("System.Text.Json.JsonSerializer", "SerializeToNode") when arguments.Length == 1 =>
+                JsonNodeHelper("jsonNodeParse", JsonClrSerialize(method!.Parameters[0].Type, arguments[0]), JsonNodeAny.ToString()),
+            ("System.DateOnly" or "System.TimeOnly", _) when method?.IsStatic == true
+                && DateOrTimeOnlyStaticInvocation(invocation, method, name!, arguments) is { } dateOrTime => dateOrTime,
             ("System.Guid", "Parse") when HasParameters(method, SpecialType.System_String) =>
                 HelperInvocation(JavaScriptHelper.GuidParse, arguments),
             ("System.Text.Json.JsonSerializer", "Serialize") when arguments.Length == 1 =>
@@ -41,6 +49,7 @@ internal sealed partial class JavaScriptEmitter
                 $"new TextEncoder().encode({JsonClrSerialize(method!.Parameters[0].Type, arguments[0])})",
             ("System.Text.Json.JsonSerializer", "Deserialize") when arguments.Length == 1 =>
                 JsonDeserialize(invocation, method!, arguments[0]),
+            ("System.Collections.Generic.KeyValuePair", "Create") when arguments.Length == 2 => $"[{arguments[0]}, {arguments[1]}]",
             ("System.Console", "WriteLine") when arguments.Length == 1 => $"console.log({arguments[0]})",
             ("System.Guid", "NewGuid") => "globalThis.crypto.randomUUID()",
             ("Workers.Performance", "Now") => "performance.now()",
@@ -123,7 +132,18 @@ internal sealed partial class JavaScriptEmitter
     {
         var resultType = method.TypeArguments.FirstOrDefault() ?? method.ReturnType;
         RegisterJsonValueType(resultType, source, strict: true);
-        var input = method.Parameters[0].Type;
+        var input = (method.ReducedFrom ?? method).Parameters[0].Type;
+        // A node is already parsed; typed members read its numbers as doubles.
+        if (IsJsonNodeType(input))
+            return IsJsonNodeType(resultType)
+                ? JsonNodeHelper("jsonNodeImport", value, JsonNodeKind(resultType).ToString())
+                : $"((node) => node == null ? null : {JsonValueExpression(resultType, JsonNodeHelper("jsonNodePlain", "node"), JsonClrMode.ToString())})({value})";
+        if (IsJsonNodeType(resultType))
+            return input.SpecialType == SpecialType.System_String
+                ? JsonNodeHelper("jsonNodeParse", value, JsonNodeKind(resultType).ToString())
+                : input.ToDisplayString() == "System.ReadOnlySpan<byte>" || input is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
+                    ? JsonNodeHelper("jsonNodeParse", $"new TextDecoder().decode({value})", JsonNodeKind(resultType).ToString())
+                    : throw UnsupportedSymbol(method, source);
         var parsed = input.SpecialType == SpecialType.System_String
             ? $"JSON.parse({value})"
             : input.ToDisplayString() == "System.ReadOnlySpan<byte>" || input is IArrayTypeSymbol

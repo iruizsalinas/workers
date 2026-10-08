@@ -20,6 +20,8 @@ object result = args.Contains("--applications")
             .Select(json => new { Json = json, Result = JsonApplicationScenarios.Provision(json) }).ToArray(),
         Regressions = RegressionScenarios.Run(),
         Regex = RegexScenarios.Run(),
+        DateTimeOnly = DateTimeOnlyScenarios.Run(),
+        JsonNodes = JsonNodeScenarios.Run(),
         JsonAudit = ApplicationScenarios.JsonAuditCases()
             .Select(json => new { Json = json, Result = ApplicationScenarios.AuditJson(json) }).ToArray(),
         Shipments = ApplicationScenarios.ShipmentCases()

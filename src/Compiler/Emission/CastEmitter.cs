@@ -11,9 +11,19 @@ internal sealed partial class JavaScriptEmitter
     {
         if (_model.GetConstantValue(cast) is { HasValue: true } constant && constant.Value is not (float or long or ulong or decimal))
             return LiteralConstant(constant.Value, cast);
+        if (_model.GetOperation(cast) is IConversionOperation { OperatorMethod: { } nodeOperator, Type: { } nodeTarget }
+            && IsJsonNodeType(nodeOperator.ContainingType))
+            return nodeOperator.Name == "op_Implicit"
+                ? JsonNodeFromValue(nodeOperator.Parameters[0].Type, Expression(cast.Expression), cast)
+                : SymbolEqualityComparer.Default.Equals(nodeOperator.ReturnType, nodeTarget)
+                    ? JsonNodeGetValue(nodeTarget, Expression(cast.Expression), cast)
+                    : throw Unsupported("WRK101", cast);
         if (_model.GetOperation(cast) is not IConversionOperation { Operand: var operand, Type: { } target } conversion
             || conversion.OperatorMethod is not null || conversion.IsChecked)
             throw Unsupported("WRK101", cast);
+        // Downcasts between node types check the runtime kind.
+        if (JsonNodeKind(target) is var nodeKind and > JsonNodeAny && IsJsonNodeType(operand.Type) && !conversion.Conversion.IsImplicit)
+            return $"((node) => node == null ? null : {JsonNodeHelper("jsonNodeAs", "node", nodeKind.ToString())})({Expression(cast.Expression)})";
         var value = Expression(cast.Expression);
         var source = operand.Type;
         if (source is null) return value;

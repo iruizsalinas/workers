@@ -73,7 +73,7 @@ internal sealed partial class JavaScriptEmitter
             RegisterJsonValueType(enumeration.EnumUnderlyingType!, source, strict);
             return;
         }
-        if (JsonScalarKind(type) is not null || type.SpecialType == SpecialType.System_Object
+        if (JsonScalarKind(type) is not null || type.SpecialType == SpecialType.System_Object || IsJsonNodeType(type)
             || type.ToDisplayString() == "System.Text.Json.JsonElement") return;
         if (strict)
             throw new NotSupportedException($"WRK119: JSON deserialization does not support member type '{type}'.");
@@ -118,6 +118,8 @@ internal sealed partial class JavaScriptEmitter
         {
             "System.DateTimeOffset" or "System.DateTime" => "7",
             "System.Guid" => "8",
+            "System.DateOnly" => "9",
+            "System.TimeOnly" => "10",
             _ => null
         }
     };
@@ -202,6 +204,8 @@ internal sealed partial class JavaScriptEmitter
             return $"{_userTypes[user.OriginalDefinition]}.$fromJSON({value}, {mode})";
         if (type.TypeKind == TypeKind.Enum && type is INamedTypeSymbol enumeration)
             return JsonValueExpression(enumeration.EnumUnderlyingType!, value, mode);
+        if (IsJsonNodeType(type))
+            return JsonNodeHelper("jsonNodeImport", value, JsonNodeKind(type).ToString());
         return JsonScalarKind(type) is { } kind ? JsonHelperCall("jsonDeserializeValue", value, mode, kind) : value;
     }
 

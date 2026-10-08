@@ -31,6 +31,8 @@ internal sealed partial class JavaScriptEmitter
         string ThenMap(string? converter, string shape) => converter is null ? result : $"{result}.then(value => {string.Format(shape, converter)})";
         var hasColumn = method.Parameters.Any(parameter => parameter.Name == "columnName")
             && invocation.ArgumentList.Arguments.Count != 0;
+        if (ReadsJsonNodeText(method))
+            return $"{result}.then(text => text == null ? null : {JsonNodeHelper("jsonNodeParse", "text", JsonNodeKind(typeArgument).ToString())})";
         return (owner, method.Name) switch
         {
             ("Workers.Request" or "Workers.Response", "JsonAsync") => Then(Converter(JsonWebMode, false)),
@@ -68,6 +70,13 @@ internal sealed partial class JavaScriptEmitter
             _ => result
         };
     }
+
+    // JSON read as a node is parsed from the text, so numbers a double cannot hold keep their digits.
+    private static bool ReadsJsonNodeText(IMethodSymbol method) =>
+        method.ContainingType.ToDisplayString() is var owner
+        && (owner is "Workers.Request" or "Workers.Response" && method.Name == "JsonAsync"
+            || owner == "Workers.IKvNamespace" && method.Name == "GetJsonAsync")
+        && IsJsonNodeType(method.TypeArguments.FirstOrDefault());
 
     private string EmitBindingIntrinsicCore(
         string receiver,
@@ -112,9 +121,10 @@ internal sealed partial class JavaScriptEmitter
         arguments = arguments.Where(argument => !IsCancellationToken(argument.Parameter)).ToArray();
         var result = intrinsic.Kind switch
         {
+            BindingIntrinsicKind.Direct when ReadsJsonNodeText(method) => $"{receiver}.text()",
             BindingIntrinsicKind.Direct => $"{receiver}.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))})",
             BindingIntrinsicKind.KvBytesGet => EmitKvGet(receiver, intrinsic.JavascriptName, arguments, "arrayBuffer"),
-            BindingIntrinsicKind.KvJsonGet => EmitKvGet(receiver, intrinsic.JavascriptName, arguments, "json"),
+            BindingIntrinsicKind.KvJsonGet => EmitKvGet(receiver, intrinsic.JavascriptName, arguments, ReadsJsonNodeText(method) ? "text" : "json"),
             BindingIntrinsicKind.KvJsonPut => EmitKvJsonPut(receiver, intrinsic.JavascriptName, arguments),
             BindingIntrinsicKind.DurableObjectGet => EmitDurableObjectGet(receiver, method, arguments),
             BindingIntrinsicKind.CacheQuery => EmitCacheQuery(receiver, intrinsic.JavascriptName, arguments),

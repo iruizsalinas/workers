@@ -7,6 +7,14 @@ internal sealed partial class JavaScriptEmitter
 {
     private string Binary(BinaryExpressionSyntax expression)
     {
+        if (expression.Kind() is SyntaxKind.AsExpression or SyntaxKind.IsExpression
+            && JsonNodeKind(_model.GetTypeInfo(expression.Right).Type) is var nodeKind and >= 0)
+        {
+            var test = nodeKind == JsonNodeAny ? "node != null" : $"node != null && {JsonNodeHelper("jsonNodeIs", "node", nodeKind.ToString())}";
+            return expression.IsKind(SyntaxKind.IsExpression)
+                ? $"((node) => {test})({Expression(expression.Left)})"
+                : $"((node) => {test} ? node : null)({Expression(expression.Left)})";
+        }
         var operation = _model.GetOperation(expression) as IBinaryOperation;
         if (operation is { } timeOperation
             && (IsTimeSpan(timeOperation.LeftOperand.Type) || IsTimeSpan(timeOperation.RightOperand.Type)))
@@ -38,6 +46,8 @@ internal sealed partial class JavaScriptEmitter
             var equals = RecordEquals(recordOperator.ContainingType, Expression(expression.Left), Expression(expression.Right), expression, referenceComparison: true);
             return expression.IsKind(SyntaxKind.EqualsExpression) ? equals : $"!{equals}";
         }
+        if (operation?.OperatorMethod is { ContainingType: var operatorType } && IsDateOrTimeOnly(operatorType))
+            return DateOrTimeOnlyBinary(expression, operation);
         if (operation?.OperatorMethod is not null)
             throw UnsupportedSymbol(operation.OperatorMethod, expression);
         if (operation is { IsLifted: true }
@@ -141,6 +151,7 @@ internal sealed partial class JavaScriptEmitter
                 $"{RequireHelperName(JavaScriptHelper.StringBuilder, "stringBuilderText")}({item})",
             _ when IsRegexCapture(underlying) => $"{item}.value",
             _ when IsRegexType(underlying, "Regex") => $"{item}.source",
+            _ when IsJsonNodeType(underlying) => JsonNodeHelper("jsonNodeToString", item),
             _ when underlying is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record) =>
                 RecordText(record, item, source),
             _ => throw Unsupported("WRK108", source)

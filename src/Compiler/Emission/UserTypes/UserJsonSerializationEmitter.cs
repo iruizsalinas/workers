@@ -22,6 +22,8 @@ internal sealed partial class JavaScriptEmitter
             return $"{ClrJsonHelper("jsonClrNumber", value)[..^1]}, {(type.SpecialType == SpecialType.System_Single ? "true" : "false")})";
         if (type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
             return ClrJsonHelper("jsonClrBytes", value);
+        if (IsJsonNodeType(type))
+            return JsonNodeHelper("jsonNodeProject", value);
         switch (type.ToDisplayString())
         {
             case "System.DateTimeOffset":

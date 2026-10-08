@@ -21,6 +21,8 @@ internal sealed partial class JavaScriptEmitter
         if (symbol is IMethodSymbol method && IsMethodGroup(member))
             return MethodGroup(member, method, method.IsStatic ? null : member.Expression);
         var property = symbol as IPropertySymbol;
+        if (property is not null && (IsJsonNodeType(property.ContainingType) || IsJsonNodeType(_model.GetTypeInfo(member.Expression).Type)))
+            return JsonNodeMember(member, property);
         if (property is { IsStatic: true, Name: "UtcNow" }
             && property.ContainingType.ToDisplayString() == "System.DateTimeOffset") return "new Date()";
         if (symbol is { IsStatic: true, Name: "UnixEpoch", ContainingType: { } epochType }
@@ -31,6 +33,8 @@ internal sealed partial class JavaScriptEmitter
         if (property is { IsStatic: false, ContainingType: { } durationType }
             && durationType.ToDisplayString() == "System.TimeSpan")
             return TimeSpanMember(member, property.Name);
+        if (property is { ContainingType: { } dateOnlyType } && IsDateOrTimeOnly(dateOnlyType))
+            return DateOrTimeOnlyMember(member, property);
         if (property is { IsStatic: false, ContainingType: { } dateTimeType }
             && dateTimeType.ToDisplayString() is "System.DateTimeOffset" or "System.DateTime")
             return DateTimeMember(member, property);

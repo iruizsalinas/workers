@@ -61,6 +61,10 @@ internal sealed partial class JavaScriptEmitter
             (_, "TryParse") when parse >= 0 && (inputs.Length == 1 || invariantProvider)
                 && method.Parameters[0].Type.SpecialType == SpecialType.System_String =>
                 $"() => {NumericParse(inputs[0], parse)}",
+            ("System.DateOnly" or "System.TimeOnly", "TryParseExact") =>
+                $"() => {DateOrTimeOnlyParse(invocation, method, inputs[0])}",
+            ("System.DateOnly" or "System.TimeOnly", "TryParse") =>
+                DateOrTimeOnlyStaticInvocation(invocation, method, method.Name, inputs),
             ("System.Guid", "TryParse") when inputs.Length == 1
                 && method.Parameters[0].Type.SpecialType == SpecialType.System_String =>
                 $"() => {HelperInvocation(JavaScriptHelper.GuidParse, inputs)}",
@@ -74,7 +78,14 @@ internal sealed partial class JavaScriptEmitter
             _ => null
         };
         string call;
-        if (owner == "Workers.Env" && method.Name == "TryGet" && inputs.Length == 1)
+        if (JsonNodeKind(method.ContainingType) == JsonNodeObject && method.Name == "TryGetPropertyValue" && inputs.Length == 1)
+            call = JsonNodeHelper("jsonObjectTake", receiver!, inputs[0]);
+        else if (JsonNodeKind(method.ContainingType) == JsonNodeValue && method.Name == "TryGetValue" && inputs.Length == 0)
+        {
+            var (kind, arguments) = JsonNodeValueKind(method.TypeArguments[0], invocation);
+            call = JsonNodeHelper("jsonNodeTryValue", receiver!, fallback, kind.ToString(), arguments);
+        }
+        else if (owner == "Workers.Env" && method.Name == "TryGet" && inputs.Length == 1)
             call = $"((environment, key) => environment[key] !== undefined ? [true, environment[key]] : [false, {fallback}])({receiver}, {inputs[0]})";
         else if (attempt is not null)
             call = $"{_helpers.Require(JavaScriptHelper.TryCall)}({attempt}, {fallback})";

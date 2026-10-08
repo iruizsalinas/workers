@@ -16,6 +16,7 @@ internal sealed partial class JavaScriptEmitter
         result = typeName switch
         {
             _ when IsRegexType(type) => RegexInstanceInvocation(invocation, method!, receiver, arguments),
+            _ when IsJsonNodeType(type) => JsonNodeInvocation(invocation, method!, receiver, name, arguments),
             _ when CollectionMemberInvocation(invocation, method, receiver, name, arguments) is { } collection => collection,
             "System.Enum" when name == "ToString" && arguments.Length == 0
                 && invocation.Expression is MemberAccessExpressionSyntax enumMember
@@ -26,6 +27,7 @@ internal sealed partial class JavaScriptEmitter
             "System.DateTimeOffset" => DateTimeInvocation(invocation, method, receiver, name, arguments),
             "System.DateTime" => DateTimeInvocation(invocation, method, receiver, name, arguments),
             "System.TimeSpan" => TimeSpanInvocation(invocation, method, receiver, name, arguments),
+            "System.DateOnly" or "System.TimeOnly" => DateOrTimeOnlyInvocation(invocation, method!, receiver, name, arguments),
             "System.Text.StringBuilder" => StringBuilderInvocation(invocation, method!, receiver, name, arguments),
             "System.Guid" => GuidInvocation(invocation, method!, receiver, name, arguments),
             "System.Text.Json.JsonElement" => JsonElementInvocation(invocation, method!, receiver, name, arguments),

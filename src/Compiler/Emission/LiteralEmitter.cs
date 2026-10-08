@@ -136,6 +136,16 @@ internal sealed partial class JavaScriptEmitter
                 : EnumText(underlying!, expression);
         if (underlying is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record))
             return $"(($workers$value) => $workers$value == null ? \"\" : {RecordText(record, "$workers$value", item)})({expression})";
+        if (IsJsonNodeType(underlying))
+            return $"(($workers$value) => $workers$value == null ? \"\" : {JsonNodeHelper("jsonNodeToString", "$workers$value")})({expression})";
+        if (IsDateOrTimeOnly(underlying))
+        {
+            if (_invariantFormatting == 0) throw CultureSensitiveFormat(underlying!);
+            var formatted = DateFormatExpression(underlying!, IsDateOnly(underlying) ? "d" : "t", "$workers$value")!;
+            return mayBeNull
+                ? $"(($workers$value) => $workers$value == null ? \"\" : {formatted})({expression})"
+                : $"(($workers$value) => {formatted})({expression})";
+        }
         if (underlying?.SpecialType is SpecialType.System_String or SpecialType.System_Char
             or >= SpecialType.System_SByte and <= SpecialType.System_Double
             || underlying?.ToDisplayString() == "System.Guid")

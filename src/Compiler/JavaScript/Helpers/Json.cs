@@ -53,6 +53,33 @@ internal static partial class HelperSource
           if (kind === 8 && typeof value === "string"
             && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value))
             return value.toLowerCase();
+          // DateOnly reads exactly yyyy-MM-dd. Database drivers may return DATE columns as midnight UTC dates.
+          if (kind === 9) {
+            if (mode === 2 && value instanceof Date && Number.isFinite(value.getTime())
+              && (value.getTime() % 86400000 + 86400000) % 86400000 === 0 && value.getUTCFullYear() >= 1 && value.getUTCFullYear() <= 9999)
+              value = String(value.getUTCFullYear()).padStart(4, "0") + "-" + String(value.getUTCMonth() + 1).padStart(2, "0")
+                + "-" + String(value.getUTCDate()).padStart(2, "0");
+            const parts = typeof value === "string" && /^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
+            if (parts) {
+              const year = Number(parts[1]), month = Number(parts[2]), day = Number(parts[3]);
+              const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+              if (year >= 1 && month >= 1 && month <= 12 && day >= 1
+                && day <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]) return value;
+            }
+          }
+          // TimeOnly reads h:m[:s[.f]] with up to seven fraction digits, like the System.Text.Json converter.
+          if (kind === 10) {
+            const parts = typeof value === "string" && value.length >= 3 && value.length <= 16
+              && /^([0-9]+):([0-9]+)(?::([0-9]+)(?:\.([0-9]{1,7}))?)?$/.exec(value);
+            if (parts) {
+              const hour = Number(parts[1]), minute = Number(parts[2]), second = Number(parts[3] ?? 0);
+              const fraction = Number((parts[4] ?? "").padEnd(7, "0"));
+              if (hour <= 23 && minute <= 59 && second <= 59) {
+                const pad = number => String(number).padStart(2, "0");
+                return pad(hour) + ":" + pad(minute) + ":" + pad(second) + (fraction ? "." + String(fraction).padStart(7, "0") : "");
+              }
+            }
+          }
           throw new TypeError("JSON value has an incompatible type or range.");
         }
         function {{name("jsonDeserializeArray")}}(value, convert, mode = 0) {
@@ -79,22 +106,62 @@ internal static partial class HelperSource
 
         """;
 
-    // Formats values the way System.Text.Json writes them with its default options.
+    // Formats values the way System.Text.Json writes them with its default options. It follows
+    // JSON.stringify (toJSON, skipped undefined members, raw JSON) but escapes property names and string
+    // values like JavaScriptEncoder.Default, which also replaces lone surrogates. Raw JSON, such as the
+    // projected dates, is written as is.
     private static string JsonSerializeClr(Func<string, string> name) => $$"""
-        function {{name("jsonSerializeClr")}}(value) {
-          const escape = code => "\\" + "u" + code.toString(16).toUpperCase().padStart(4, "0");
-          const text = token => token.replace(/\\u[0-9a-f]{4}|\\.|[^ -~]|[<>&'+`]/g, match => {
-            if (match.length === 6) return escape(Number.parseInt(match.slice(2), 16));
-            if (match.length === 2) return match === "\\\"" ? escape(34) : match;
-            return escape(match.charCodeAt(0));
-          });
-          return JSON.stringify(value, (key, item) => {
-            if (typeof item === "number" && !Number.isFinite(item))
-              throw new TypeError("Nonfinite numbers cannot be written as JSON.");
-            return typeof item === "string" && typeof JSON.rawJSON === "function"
-              ? JSON.rawJSON('"' + text(JSON.stringify(item).slice(1, -1)) + '"')
-              : item;
-          });
+        function {{name("jsonClrString")}}(value) {
+          if (!/[^ -~]|["\\<>&'+`]/.test(value)) return '"' + value + '"';
+          const escape = code => "\\u" + code.toString(16).toUpperCase().padStart(4, "0");
+          const short = { 8: "\\b", 9: "\\t", 10: "\\n", 12: "\\f", 13: "\\r", 92: "\\\\" };
+          let result = '"';
+          for (let index = 0; index < value.length; index++) {
+            const code = value.charCodeAt(index);
+            if (code >= 0xD800 && code <= 0xDBFF && index + 1 < value.length
+                && value.charCodeAt(index + 1) >= 0xDC00 && value.charCodeAt(index + 1) <= 0xDFFF) {
+              result += escape(code) + escape(value.charCodeAt(++index));
+            } else if (code >= 0xD800 && code <= 0xDFFF) result += escape(0xFFFD);
+            else if (Object.hasOwn(short, code)) result += short[code];
+            else if (code < 0x20 || code > 0x7E || "\"<>&'+`".includes(value[index])) result += escape(code);
+            else result += value[index];
+          }
+          return result + '"';
+        }
+        function {{name("jsonSerializeClr")}}(value, indented = false) {
+          const write = (holder, key, item, indent) => {
+            if (item !== null && (typeof item === "object" || typeof item === "bigint") && typeof item.toJSON === "function")
+              item = item.toJSON(key);
+            if (item === null) return "null";
+            if (typeof JSON.isRawJSON === "function" && JSON.isRawJSON(item)) return item.rawJSON;
+            switch (typeof item) {
+              case "string": return {{name("jsonClrString")}}(item);
+              case "boolean": return item ? "true" : "false";
+              case "number":
+                if (!Number.isFinite(item)) throw new TypeError("Nonfinite numbers cannot be written as JSON.");
+                return String(item);
+              case "object": break;
+              case "bigint": throw new TypeError("Do not know how to serialize a BigInt.");
+              default: return undefined;
+            }
+            if (item instanceof Number || item instanceof String || item instanceof Boolean)
+              return write(holder, key, item.valueOf(), indent);
+            const inner = indented ? indent + "  " : "";
+            const open = indented ? "\n" + inner : "", close = indented ? "\n" + indent : "";
+            const separator = indented ? ",\n" + inner : ",";
+            if (Array.isArray(item)) {
+              if (item.length === 0) return "[]";
+              const parts = Array.from(item, (element, index) => write(item, String(index), element, inner) ?? "null");
+              return "[" + open + parts.join(separator) + close + "]";
+            }
+            const parts = [];
+            for (const property of Object.keys(item)) {
+              const written = write(item, property, item[property], inner);
+              if (written !== undefined) parts.push({{name("jsonClrString")}}(property) + (indented ? ": " : ":") + written);
+            }
+            return parts.length === 0 ? "{}" : "{" + open + parts.join(separator) + close + "}";
+          };
+          return write({ "": value }, "", value, "");
         }
         function {{name("jsonClrNumber")}}(value, single) {
           if (typeof value === "number" && !Number.isFinite(value))

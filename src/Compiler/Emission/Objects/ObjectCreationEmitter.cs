@@ -14,6 +14,16 @@ internal sealed partial class JavaScriptEmitter
             return CreateTimeSpan(value, constructor, arguments);
         if (typeName == "System.DateTimeOffset")
             return CreateDateTimeOffset(value, constructor, arguments);
+        if (IsJsonNodeType(type))
+            return CreateJsonNode(value, constructor, arguments);
+        // KeyValuePair values are [key, value] arrays, the shape Object.entries and Map iteration produce.
+        if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>"
+            && constructor?.Parameters.Length == 2 && value.Initializer is null)
+            return PositionalObjectCreation(value, constructor, arguments, values => $"[{values[0]}, {values[1]}]");
+        if (typeName is "System.DateOnly" or "System.TimeOnly")
+            return constructor is { Parameters.Length: 0 } && arguments.Length == 0 && value.Initializer is null
+                ? DefaultFieldValue(type!, value)
+                : CreateDateOrTimeOnly(value, constructor, arguments);
         if (typeName == "System.Threading.CancellationTokenSource" && arguments.Length == 0)
             return "new AbortController()";
         if (typeName == "System.Text.StringBuilder")
