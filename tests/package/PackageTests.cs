@@ -68,11 +68,14 @@ public sealed class PackageTests
         var module = Path.Combine(consumer, "dist", "worker.js");
         Assert.Contains("from \"pg\"", File.ReadAllText(module), StringComparison.Ordinal);
         Assert.Contains("\"pg\"", File.ReadAllText(Path.Combine(consumer, "package.json")), StringComparison.Ordinal);
-        // Resolve the import from the Worker's directory, as the bundler does.
+        // Resolve the import from the Worker's directory, as the bundler does. Node reports real paths
+        // (macOS temp folders sit behind a symlink), so the result is compared relative to the consumer.
         var (exitCode, output) = Execute("node", consumer,
-            "-e", "console.log(require.resolve('pg', { paths: [process.argv[1]] }))", Path.GetDirectoryName(module)!);
+            "-e", "const { realpathSync } = require('node:fs'); const { relative } = require('node:path'); "
+                + "console.log(relative(realpathSync(process.argv[2]), require.resolve('pg', { paths: [process.argv[1]] })))",
+            Path.GetDirectoryName(module)!, consumer);
         Assert.True(exitCode == 0, $"pg did not resolve from the Worker:{Environment.NewLine}{output}");
-        Assert.StartsWith(Path.Combine(consumer, "node_modules", "pg"), output.Trim(), StringComparison.Ordinal);
+        Assert.StartsWith(Path.Combine("node_modules", "pg") + Path.DirectorySeparatorChar, output.Trim(), StringComparison.Ordinal);
     }
 
     private static string Project(string package, string source) => $$"""
