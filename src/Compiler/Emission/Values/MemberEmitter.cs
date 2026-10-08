@@ -9,6 +9,13 @@ internal sealed partial class JavaScriptEmitter
     private string Member(MemberAccessExpressionSyntax member)
     {
         var symbol = _model.GetSymbolInfo(member).Symbol;
+        if (symbol is IPropertySymbol { IsStatic: true, Name: "Ordinal" or "OrdinalIgnoreCase", ContainingType: { } comparerType }
+            && comparerType.ToDisplayString() == "System.StringComparer")
+            return $"\"{symbol.Name}\"";
+        if (IsUserStaticState(symbol))
+            return StaticMemberAccess(symbol!, member.Name);
+        if (symbol is IMethodSymbol method && IsMethodGroup(member))
+            return MethodGroup(member, method, method.IsStatic ? null : member.Expression);
         var property = symbol as IPropertySymbol;
         if (property is { IsStatic: true, Name: "UtcNow" }
             && property.ContainingType.ToDisplayString() == "System.DateTimeOffset") return "new Date()";
@@ -175,6 +182,10 @@ internal sealed partial class JavaScriptEmitter
             return $"{Expression(member.Expression)}.length";
         if (property?.ContainingType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
             return $"{Expression(member.Expression)}[{(property.Name == "Key" ? 0 : 1)}]";
+        // QueryParameter values only come from iterating URLSearchParams, which yields [name, value] pairs.
+        if (property is { Name: "Name" or "Value", ContainingType: { } parameterType }
+            && parameterType.ToDisplayString() == "Workers.QueryParameter")
+            return $"{Expression(member.Expression)}[{(property.Name == "Name" ? 0 : 1)}]";
         if (property is { Name: "Key" }
             && property.ContainingType.OriginalDefinition.ToDisplayString() == "System.Linq.IGrouping<TKey, TElement>")
             return $"{Expression(member.Expression)}.key";
@@ -196,6 +207,8 @@ internal sealed partial class JavaScriptEmitter
         if (property is { Name: "Count", ContainingType: { } queueBatch }
             && BindingIntrinsicRegistry.IsQueueMessageBatch(queueBatch))
             return $"{Expression(member.Expression)}.messages.length";
+        if (property is { Name: "Keys" or "Values" } && IsDictionary(_model.GetTypeInfo(member.Expression).Type))
+            return $"Object.{(property.Name == "Keys" ? "keys" : "values")}({Expression(member.Expression)})";
         if (property is { Name: "Count" } && IsDictionary(_model.GetTypeInfo(member.Expression).Type))
             return $"Object.keys({Expression(member.Expression)}).length";
         if (property is { Name: "Count" } && IsSet(_model.GetTypeInfo(member.Expression).Type))

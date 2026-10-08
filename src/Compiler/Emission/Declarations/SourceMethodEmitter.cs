@@ -9,14 +9,18 @@ internal sealed partial class JavaScriptEmitter
         if (type.IsReferenceType || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) return "null";
         if (type.SpecialType == SpecialType.System_Boolean) return "false";
         if (type.SpecialType == SpecialType.System_Char) return "\"\\u0000\"";
-        if (type.TypeKind == TypeKind.Enum || type.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Decimal)
+        if (type.TypeKind == TypeKind.Enum || type.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Double)
             return "0";
+        if (type.ToDisplayString() == "System.Guid") return "\"00000000-0000-0000-0000-000000000000\"";
+        // default(JsonElement) has ValueKind Undefined, which the JsonElement helpers report for undefined.
+        if (type.ToDisplayString() == "System.Text.Json.JsonElement") return "undefined";
         throw Unsupported("WRK108", source);
     }
 
     private void EmitHandler(string eventName, MethodDeclarationSyntax method)
     {
         _model = _compilation.GetSemanticModel(method.SyntaxTree);
+        _diagnosticNode = method;
         var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterName));
         var isAsync = method.Modifiers.Any(token => token.RawKind == (int)SyntaxKind.AsyncKeyword);
         _output.Append(isAsync ? "async " : "").Append("function ").Append(EventName(eventName)).Append('(').Append(parameters).AppendLine(") {");
@@ -56,6 +60,7 @@ internal sealed partial class JavaScriptEmitter
             if (!_emittedUserMethods.Add(symbol)) continue;
             var declaration = (MethodDeclarationSyntax)symbol.DeclaringSyntaxReferences.Single().GetSyntax();
             _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
+            _diagnosticNode = declaration;
             var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(ParameterDeclaration));
             var isAsync = declaration.Modifiers.Any(SyntaxKind.AsyncKeyword);
             var isIterator = IsIterator(declaration);

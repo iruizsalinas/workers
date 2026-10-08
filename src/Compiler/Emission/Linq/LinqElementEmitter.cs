@@ -75,7 +75,7 @@ internal sealed partial class JavaScriptEmitter
         type = UnwrapNullable(type);
         return type.TypeKind == TypeKind.Enum
         || type.SpecialType is SpecialType.System_Boolean or SpecialType.System_Char or SpecialType.System_String
-            or >= SpecialType.System_SByte and <= SpecialType.System_Decimal
+            or >= SpecialType.System_SByte and <= SpecialType.System_Double
         || type.ToDisplayString() == "System.Guid";
     }
 }

@@ -34,6 +34,8 @@ public static class Worker
             return Response.Json(ApplicationScenarios.Inventory());
         if (request.Path == "/reporting")
             return Response.Json(ApplicationScenarios.Reporting());
+        if (request.Path == "/regressions")
+            return Response.Json(RegressionScenarios.Run());
         return Response.Text("Not found", 404);
     }
 }

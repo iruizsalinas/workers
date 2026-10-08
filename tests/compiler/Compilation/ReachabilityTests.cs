@@ -29,7 +29,7 @@ public sealed class ReachabilityTests
         Assert.Contains("function $workers$cs$Formatting$Render$0", module);
         Assert.Contains("function $workers$cs$Formatting$Prefix$1", module);
         Assert.Contains("function $workers$cs$Formatting$CountDown$2", module);
-        Assert.Contains("$workers$cs$Formatting$CountDown$2((value - 1) | 0)", module);
+        Assert.Contains("$workers$cs$Formatting$CountDown$2(((value - 1) | 0))", module);
         Assert.DoesNotContain("unused-overload", module);
         Assert.DoesNotContain("dead-code", module);
     }

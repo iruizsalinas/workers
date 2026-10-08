@@ -48,7 +48,12 @@ internal enum BindingIntrinsicKind
     QueueSendBatch,
     QueueRequest,
     RequestWithUrl,
-    Utf8Decode
+    Utf8Decode,
+    SqlPrepare,
+    SqlCursorNext,
+    SqlTransactionRaw,
+    SyncStorageGet,
+    QueryAs
 }
 
 internal sealed record BindingIntrinsic(string JavascriptName, BindingIntrinsicKind Kind = BindingIntrinsicKind.Direct);

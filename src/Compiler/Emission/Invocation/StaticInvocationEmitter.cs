@@ -36,9 +36,9 @@ internal sealed partial class JavaScriptEmitter
             ("System.Guid", "Parse") when HasParameters(method, SpecialType.System_String) =>
                 HelperInvocation(JavaScriptHelper.GuidParse, arguments),
             ("System.Text.Json.JsonSerializer", "Serialize") when arguments.Length == 1 =>
-                $"JSON.stringify({arguments[0]})",
+                JsonClrSerialize(method!.Parameters[0].Type, arguments[0]),
             ("System.Text.Json.JsonSerializer", "SerializeToUtf8Bytes") when arguments.Length == 1 =>
-                $"new TextEncoder().encode(JSON.stringify({arguments[0]}))",
+                $"new TextEncoder().encode({JsonClrSerialize(method!.Parameters[0].Type, arguments[0])})",
             ("System.Text.Json.JsonSerializer", "Deserialize") when arguments.Length == 1 =>
                 JsonDeserialize(invocation, method!, arguments[0]),
             ("System.Console", "WriteLine") when arguments.Length == 1 => $"console.log({arguments[0]})",
@@ -56,6 +56,14 @@ internal sealed partial class JavaScriptEmitter
             ("float", "Parse") when HasParameters(method, SpecialType.System_String) => NumericParse(arguments[0], 2),
             ("double", "Parse") when HasParameters(method, SpecialType.System_String) => NumericParse(arguments[0], 3),
             ("bool", "Parse") when HasParameters(method, SpecialType.System_String) => NumericParse(arguments[0], 4),
+            ("int" or "uint" or "float" or "double", "Parse") when IsInvariantParse(invocation, method) =>
+                NumericParse(arguments[0], method!.ContainingType.SpecialType switch
+                {
+                    SpecialType.System_Int32 => 0,
+                    SpecialType.System_UInt32 => 1,
+                    SpecialType.System_Single => 2,
+                    _ => 3
+                }),
             ("System.Math" or "System.MathF", _) => MathInvocation(invocation, method!, name!, arguments),
             ("string", _) when method?.IsStatic == true => StringStaticInvocation(invocation, method, name!, arguments),
             ("System.Text.RegularExpressions.Regex", "IsMatch") when method?.IsStatic == true && arguments.Length == 2 =>
@@ -69,6 +77,13 @@ internal sealed partial class JavaScriptEmitter
         };
         return result.Length != 0;
     }
+
+    // Parse(string, IFormatProvider) with CultureInfo.InvariantCulture.
+    private bool IsInvariantParse(InvocationExpressionSyntax invocation, IMethodSymbol? method) =>
+        method is { Parameters: [{ Type.SpecialType: SpecialType.System_String }, { Type: { } provider }] }
+        && provider is { Name: "IFormatProvider", ContainingNamespace.Name: "System" }
+        && invocation.ArgumentList.Arguments is [_, { Expression: var culture }]
+        && IsInvariantCulture(culture);
 
     private static bool HasParameters(IMethodSymbol? method, params SpecialType[] types) =>
         method is not null && method.Parameters.Select(parameter => parameter.Type.SpecialType).SequenceEqual(types);
@@ -106,8 +121,8 @@ internal sealed partial class JavaScriptEmitter
 
     private string JsonDeserialize(InvocationExpressionSyntax source, IMethodSymbol method, string value)
     {
-        if (method.TypeArguments.FirstOrDefault() is INamedTypeSymbol resultType && IsUserInstanceType(resultType))
-            RegisterJsonMaterializer(resultType, source);
+        var resultType = method.TypeArguments.FirstOrDefault() ?? method.ReturnType;
+        RegisterJsonValueType(resultType, source, strict: true);
         var input = method.Parameters[0].Type;
         var parsed = input.SpecialType == SpecialType.System_String
             ? $"JSON.parse({value})"
@@ -117,9 +132,7 @@ internal sealed partial class JavaScriptEmitter
             }
                 ? $"JSON.parse(new TextDecoder().decode({value}))"
                 : throw UnsupportedSymbol(method, source);
-        if (method.TypeArguments.FirstOrDefault() is INamedTypeSymbol target && IsUserInstanceType(target))
-            return $"{QueueUserType(target, source)}.$fromJSON({parsed})";
-        return parsed;
+        return JsonValueExpression(resultType, parsed, JsonClrMode.ToString());
     }
 
     private string MathInvocation(

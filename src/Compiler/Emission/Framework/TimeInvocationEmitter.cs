@@ -10,12 +10,17 @@ internal sealed partial class JavaScriptEmitter
         string name,
         string[] arguments) => name switch
         {
-            "ToString" when arguments.Length == 1
+            // Culture-invariant standard formats need no provider; other formats require InvariantCulture.
+            "ToString" when arguments.Length is 1 or 2
                             && source.ArgumentList.Arguments[0].Expression is LiteralExpressionSyntax format
-                            && format.Token.ValueText is "O" or "o" =>
-                method?.ContainingType.ToDisplayString() == "System.DateTime"
-                    ? DateTimeRoundTrip(receiver, includeOffset: false)
-                    : DateTimeRoundTrip(receiver),
+                            && format.Token.Value is string text
+                            && (arguments.Length == 2
+                                ? IsInvariantCulture(source.ArgumentList.Arguments[1].Expression)
+                                : IsCultureInvariantDateFormat(text))
+                            && DateFormatExpression(method!.ContainingType, text, receiver) is { } formatted => formatted,
+            "ToString" when arguments.Length == 1 && IsInvariantCulture(source.ArgumentList.Arguments[0].Expression) =>
+                DateFormatExpression(method!.ContainingType,
+                    method.ContainingType.ToDisplayString() == "System.DateTimeOffset" ? "MM/dd/yyyy HH:mm:ss zzz" : "G", receiver)!,
             "AddMonths" when arguments.Length == 1 =>
                 $"{_helpers.Require(JavaScriptHelper.DateTimeAddMonths)}({receiver}, {arguments[0]})",
             "AddYears" when arguments.Length == 1 =>

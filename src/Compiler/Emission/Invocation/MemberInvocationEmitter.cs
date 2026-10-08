@@ -17,6 +17,13 @@ internal sealed partial class JavaScriptEmitter
             && consoleType.ToDisplayString() == "System.Console")
             return arguments.Length == 1 ? $"console.error({arguments[0]})" : throw UnsupportedSymbol(method, invocation);
         var receiver = receiverOverride ?? Expression(member.Expression);
+        if (IsSynthesizedRecordToString(method))
+            return RecordText(method!.ContainingType, receiver, invocation);
+        if (IsSynthesizedRecordMember(method))
+            return method is { Name: "Equals", Parameters: [{ } other] }
+                   && SymbolEqualityComparer.Default.Equals(other.Type.OriginalDefinition, method.ContainingType.OriginalDefinition)
+                ? RecordEquals(method.ContainingType, receiver, arguments[0], invocation)
+                : throw UnsupportedSymbol(method, invocation);
         if (TryEmitFrameworkInvocation(invocation, method, receiver, name, arguments, out var framework)) return framework;
         if (type == "Workers.Env" && EnvironmentBindings.Contains(name)) return $"{receiver}[{arguments[0]}]";
         if (type == "Workers.CacheStorage" && name == "OpenAsync") return $"caches.open({arguments[0]})";
@@ -66,7 +73,8 @@ internal sealed partial class JavaScriptEmitter
         "Json" => $"Response.json({arguments[0]}{JsonResponseInit(arguments)})",
         "Empty" => $"new Response(null{ResponseInit(arguments, 0, 1)})",
         "Redirect" when arguments.Length > 2 => $"new Response(null{ResponseInit(arguments, 1, 2, $"{{ location: {arguments[0]} }}")})",
-        "Redirect" => $"Response.redirect({arguments[0]}, {(arguments.Length > 1 ? arguments[1] : "302")})",
+        // Response.redirect only accepts absolute URLs, while Location may be relative.
+        "Redirect" => $"new Response(null, {{ status: {(arguments.Length > 1 ? arguments[1] : "302")}, headers: {{ location: {arguments[0]} }} }})",
         "FromBody" => ResponseFromBody(invocation, arguments),
         "FromStream" when method?.Parameters.Length >= 2 && method.Parameters[1].Type.ToDisplayString() == "Workers.Headers" => $"new Response({arguments[0]}, {{ status: {(arguments.Length > 2 ? arguments[2] : "200")}, headers: {arguments[1]} }})",
         "FromStream" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})",

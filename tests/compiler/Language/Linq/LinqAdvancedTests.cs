@@ -105,7 +105,6 @@ public sealed class LinqAdvancedTests
     }
 
     [Theory]
-    [InlineData("values.Contains(new Item(1))")]
     [InlineData("values.Contains(new Item(1), EqualityComparer<Item>.Default)")]
     [InlineData("values.Distinct()")]
     [InlineData("values.SequenceEqual(values)")]

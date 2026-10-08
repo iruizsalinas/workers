@@ -53,7 +53,6 @@ public sealed class GuidTests
     }
 
     [Theory]
-    [InlineData("Guid.TryParse(\"00112233-4455-6677-8899-aabbccddeeff\", out var value)")]
     [InlineData("Guid.Parse(\"00112233-4455-6677-8899-aabbccddeeff\").ToString(\"X\")")]
     [InlineData("Guid.Parse(\"00112233-4455-6677-8899-aabbccddeeff\").CompareTo(Guid.Empty)")]
     [InlineData("new Guid(\"00112233-4455-6677-8899-aabbccddeeff\")")]

@@ -105,6 +105,7 @@ internal sealed partial class JavaScriptEmitter
     private static string Response(string[] arguments, string _) => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})";
     private string Identifier(IdentifierNameSyntax value) => _model.GetSymbolInfo(value).Symbol switch
     {
+        IMethodSymbol method when IsMethodGroup(value) => MethodGroup(value, method, null),
         IPropertySymbol { ContainingType: { } type, Name: var name }
             when type.ToDisplayString() == "Workers.WorkerEntrypoint" => name == "Environment" ? "this.env" : "this.ctx",
         IPropertySymbol { IsStatic: false } property when IsUserInstanceType(property.ContainingType) =>
@@ -113,10 +114,39 @@ internal sealed partial class JavaScriptEmitter
             UserMemberAccess("this", field),
         IFieldSymbol { IsStatic: false } field => $"this.{UserIdentifier(field, field.Name)}",
         IFieldSymbol { IsStatic: true, HasConstantValue: true } field => LiteralConstant(field.ConstantValue, value),
+        ISymbol staticState when IsUserStaticState(staticState) => StaticMemberAccess(staticState, value),
         IFieldSymbol { IsStatic: true } => throw Unsupported("WRK110", value),
         ISymbol symbol => UserIdentifier(symbol, value.Identifier),
         _ => value.Identifier.ValueText
     };
+
+    private static bool IsMethodGroup(ExpressionSyntax syntax)
+    {
+        var target = syntax.Parent is MemberAccessExpressionSyntax access && access.Name == syntax ? access : syntax;
+        return !(target.Parent is InvocationExpressionSyntax invocation && invocation.Expression == target);
+    }
+
+    // A method group converted to a delegate, such as items.Select(Format).
+    private string MethodGroup(ExpressionSyntax syntax, IMethodSymbol method, ExpressionSyntax? receiver)
+    {
+        method = method.ReducedFrom ?? method;
+        if (method.IsStatic && !method.IsExtensionMethod && method.MethodKind == MethodKind.Ordinary
+            && method.DeclaringSyntaxReferences is [{ } reference]
+            && reference.GetSyntax() is MethodDeclarationSyntax)
+            return QueueUserMethod(method, syntax);
+        if (!method.IsStatic && method.MethodKind == MethodKind.Ordinary
+            && method.ContainingType is { } type && IsUserInstanceType(type) && RequiresUserClass(type))
+        {
+            QueueUserType(type, syntax);
+            var key = $"method-group:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
+            var target = _names.Get($"{key}:target", "target");
+            var parameters = string.Join(", ", method.Parameters.Select((_, index) => _names.Get($"{key}:{index}", $"arg{index + 1}")));
+            return $"(({target}) => ({parameters}) => {target}.{UserInstanceMethodName(method)}({parameters}))" +
+                   $"({(receiver is null ? "this" : Expression(receiver))})";
+        }
+        throw new NotSupportedException(
+            $"WRK105: Converting the method group '{method.ToDisplayString()}' to a delegate is not supported; use a lambda instead.");
+    }
 
     private string LiteralConstant(object? value, SyntaxNode source) => value switch
     {
@@ -124,7 +154,9 @@ internal sealed partial class JavaScriptEmitter
         string text => JsonSerializer.Serialize(text),
         char character => JsonSerializer.Serialize(character.ToString()),
         bool boolean => boolean ? "true" : "false",
-        byte or sbyte or short or ushort or int or uint or float or double =>
+        // A float constant is the nearest single-precision value; JavaScript numbers are doubles.
+        float single => ((double)single).ToString("R", CultureInfo.InvariantCulture),
+        byte or sbyte or short or ushort or int or uint or double =>
             Convert.ToString(value, CultureInfo.InvariantCulture)!,
         long signed when Math.Abs((double)signed) <= 9_007_199_254_740_991d =>
             signed.ToString(CultureInfo.InvariantCulture),

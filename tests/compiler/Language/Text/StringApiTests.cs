@@ -135,7 +135,6 @@ public sealed class StringApiTests
     [InlineData("value.Equals(\"a\", StringComparison.CurrentCulture)")]
     [InlineData("value.Contains(\"a\", StringComparison.InvariantCultureIgnoreCase)")]
     [InlineData("value.Replace(\"a\", \"b\", StringComparison.OrdinalIgnoreCase)")]
-    [InlineData("value.Split(\",\", StringSplitOptions.None)")]
     public void RejectsCultureSensitiveOrBroadStringOverloads(string operation)
     {
         var error = Assert.Throws<NotSupportedException>(() => Compile($$"""

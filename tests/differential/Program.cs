@@ -5,6 +5,7 @@ object result = args.Contains("--applications")
     {
         Inventory = ApplicationScenarios.Inventory(),
         Reporting = ApplicationScenarios.Reporting(),
+        Regressions = RegressionScenarios.Run(),
         JsonAudit = ApplicationScenarios.JsonAuditCases()
             .Select(json => new { Json = json, Result = ApplicationScenarios.AuditJson(json) }).ToArray(),
         Shipments = ApplicationScenarios.ShipmentCases()

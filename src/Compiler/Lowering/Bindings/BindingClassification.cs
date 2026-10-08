@@ -21,7 +21,7 @@ internal static class BindingClassification
 
     private static readonly HashSet<(string Type, string Method)> SpecialMethods =
     [
-        Key("Workers.Env", "Get"), Key("Workers.Env", "Variable"),
+        Key("Workers.Env", "Get"), Key("Workers.Env", "TryGet"), Key("Workers.Env", "Variable"),
         Key("Workers.Env", "Secret"), Key("Workers.Env", "Raw"), Key("Workers.Env", "Kv"),
         Key("Workers.Env", "R2"), Key("Workers.Env", "Service"), Key("Workers.Env", "Assets"),
         Key("Workers.Env", "Mtls"), Key("Workers.Env", "Dispatcher"), Key("Workers.Env", "Queue"),
@@ -47,8 +47,6 @@ internal static class BindingClassification
 
     private static readonly HashSet<(string Type, string Method)> UnsupportedMethods =
     [
-        Key("Workers.Env", "TryGet"), Key("Workers.QueryParameters", "As"),
-        Key("Workers.HtmlElement", "OnEndTag"),
         Key("Workers.QueueMessageBatch<T>", "GetEnumerator"), Key("Workers.TailEvent", "GetEnumerator"),
         Key("Workers.Headers", "GetEnumerator"), Key("Workers.QueryParameters", "GetEnumerator"),
         Key("Workers.FormData", "GetEnumerator")

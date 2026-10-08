@@ -3,7 +3,7 @@ internal enum JavaScriptHelper
     WithHeader, Delay, CancellationCheck, CancellationDelay, CancellationCancelAfter,
     Stream, Socket, Digest, WebSocketEvents, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
     RandomNext, SetAdd, QueueStack, Base64, RpcArguments, HexDecode, EscapeDataString, JsonElementToString,
-    JsonElementValueKind, JsonElementGetValue, JsonElementGetProperty, JsonElementGetIndex, JsonDeserializeValue,
+    JsonElementValueKind, JsonElementGetValue, JsonElementGetProperty, JsonElementGetIndex, JsonDeserializeValue, JsonSerializeClr, SqlStatement, NumberText, StringCase, TryCall, CollectionMembers, DateFormat,
     StringTrim, StringContains, StringStartsWith, StringEndsWith, StringSubstring, StringReplace,
     StringIsNullOrEmpty, StringIsNullOrWhiteSpace, StringJoin, StringOrdinal,
     StringRemove, StringInsert, StringPad, StringToCharArray, StringSplit, StringBuilder,
@@ -33,6 +33,10 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
             _required.Add(JavaScriptHelper.DateTimeIsLeapYear);
         if (helper == JavaScriptHelper.NumericFormat)
             _required.Add(JavaScriptHelper.MathRound);
+        if (helper == JavaScriptHelper.JsonSerializeClr)
+            _required.Add(JavaScriptHelper.NumberText);
+        if (helper == JavaScriptHelper.CollectionMembers)
+            _required.Add(JavaScriptHelper.LinqValues);
         if (helper.IsLinqOperator())
             _required.Add(JavaScriptHelper.LinqValues);
         return Name(helper.EntryPoint());
@@ -73,6 +77,13 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.JsonElementGetProperty => "jsonElementGetProperty",
         JavaScriptHelper.JsonElementGetIndex => "jsonElementGetIndex",
         JavaScriptHelper.JsonDeserializeValue => "jsonDeserializeValue",
+        JavaScriptHelper.JsonSerializeClr => "jsonSerializeClr",
+        JavaScriptHelper.SqlStatement => "sqlStatement",
+        JavaScriptHelper.NumberText => "numberText",
+        JavaScriptHelper.StringCase => "stringCase",
+        JavaScriptHelper.TryCall => "tryCall",
+        JavaScriptHelper.CollectionMembers => "collectionKey",
+        JavaScriptHelper.DateFormat => "dateFormat",
         JavaScriptHelper.StringTrim => "stringTrim",
         JavaScriptHelper.StringContains => "stringContains",
         JavaScriptHelper.StringStartsWith => "stringStartsWith",

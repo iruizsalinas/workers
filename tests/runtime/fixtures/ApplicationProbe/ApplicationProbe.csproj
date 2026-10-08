@@ -7,6 +7,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../../differential/ApplicationScenarios.cs" Link="ApplicationScenarios.cs" />
+    <Compile Include="../../../differential/Regressions.cs" Link="Regressions.cs" />
+    <Compile Include="../../../differential/RegressionsLanguage.cs" Link="RegressionsLanguage.cs" />
     <ProjectReference Include="../../../../src/Workers.csproj" />
     <ProjectReference Include="../../../../src/Compiler/Compiler.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
   </ItemGroup>

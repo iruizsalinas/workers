@@ -6,17 +6,16 @@ internal sealed partial class JavaScriptEmitter
     private string Invocation(InvocationExpressionSyntax invocation)
     {
         var method = _model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
-        if (method?.Name == "TryParse" && method.ContainingType.SpecialType is
-            SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Int64
-            or SpecialType.System_UInt64 or SpecialType.System_Single or SpecialType.System_Double
-            or SpecialType.System_Boolean or SpecialType.System_Decimal)
-            throw UnsupportedSymbol(method, invocation);
-        if (method?.Name is "TryParse" or "TryParseExact"
-            && method.ContainingType.ToDisplayString() == "System.Guid")
-            throw UnsupportedSymbol(method, invocation);
-        if (method?.Name == "TryGetProperty"
-            && method.ContainingType.ToDisplayString() == "System.Text.Json.JsonElement")
-            throw UnsupportedSymbol(method, invocation);
+        if (method is not null && method.DeclaringSyntaxReferences.Length == 0
+            && TryEmitOutInvocation(invocation, method, out var outInvocation))
+            return outInvocation;
+        if (method is { IsStatic: true, Name: "Invariant" } && method.ContainingType.ToDisplayString() == "System.FormattableString"
+            && invocation.ArgumentList.Arguments is [{ Expression: InterpolatedStringExpressionSyntax invariant }])
+            return InvariantInterpolation(invariant);
+        if (method is { IsStatic: true, Name: "Create", ContainingType.SpecialType: SpecialType.System_String }
+            && invocation.ArgumentList.Arguments is [{ } provider, { Expression: InterpolatedStringExpressionSyntax created }]
+            && IsInvariantCulture(provider.Expression))
+            return InvariantInterpolation(created);
         if (method?.Name == "Parse" && method.ContainingType.SpecialType is
             SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal)
             throw UnsupportedSymbol(method, invocation);

@@ -32,7 +32,7 @@ public sealed class DurableObjectBindingTests
         Assert.Contains("stub[\"reset\"]()", module);
         Assert.Contains("state.storage.put(\"count\", 1)", module);
         Assert.Contains("state.storage.get(\"count\")", module);
-        Assert.Contains("state.storage.sql.exec(\"SELECT 1\").all()", module);
+        Assert.Contains("$workers$sqlStatement(state.storage.sql, \"SELECT 1\").all()", module);
         Assert.Contains("state.container.signal(15)", module);
     }
 
@@ -65,7 +65,7 @@ public sealed class DurableObjectBindingTests
         Assert.Contains("constructor(objectState, environment) { super(objectState, environment);", module);
         Assert.Contains("this._state = objectState", module);
         Assert.Contains("this._state.storage.get(\"count\")", module);
-        Assert.Contains("this._state.storage.put(\"count\", (count + 1) | 0)", module);
+        Assert.Contains("this._state.storage.put(\"count\", ((count + 1) | 0))", module);
     }
 
     [Fact]

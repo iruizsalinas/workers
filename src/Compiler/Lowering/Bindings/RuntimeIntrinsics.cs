@@ -94,6 +94,8 @@ internal static class RuntimeIntrinsics
             [Key("Workers.HtmlElement", "Replace")] = new("replace", BindingIntrinsicKind.Fluent),
             [Key("Workers.HtmlElement", "SetInnerContent")] = new("setInnerContent", BindingIntrinsicKind.Fluent),
             [Key("Workers.HtmlElement", "Remove")] = new("remove", BindingIntrinsicKind.Fluent),
+            [Key("Workers.HtmlElement", "OnEndTag")] = Direct("onEndTag"),
+            [Key("Workers.QueryParameters", "As")] = new("", BindingIntrinsicKind.QueryAs),
             [Key("Workers.HtmlElement", "RemoveAndKeepContent")] = new("removeAndKeepContent", BindingIntrinsicKind.Fluent),
             [Key("Workers.HtmlEndTag", "Before")] = new("before", BindingIntrinsicKind.Fluent),
             [Key("Workers.HtmlEndTag", "After")] = new("after", BindingIntrinsicKind.Fluent),

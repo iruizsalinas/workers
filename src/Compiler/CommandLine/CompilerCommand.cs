@@ -35,7 +35,22 @@ internal static class CompilerCommand
             .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), parseOptions, path))
             .ToArray();
 
-        var module = WorkerCompiler.Compile(trees, options.Reference is null ? [] : [options.Reference]);
+        string module;
+        try
+        {
+            module = WorkerCompiler.Compile(trees, options.Reference is null ? [] : [options.Reference]);
+        }
+        catch (CompilationFailedException exception)
+        {
+            foreach (var diagnostic in exception.Diagnostics)
+                error.WriteLine(diagnostic.ToString());
+            return 1;
+        }
+        catch (NotSupportedException exception)
+        {
+            error.WriteLine(WorkerDiagnostics.Format(exception));
+            return 1;
+        }
         Directory.CreateDirectory(Path.GetDirectoryName(options.Output)!);
         File.WriteAllText(options.Output, module);
         return 0;

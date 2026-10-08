@@ -267,12 +267,12 @@ describe("compiler value semantics", () => {
       fullName: "Ada Lovelace",
       greeting: "Hello, Ada Lovelace",
       age: 36,
-      counter: { Label: "items", Doubled: 10 },
+      counter: { label: "items", doubled: 10 },
       person: {
-        First: "Ada",
-        Last: "Lovelace",
-        Age: 36,
-        FullName: "Ada Lovelace",
+        first: "Ada",
+        last: "Lovelace",
+        age: 36,
+        fullName: "Ada Lovelace",
       },
     });
   });

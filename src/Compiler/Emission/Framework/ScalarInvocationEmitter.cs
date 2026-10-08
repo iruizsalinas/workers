@@ -95,25 +95,46 @@ internal sealed partial class JavaScriptEmitter
             }
             || providerType.ToDisplayString() != "System.Globalization.CultureInfo")
             throw UnsupportedSymbol(method, source);
-        var format = formatLiteral.Token.ValueText;
-        var type = method.ContainingType.SpecialType;
-        var integral = type is SpecialType.System_Int32 or SpecialType.System_UInt32;
-        var code = format.Length == 0 ? '\0' : format[0];
-        if (integral ? code is not ('D' or 'd' or 'X' or 'x') : code is not ('F' or 'f'))
-            throw UnsupportedSymbol(method, source);
-        var digits = format.Length == 1 ? (integral ? 0 : 2)
-            : int.TryParse(format[1..], out var precision) ? precision : -1;
-        if (digits is < 0 or > 100) throw UnsupportedSymbol(method, source);
-        var kind = type switch
+        return NumericFormatExpression(method.ContainingType, formatLiteral.Token.ValueText, receiver)
+            ?? throw UnsupportedSymbol(method, source);
+    }
+
+    // Invariant standard numeric formats D, X (integers), F, N and P. Returns null for other formats.
+    private string? NumericFormatExpression(ITypeSymbol type, string format, string value)
+    {
+        var kind = UnwrapNullable(type).SpecialType switch
         {
             SpecialType.System_Int32 => 0,
             SpecialType.System_UInt32 => 1,
             SpecialType.System_Single => 2,
-            _ => 3
+            SpecialType.System_Double => 3,
+            _ => -1
         };
+        if (kind < 0 || format.Length == 0) return null;
+        var code = char.ToUpperInvariant(format[0]);
+        if (code is 'D' or 'X' ? kind > 1 : code is not ('F' or 'N' or 'P')) return null;
+        var digits = format.Length == 1 ? (code is 'D' or 'X' ? 0 : 2)
+            : int.TryParse(format[1..], out var precision) ? precision : -1;
+        if (digits is < 0 or > 100) return null;
         return HelperInvocation(JavaScriptHelper.NumericFormat,
-            [receiver, arguments[0], kind.ToString(), digits.ToString()]);
+            [value, JsonText(format), kind.ToString(), digits.ToString()]);
     }
+
+    // Invariant DateTime and DateTimeOffset formats. Formats that depend on the value's DateTimeKind are rejected.
+    private string? DateFormatExpression(ITypeSymbol type, string format, string value)
+    {
+        var display = UnwrapNullable(type).ToDisplayString();
+        if (display is not ("System.DateTimeOffset" or "System.DateTime") || format.Length == 0) return null;
+        var offset = display == "System.DateTimeOffset";
+        if (format is "O" or "o")
+            return offset ? DateTimeRoundTrip(value) : DateTimeRoundTrip(value, includeOffset: false);
+        if (!offset && format.Length > 1 && (format.Contains('K') || format.Contains('z'))) return null;
+        return $"{_helpers.Require(JavaScriptHelper.DateFormat)}({value}, {JsonText(format)}, {(offset ? "true" : "false")})";
+    }
+
+    private static bool IsCultureInvariantDateFormat(string format) => format is "O" or "o" or "s" or "u" or "R" or "r";
+
+    private static string JsonText(string text) => System.Text.Json.JsonSerializer.Serialize(text);
 
     private string RandomInvocation(
         SyntaxNode source,

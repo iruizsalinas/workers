@@ -1,5 +1,45 @@
 internal static partial class HelperSource
 {
+    private static string TryCall(Func<string, string> name) => $$"""
+        function {{name("tryCall")}}(action, fallback) {
+          try {
+            return [true, action()];
+          } catch {
+            return [false, fallback];
+          }
+        }
+        function {{name("dictionaryTake")}}(dictionary, key, fallback, remove) {
+          if (key == null) throw new TypeError("Value cannot be null.");
+          if (!Object.hasOwn(dictionary, key)) return [false, fallback];
+          const value = dictionary[key];
+          if (remove) delete dictionary[key];
+          return [true, value];
+        }
+
+        """;
+
+    // ctx.storage.sql only exposes exec(query, ...bindings), which runs immediately. Prepared
+    // statements defer execution until a result is requested so Bind can supply the parameters.
+    private static string SqlStatement(Func<string, string> name) => $$"""
+        function {{name("sqlStatement")}}(sql, query, bindings = []) {
+          const run = () => sql.exec(query, ...bindings);
+          const result = (cursor, rows) => ({ rows, columnNames: cursor.columnNames, rowsRead: cursor.rowsRead, rowsWritten: cursor.rowsWritten });
+          return {
+            bind: (...values) => {{name("sqlStatement")}}(sql, query, values),
+            all: async () => { const cursor = run(); return result(cursor, cursor.toArray()); },
+            one: async () => run().one(),
+            raw: async () => { const cursor = run(); return result(cursor, Array.from(cursor.raw())); },
+            cursor: async () => run(),
+            rawSync: () => { const cursor = run(); return result(cursor, Array.from(cursor.raw())); }
+          };
+        }
+        function {{name("sqlCursorNext")}}(cursor) {
+          const next = cursor.next();
+          return next.done ? null : next.value;
+        }
+
+        """;
+
     private static string WithHeader(Func<string, string> name) => $$"""
         function {{name("withHeader")}}(response, name, value, operation = "set") {
           const copy = new Response(response.body, response);

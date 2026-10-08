@@ -106,13 +106,41 @@ internal sealed partial class JavaScriptEmitter
             var isIterator = IsIterator(method);
             _output.Append("  ").Append(isAsync ? "async " : "").Append(isIterator ? "*" : "")
                 .Append(name).Append('(').Append(parameters).AppendLine(") {");
-            if (method.ExpressionBody is not null)
-                _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
-            else
-                foreach (var statement in method.Body?.Statements ?? []) EmitStatement(statement, 2);
+            EmitRpcMethodBody(method, model.GetDeclaredSymbol(method)!);
             _output.AppendLine("  }");
         }
         _output.AppendLine("}").AppendLine();
     }
 
+    // Public methods of Worker entrypoints and Durable Objects are callable over RPC, which cannot
+    // carry instances of compiled user classes; their results are converted to plain objects.
+    private void EmitRpcMethodBody(MethodDeclarationSyntax method, IMethodSymbol symbol)
+    {
+        var convert = symbol.DeclaredAccessibility == Accessibility.Public && !IsIterator(method)
+            && ContainsUserInstanceType(symbol.ReturnType);
+        var rpcValue = convert ? RequireHelperName(JavaScriptHelper.RpcArguments, "rpcValue") : null;
+        if (method.ExpressionBody is not null)
+        {
+            var value = Expression(method.ExpressionBody.Expression);
+            _output.Append("    return ").Append(rpcValue is null ? value : $"{rpcValue}({value})").AppendLine(";");
+            return;
+        }
+        if (rpcValue is null)
+        {
+            foreach (var statement in method.Body?.Statements ?? []) EmitStatement(statement, 2);
+            return;
+        }
+        var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);
+        _output.Append("    return ").Append(rpcValue).AppendLine(isAsync ? "(await (async () => {" : "((() => {");
+        foreach (var statement in method.Body?.Statements ?? []) EmitStatement(statement, 3);
+        _output.AppendLine("    })());");
+    }
+
+    private static bool ContainsUserInstanceType(ITypeSymbol type) => type switch
+    {
+        IArrayTypeSymbol array => ContainsUserInstanceType(array.ElementType),
+        INamedTypeSymbol named when IsUserInstanceType(named) => true,
+        INamedTypeSymbol named => named.TypeArguments.Any(ContainsUserInstanceType),
+        _ => false
+    };
 }

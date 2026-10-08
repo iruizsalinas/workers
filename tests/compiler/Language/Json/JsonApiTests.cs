@@ -44,11 +44,11 @@ public sealed class JsonApiTests
             }
             """);
 
-        Assert.Contains("JSON.stringify({ value: 42 })", module);
+        Assert.Contains("$workers$jsonSerializeClr({ value: 42 })", module);
         Assert.Contains("JSON.parse(json)", module);
-        Assert.Contains("new TextEncoder().encode(JSON.stringify({ ok: true }))", module);
+        Assert.Contains("new TextEncoder().encode($workers$jsonSerializeClr({ ok: true }))", module);
         Assert.Contains("JSON.parse(new TextDecoder().decode(bytes))", module);
-        Assert.DoesNotContain("function $workers$json", module);
+        Assert.DoesNotContain("function $workers$jsonDeserialize", module);
     }
 
     [Fact]
@@ -142,18 +142,18 @@ public sealed class JsonApiTests
             """);
 
         Assert.Contains("$workers$User.$fromJSON(JSON.parse(", module);
-        Assert.Contains("Object.hasOwn(value, \"Name\")", module);
-        Assert.Contains("result.name = $workers$jsonDeserializeValue(value[\"Name\"], 0)", module);
-        Assert.Contains("return { Name: this.name };", module);
+        Assert.Contains("Object.hasOwn(source, (mode === 0 ? \"Name\" : \"name\"))", module);
+        Assert.Contains("result.name = $workers$jsonDeserializeValue(source[(mode === 0 ? \"Name\" : \"name\")], mode, 0)", module);
+        Assert.Contains("return { name: this.name };", module);
+        Assert.Contains("return { Name: value.name };", module);
         Assert.Contains("$workers$Item.$fromJSON(JSON.parse(", module);
-        Assert.Contains("new $workers$Item(Object.hasOwn(value, \"Label\")", module);
+        Assert.Contains("new $workers$Item(Object.hasOwn(source, (mode === 0 ? \"Label\" : \"label\"))", module);
     }
 
     [Theory]
     [InlineData("JsonSerializer.Serialize(new { value = 1 }, new JsonSerializerOptions())")]
     [InlineData("JsonDocument.Parse(\"{}\")")]
     [InlineData("value.GetRawText()")]
-    [InlineData("value.TryGetProperty(\"name\", out var property)")]
     public void RejectsJsonApisOutsideTheNativeProfile(string operation)
     {
         var declaration = operation.Contains("value.", StringComparison.Ordinal)

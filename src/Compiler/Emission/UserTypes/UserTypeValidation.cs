@@ -7,10 +7,12 @@ internal sealed partial class JavaScriptEmitter
 {
     private static void ValidateUserType(INamedTypeSymbol type, TypeDeclarationSyntax declaration)
     {
+        var exception = IsUserException(type);
         if (type.IsAbstract || type.IsStatic || type.Arity != 0
-            || type.BaseType?.SpecialType != SpecialType.System_Object)
+            || type.BaseType?.SpecialType != SpecialType.System_Object && !exception)
             throw new NotSupportedException(
-                $"WRK119: User type '{type}' must be a non-abstract, non-generic class or record without inheritance.");
+                $"WRK119: User type '{type}' must be a non-abstract, non-generic class or record without inheritance. " +
+                "Exception types may derive directly from System.Exception.");
         ValidateJsonAttributes(type);
         if (declaration is RecordDeclarationSyntax { ParameterList: { } recordParameters }
             && recordParameters.Parameters.Any(parameter =>
@@ -19,6 +21,7 @@ internal sealed partial class JavaScriptEmitter
         var constructors = declaration.Members.OfType<ConstructorDeclarationSyntax>().ToArray();
         if (constructors.Length > 1 || constructors.Any(constructor =>
                 constructor.Initializer is not null
+                    && !(exception && constructor.Initializer.IsKind(SyntaxKind.BaseConstructorInitializer))
                 || constructor.Modifiers.Any(SyntaxKind.StaticKeyword)
                 || constructor.Modifiers.Any(SyntaxKind.ExternKeyword)
                 || constructor.ParameterList.Parameters.Any(parameter => parameter.Modifiers.Any(modifier =>
@@ -42,6 +45,9 @@ internal sealed partial class JavaScriptEmitter
         if (unsupported is not null)
             throw new NotSupportedException($"WRK119: User type '{type}' contains an unsupported member: {unsupported}");
     }
+
+    private static bool IsUserException(INamedTypeSymbol type) =>
+        type.BaseType?.ToDisplayString() == "System.Exception" && !type.IsRecord;
 
     private static bool IsSupportedUserMethod(MethodDeclarationSyntax declaration)
     {

@@ -1,5 +1,18 @@
 internal static partial class HelperSource
 {
+    // .NET invariant casing maps each character on its own (simple case mapping), while JavaScript
+    // applies full and context-sensitive mappings such as "ß" to "SS" or a word-final sigma.
+    private static string StringCase(Func<string, string> name) => $$"""
+        function {{name("stringCase")}}(value, upper) {
+          return value.replace(/[^ -~]/gu, character => {
+            const mapped = upper ? character.toUpperCase() : character.toLowerCase();
+            if (mapped.length === character.length) return mapped;
+            return upper ? character : mapped.slice(0, character.length);
+          }).replace(/[A-Za-z]+/g, text => upper ? text.toUpperCase() : text.toLowerCase());
+        }
+
+        """;
+
     private static string StringTrim(Func<string, string> name) => $$"""
         function {{name("stringTrim")}}(source) {
           return source.replace(/^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/gu, "");
@@ -147,11 +160,23 @@ internal static partial class HelperSource
         """;
 
     private static string StringSplit(Func<string, string> name) => $$"""
-        function {{name("stringSplit")}}(source, separator, options) {
-          if (separator == null || separator.length !== 1)
+        function {{name("stringSplit")}}(source, separator, options, text = false, count = undefined) {
+          if (!text && (separator == null || separator.length !== 1))
             throw new TypeError("Only a single character separator is supported.");
           if ((options & ~3) !== 0) throw new RangeError("Split options are out of range.");
-          let values = source.split(separator);
+          let values = text && (separator == null || separator.length === 0) ? [source] : source.split(separator);
+          if (count !== undefined) {
+            if (!Number.isInteger(count) || count < 0) throw new RangeError("Count cannot be less than zero.");
+            const limited = [];
+            let index = 0;
+            while (index < values.length && limited.length < count - 1) {
+              const piece = values[index++];
+              if ((options & 1) !== 0 && ((options & 2) !== 0 ? piece.trim() : piece).length === 0) continue;
+              limited.push(piece);
+            }
+            if (count > 0 && index < values.length) limited.push(values.slice(index).join(separator));
+            values = limited;
+          }
           if ((options & 2) !== 0) values = values.map(value =>
             value.replace(/^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/gu, ""));
           if ((options & 1) !== 0) values = values.filter(value => value.length !== 0);

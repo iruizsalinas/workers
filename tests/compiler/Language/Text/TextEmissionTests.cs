@@ -41,8 +41,8 @@ public sealed class TextEmissionTests
             }
             """);
 
-        Assert.Contains("\\` slash \\\\ ${value ?? \"\"}", module);
-        Assert.Contains("value ?? \"\"", module);
+        Assert.Contains("\\` slash \\\\ ${(value) ?? \"\"}", module);
+        Assert.Contains("(value) ?? \"\"", module);
     }
 
     [Fact]

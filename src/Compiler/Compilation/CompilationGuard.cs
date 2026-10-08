@@ -9,6 +9,12 @@ internal static class CompilationGuard
             .ToArray();
 
         if (errors.Length > 0)
-            throw new InvalidOperationException("WRK002: C# compilation failed:\n" + string.Join("\n", errors));
+            throw new CompilationFailedException(errors);
     }
+}
+
+internal sealed class CompilationFailedException(IReadOnlyList<Diagnostic> diagnostics)
+    : InvalidOperationException("WRK002: C# compilation failed:\n" + string.Join("\n", diagnostics))
+{
+    public IReadOnlyList<Diagnostic> Diagnostics { get; } = diagnostics;
 }

@@ -20,6 +20,12 @@ internal static partial class HelperSource
         function {{name("stringBuilderText")}}(builder) {
           return builder.parts.join("");
         }
+        function {{name("stringBuilderCharAt")}}(builder, index) {
+          if (!Number.isInteger(index) || index < 0 || index >= builder.length)
+            throw new RangeError("Index was out of range. Must be non-negative and less than the size of the collection.");
+          if (builder.parts.length > 1) builder.parts = [builder.parts.join("")];
+          return builder.parts[0][index];
+        }
         function {{name("stringBuilderSetText")}}(builder, text) {
           builder.parts = text.length === 0 ? [] : [text];
           builder.length = text.length;

@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 internal sealed partial class JavaScriptEmitter
@@ -10,8 +11,41 @@ internal sealed partial class JavaScriptEmitter
         {
             MemberBindingExpressionSyntax member => ConditionalMember(value, member, receiver),
             ElementBindingExpressionSyntax element => ConditionalElement(value, element, receiver),
-            _ => throw Unsupported("WRK101", value.WhenNotNull)
+            _ => SpeculativeConditionalAccess(value, receiver)
         };
+    }
+
+    // General x?.rest: the rest is re-bound speculatively against a local of the receiver's
+    // non-nullable type, emitted with the regular lowering, and guarded by a null check.
+    private string SpeculativeConditionalAccess(ConditionalAccessExpressionSyntax value, string receiver)
+    {
+        const string local = "__workers_receiver";
+        var receiverType = _model.GetTypeInfo(value.Expression).Type;
+        var resultType = _model.GetTypeInfo(value).Type;
+        if (receiverType is null) throw Unsupported("WRK101", value.WhenNotNull);
+        var declared = UnwrapNullable(receiverType).ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var access = local + value.WhenNotNull.ToFullString().Trim();
+        var statement = Microsoft.CodeAnalysis.CSharp.SyntaxFactory.ParseStatement(
+            $"{{ {declared} {local} = default!; {(resultType?.SpecialType == SpecialType.System_Void ? "" : "_ = ")}{access}; }}");
+        if (!_model.TryGetSpeculativeSemanticModel(value.SpanStart, statement, out var speculative))
+            throw Unsupported("WRK101", value.WhenNotNull);
+        var block = (BlockSyntax)statement;
+        var expression = block.Statements[1] is ExpressionStatementSyntax
+        {
+            Expression: AssignmentExpressionSyntax { Right: var right }
+        } ? right : ((ExpressionStatementSyntax)block.Statements[1]).Expression;
+        var original = _model;
+        string emitted;
+        try
+        {
+            _model = speculative;
+            emitted = Expression(expression);
+        }
+        finally
+        {
+            _model = original;
+        }
+        return $"(({local}) => {local} == null ? null : {emitted})({receiver})";
     }
 
     private string ConditionalElement(
@@ -23,7 +57,7 @@ internal sealed partial class JavaScriptEmitter
         if (!IsSequenceType(_model.GetTypeInfo(access.Expression).Type))
         {
             if (!IsDictionary(_model.GetTypeInfo(access.Expression).Type))
-                return $"{receiver}?.[{string.Join(", ", arguments.Select(argument => Expression(argument.Expression)))}]";
+                return $"({receiver}?.[{string.Join(", ", arguments.Select(argument => Expression(argument.Expression)))}] ?? null)";
             var dictionary = _names.Get($"conditional-dictionary:{access.SyntaxTree.FilePath}:{access.SpanStart}", "dictionary");
             return $"(({dictionary}) => {dictionary} == null ? null : {HelperInvocation(JavaScriptHelper.DictionaryIndex, [dictionary, Expression(arguments.Single().Expression)])})({receiver})";
         }
@@ -40,18 +74,18 @@ internal sealed partial class JavaScriptEmitter
         var receiverType = _model.GetTypeInfo(access.Expression).Type;
         if (symbol?.Name == "Length"
             && (receiverType?.SpecialType == SpecialType.System_String || receiverType is IArrayTypeSymbol))
-            return $"{receiver}?.length";
+            return $"({receiver}?.length ?? null)";
         if (symbol?.ContainingType is { } userType && IsUserInstanceType(userType) && RequiresUserClass(userType)
             && symbol is IFieldSymbol or IPropertySymbol)
         {
             QueueUserType(userType, member);
             var name = UserMemberName(symbol);
             return IsJavaScriptPropertyIdentifier(name)
-                ? $"{receiver}?.{name}"
-                : $"{receiver}?.[{System.Text.Json.JsonSerializer.Serialize(name)}]";
+                ? $"({receiver}?.{name} ?? null)"
+                : $"({receiver}?.[{System.Text.Json.JsonSerializer.Serialize(name)}] ?? null)";
         }
         ThrowIfUnsupportedFrameworkMember(symbol, member);
-        return $"{receiver}?.{LowerFirst(symbol?.Name ?? member.Name.Identifier.ValueText)}";
+        return $"({receiver}?.{LowerFirst(symbol?.Name ?? member.Name.Identifier.ValueText)} ?? null)";
     }
 
     private string ElementAccess(ElementAccessExpressionSyntax value)
@@ -70,6 +104,11 @@ internal sealed partial class JavaScriptEmitter
             return $"{receiver}.get({string.Join(", ", value.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))})";
         if (BindingIntrinsicRegistry.IsQueueMessageBatch(_model.GetTypeInfo(value.Expression).Type))
             receiver += ".messages";
+        if (_model.GetTypeInfo(value.Expression).Type?.ToDisplayString() == "System.Text.StringBuilder")
+        {
+            _helpers.Require(JavaScriptHelper.StringBuilder);
+            return $"{_helpers.Name("stringBuilderCharAt")}({receiver}, {Expression(value.ArgumentList.Arguments.Single().Expression)})";
+        }
         if (IsSequenceType(_model.GetTypeInfo(value.Expression).Type))
         {
             var index = value.ArgumentList.Arguments.Single();

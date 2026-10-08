@@ -7,9 +7,17 @@ internal sealed partial class JavaScriptEmitter
 {
     private void EmitUserCode()
     {
-        while (_pendingUserMethods.Count != 0 || _pendingUserTypes.Count != 0)
+        while (_pendingUserMethods.Count != 0 || _pendingUserTypes.Count != 0
+               || _pendingStaticHolders.Count != 0 || _pendingStaticGetters.Count != 0
+               || _pendingClrJsonProjections.Count != 0 || _pendingRecordTextFunctions.Count != 0
+               || _pendingRecordEqualityFunctions.Count != 0 || _pendingEnumTextFunctions.Count != 0)
         {
+            EmitPendingEnumTextFunctions();
+            EmitPendingRecordEqualityFunctions();
+            EmitPendingRecordTextFunctions();
             EmitUserMethods();
+            EmitPendingStaticState();
+            EmitPendingClrJsonProjections();
             while (_pendingUserTypes.Count != 0)
             {
                 var type = _pendingUserTypes.Dequeue();
@@ -25,9 +33,11 @@ internal sealed partial class JavaScriptEmitter
             || type.DeclaringSyntaxReferences[0].GetSyntax() is not TypeDeclarationSyntax declaration)
             throw new NotSupportedException($"WRK119: User type '{type}' must have one class or record declaration.");
         _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
+        _diagnosticNode = declaration;
         ValidateUserType(type, declaration);
 
-        _output.Append("class ").Append(_userTypes[type]).AppendLine(" {");
+        _output.Append("class ").Append(_userTypes[type])
+            .Append(IsUserException(type) ? " extends Error" : "").AppendLine(" {");
         EmitUserConstructor(type, declaration);
         foreach (var property in declaration.Members.OfType<PropertyDeclarationSyntax>().Where(property =>
                      !IsAutoProperty(property)))
@@ -41,30 +51,24 @@ internal sealed partial class JavaScriptEmitter
         _output.AppendLine("}").AppendLine();
     }
 
+    // Workers APIs serialize with JSON.stringify, which calls toJSON. The names follow the web
+    // contract (camelCase unless JsonPropertyName is present), matching plain records.
     private void EmitUserJsonProjection(INamedTypeSymbol type, TypeDeclarationSyntax declaration)
     {
-        var properties = new List<IPropertySymbol>();
-        if (declaration is RecordDeclarationSyntax { ParameterList: { } parameters })
-            foreach (var parameter in parameters.Parameters)
-            {
-                var parameterSymbol = (IParameterSymbol)_model.GetDeclaredSymbol(parameter)!;
-                properties.Add(type.GetMembers(parameterSymbol.Name).OfType<IPropertySymbol>().Single());
-            }
-        properties.AddRange(declaration.Members.OfType<PropertyDeclarationSyntax>()
-            .Select(property => (IPropertySymbol)_model.GetDeclaredSymbol(property)!)
-            .Where(property => property.DeclaredAccessibility == Accessibility.Public && property.GetMethod is not null));
-        var seen = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
-        properties = properties.Where(property => seen.Add(property)
-            && !HasAttribute(property, "System.Text.Json.Serialization.JsonIgnoreAttribute")).ToList();
-
+        var members = JsonProjectionProperties(type, declaration)
+            .Select(property => (Property: property, Name: JsonPropertyName(property) ?? LowerFirst(property.Name)))
+            .ToList();
         _output.AppendLine("  toJSON() {");
-        _output.Append("    return { ")
-            .Append(string.Join(", ", properties.Select(property =>
-            {
-                var jsonName = JsonPropertyName(property) ?? property.Name;
-                return $"{JavaScriptObjectKey(jsonName)}: {UserMemberAccess("this", property)}";
-            })))
-            .AppendLine(" };");
+        var collision = members.GroupBy(member => member.Name, StringComparer.Ordinal).FirstOrDefault(group => group.Count() > 1);
+        if (collision is not null)
+            _output.Append("    throw new TypeError(")
+                .Append(JsonSerializer.Serialize($"{type} has more than one property named {collision.Key} in JSON."))
+                .AppendLine(");");
+        else
+            _output.Append("    return { ")
+                .Append(string.Join(", ", members.Select(member =>
+                    $"{JavaScriptObjectKey(member.Name)}: {UserMemberAccess("this", member.Property)}")))
+                .AppendLine(" };");
         _output.AppendLine("  }");
     }
 
@@ -76,6 +80,8 @@ internal sealed partial class JavaScriptEmitter
         _output.Append("  constructor(")
             .Append(parameters.Count == 0 ? "" : string.Join(", ", parameters.Select(ParameterDeclaration)))
             .AppendLine(") {");
+        if (IsUserException(type))
+            EmitExceptionBaseCall(type, constructor);
 
         foreach (var field in declaration.Members.OfType<FieldDeclarationSyntax>())
             foreach (var variable in field.Declaration.Variables)
@@ -112,6 +118,30 @@ internal sealed partial class JavaScriptEmitter
             foreach (var statement in constructor?.Body?.Statements ?? [])
                 EmitStatement(statement, 2);
         _output.AppendLine("  }");
+    }
+
+    private void EmitExceptionBaseCall(INamedTypeSymbol type, ConstructorDeclarationSyntax? constructor)
+    {
+        var fallback = JsonSerializer.Serialize($"Exception of type '{type.ToDisplayString()}' was thrown.");
+        var initializer = constructor?.Initializer;
+        var message = fallback;
+        string? inner = null;
+        if (initializer is not null
+            && _model.GetSymbolInfo(initializer).Symbol is IMethodSymbol baseConstructor)
+            for (var index = 0; index < initializer.ArgumentList.Arguments.Count; index++)
+            {
+                var argument = initializer.ArgumentList.Arguments[index];
+                var parameter = ArgumentParameter(baseConstructor, argument, index);
+                if (parameter.Name == "message")
+                    message = $"({Expression(argument.Expression)}) ?? {fallback}";
+                else if (parameter.Name == "innerException")
+                    inner = Expression(argument.Expression);
+                else
+                    throw UnsupportedSymbol(baseConstructor, initializer);
+            }
+        _output.Append("    super(").Append(message)
+            .Append(inner is null ? "" : $", {{ cause: {inner} }}").AppendLine(");");
+        _output.Append("    this.name = ").Append(JsonSerializer.Serialize(type.Name)).AppendLine(";");
     }
 
     private void EmitComputedProperty(PropertyDeclarationSyntax property)

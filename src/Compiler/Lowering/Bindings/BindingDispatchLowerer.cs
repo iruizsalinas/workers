@@ -7,6 +7,66 @@ internal sealed partial class JavaScriptEmitter
         string receiver,
         InvocationExpressionSyntax invocation,
         IMethodSymbol method,
+        BindingIntrinsic intrinsic) =>
+        MaterializeBindingResult(invocation, method, EmitBindingIntrinsicCore(receiver, invocation, method, intrinsic));
+
+    private string RequireHelperName(JavaScriptHelper helper, string name)
+    {
+        _helpers.Require(helper);
+        return _helpers.Name(name);
+    }
+
+    // Values read through Workers APIs arrive as parsed JSON, SQLite rows or structured clones.
+    // Typed reads convert them to the declared C# type so user classes get their members, defaults
+    // apply and mismatched JSON is rejected instead of flowing through with the wrong type.
+    private string MaterializeBindingResult(InvocationExpressionSyntax invocation, IMethodSymbol method, string result)
+    {
+        var owner = method.ContainingType.OriginalDefinition.ToDisplayString();
+        var typeArgument = method.TypeArguments.FirstOrDefault()
+            ?? (method.ContainingType.TypeArguments.Length == 1 ? method.ContainingType.TypeArguments[0] : null);
+        if (typeArgument is null) return result;
+        string? Converter(int mode, bool missingIsDefault) => JsonBoundaryConverter(typeArgument, invocation, mode, missingIsDefault);
+        string Then(string? converter) => converter is null ? result : $"{result}.then({converter})";
+        string Call(string? converter) => converter is null ? result : $"({converter})({result})";
+        string ThenMap(string? converter, string shape) => converter is null ? result : $"{result}.then(value => {string.Format(shape, converter)})";
+        var hasColumn = method.Parameters.Any(parameter => parameter.Name == "columnName")
+            && invocation.ArgumentList.Arguments.Count != 0;
+        return (owner, method.Name) switch
+        {
+            ("Workers.Request" or "Workers.Response", "JsonAsync") => Then(Converter(JsonWebMode, false)),
+            ("Workers.IKvNamespace", "GetJsonAsync") => Then(Converter(JsonWebMode, true)),
+            ("Workers.IKvNamespace", "GetJsonWithMetadataAsync") =>
+                ThenMap(Converter(JsonWebMode, false), "(value.value = ({0})(value.value), value)"),
+            ("Workers.IKvNamespace", "GetJsonBulkAsync") =>
+                ThenMap(Converter(JsonWebMode, false), "Object.fromEntries(Object.entries(value).map(([key, item]) => [key, ({0})(item)]))"),
+            ("Workers.WebSocketMessage", "Json") => Call(Converter(JsonWebMode, false)),
+            ("Workers.QueryParameters", "As") => typeArgument is INamedTypeSymbol queryType && IsUserInstanceType(queryType)
+                && Converter(JsonQueryMode, false) is { } query
+                    ? $"({query})({result})"
+                    : throw new NotSupportedException($"WRK119: QueryParameters.As<T>() needs a Worker class or record type, not '{typeArgument}'."),
+            ("Workers.WebSocket", "DeserializeAttachment") => Call(Converter(JsonRowMode, false)),
+            ("Workers.D1PreparedStatement", "FirstAsync") => Then(Converter(JsonRowMode, hasColumn)),
+            ("Workers.D1PreparedStatement", "AllAsync") =>
+                ThenMap(Converter(JsonRowMode, false), "(value.results = value.results.map({0}), value)"),
+            ("Workers.DurableObjectStorage" or "Workers.DurableObjectTransaction", "GetAsync")
+                when method.Parameters[0].Type.SpecialType == SpecialType.System_String =>
+                Then(Converter(JsonRowMode, true)),
+            ("Workers.DurableObjectKvStorage", "Get") => Call(Converter(JsonRowMode, true)),
+            ("Workers.DurableObjectSqlStatement", "AllAsync") =>
+                ThenMap(Converter(JsonRowMode, false), "(value.rows = value.rows.map({0}), value)"),
+            ("Workers.DurableObjectSqlStatement", "OneAsync") => Then(Converter(JsonRowMode, false)),
+            ("Workers.DurableObjectSqlCursor<T>", "One") => Call(Converter(JsonRowMode, false)),
+            ("Workers.DurableObjectSqlCursor<T>", "ToArray" or "ReadAllAsync") =>
+                Converter(JsonRowMode, false) is { } rows ? $"{result}.map({rows})" : result,
+            ("Workers.DurableObjectSqlCursor<T>", "NextAsync") => Call(Converter(JsonRowMode, false)),
+            _ => result
+        };
+    }
+
+    private string EmitBindingIntrinsicCore(
+        string receiver,
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method,
         BindingIntrinsic intrinsic)
     {
         var arguments = BindingArguments(invocation, method);
@@ -93,6 +153,13 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.QueueRequest => EmitQueueRequest(intrinsic.JavascriptName, arguments),
             BindingIntrinsicKind.RequestWithUrl => $"new Request({arguments[0].Value}, {receiver})",
             BindingIntrinsicKind.Utf8Decode => EmitUtf8Decode(arguments),
+            BindingIntrinsicKind.SqlPrepare => $"{_helpers.Require(JavaScriptHelper.SqlStatement)}({receiver}, {arguments[0].Value})",
+            BindingIntrinsicKind.SqlCursorNext => $"{RequireHelperName(JavaScriptHelper.SqlStatement, "sqlCursorNext")}({receiver})",
+            BindingIntrinsicKind.SqlTransactionRaw => $"Promise.resolve(Array.from({arguments[0].Value}, statement => statement.rawSync()))",
+            BindingIntrinsicKind.SyncStorageGet => $"({receiver}.get({arguments[0].Value}) ?? null)",
+            // Every name maps to all of its values; scalar members take the first one.
+            BindingIntrinsicKind.QueryAs =>
+                $"((parameters) => Object.fromEntries(Array.from(new Set(parameters.keys()), name => [name, parameters.getAll(name)])))({receiver})",
             _ => throw new InvalidOperationException($"Unknown binding intrinsic kind '{intrinsic.Kind}'.")
         };
         return cancellation is null

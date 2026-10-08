@@ -48,10 +48,7 @@ internal sealed partial class JavaScriptEmitter
                 .Append(IsIterator(method) ? "*" : "")
                 .Append(GeneratedInstanceMethodName(methodSymbol))
                 .Append('(').Append(parameters).AppendLine(") {");
-            if (method.ExpressionBody is not null)
-                _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
-            else
-                foreach (var statement in method.Body?.Statements ?? []) EmitStatement(statement, 2);
+            EmitRpcMethodBody(method, methodSymbol);
             _output.AppendLine("  }");
         }
         _output.AppendLine("}").AppendLine();

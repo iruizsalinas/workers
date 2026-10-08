@@ -1,5 +1,5 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import worker from "../fixtures/ApplicationProbe/dist/worker.js";
 import clr from "../generated/applications.json";
 
@@ -28,6 +28,16 @@ describe("application correctness probes", () => {
 
   it("reports deferred sales and excludes unassigned tenants from joins", async () => {
     await expect((await invoke("/reporting")).json()).resolves.toEqual(clr.reporting);
+  });
+
+  describe("regression scenarios", () => {
+    let regressions;
+    beforeAll(async () => {
+      regressions = await (await invoke("/regressions")).json();
+    });
+    it.each(Object.entries(clr.regressions))("%s agrees with the CLR", (name, expected) => {
+      expect(regressions[name]).toBe(expected);
+    });
   });
 });
 

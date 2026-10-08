@@ -11,6 +11,13 @@ internal static partial class HelperSource
           } else if (kind === 1) {
             left = left.charCodeAt(0);
             right = right.charCodeAt(0);
+          } else if (kind === 4) {
+            const upper = text => Array.from(text, character => {
+              const mapped = character.toUpperCase();
+              return mapped.length === character.length ? mapped : character;
+            }).join("");
+            left = upper(left);
+            right = upper(right);
           }
           if (left === right) return 0;
           if (typeof left === "number" && Number.isNaN(left))

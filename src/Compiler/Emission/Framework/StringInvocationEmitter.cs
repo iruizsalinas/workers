@@ -11,8 +11,8 @@ internal sealed partial class JavaScriptEmitter
         string[] arguments) => (name, arguments.Length) switch
         {
             ("Trim", 0) => HelperInvocation(JavaScriptHelper.StringTrim, [receiver]),
-            ("ToLowerInvariant", 0) => $"{receiver}.toLowerCase()",
-            ("ToUpperInvariant", 0) => $"{receiver}.toUpperCase()",
+            ("ToLowerInvariant", 0) => $"{_helpers.Require(JavaScriptHelper.StringCase)}({receiver}, false)",
+            ("ToUpperInvariant", 0) => $"{_helpers.Require(JavaScriptHelper.StringCase)}({receiver}, true)",
             ("Contains", 1) when method?.Parameters[0].Type.SpecialType == SpecialType.System_String =>
                 HelperInvocation(JavaScriptHelper.StringContains, [receiver, arguments[0]]),
             ("Contains", 1) => $"{receiver}.includes({arguments[0]})",
@@ -52,8 +52,16 @@ internal sealed partial class JavaScriptEmitter
             ("PadRight", 2) => HelperInvocation(JavaScriptHelper.StringPad, [receiver, .. arguments, "false"]),
             ("ToCharArray", 0) => HelperInvocation(JavaScriptHelper.StringToCharArray, [receiver, "null", "null"]),
             ("ToCharArray", 2) => HelperInvocation(JavaScriptHelper.StringToCharArray, [receiver, .. arguments]),
-            ("Split", 2) when method?.Parameters[0].Type.SpecialType == SpecialType.System_Char =>
+            ("Split", 2) when method?.Parameters is [{ Type.SpecialType: SpecialType.System_Char }, { Type.TypeKind: TypeKind.Enum }] =>
                 HelperInvocation(JavaScriptHelper.StringSplit, [receiver, .. arguments]),
+            ("Split", 2 or 3) when method?.Parameters is [{ Type.SpecialType: SpecialType.System_Char or SpecialType.System_String } separator,
+                    { Type.SpecialType: SpecialType.System_Int32 }, { Type.TypeKind: TypeKind.Enum }] =>
+                HelperInvocation(JavaScriptHelper.StringSplit, [receiver, arguments[0], arguments.Length == 3 ? arguments[2] : "0",
+                    separator.Type.SpecialType == SpecialType.System_String ? "true" : "false", arguments[1]]),
+            ("Split", 1) when method?.Parameters is [{ Type.SpecialType: SpecialType.System_Char }, { IsOptional: true }] =>
+                HelperInvocation(JavaScriptHelper.StringSplit, [receiver, arguments[0], "0"]),
+            ("Split", 1 or 2) when method?.Parameters is [{ Type.SpecialType: SpecialType.System_String }, { Type.TypeKind: TypeKind.Enum }] =>
+                HelperInvocation(JavaScriptHelper.StringSplit, [receiver, arguments[0], arguments.Length == 2 ? arguments[1] : "0", "true"]),
             _ => throw UnsupportedSymbol(method, source)
         };
 

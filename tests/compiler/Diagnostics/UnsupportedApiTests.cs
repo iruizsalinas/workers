@@ -97,13 +97,28 @@ public sealed class UnsupportedApiTests
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context ctx)
                 {
-                    var values = request.QueryParameters.As<object>();
+                    var values = request.Headers.GetEnumerator();
                     return Response.Text("ok");
                 }
             }
             """));
 
         Assert.StartsWith("WRK105:", error.Message);
-        Assert.Contains("Workers.QueryParameters.As", error.Message);
+        Assert.Contains("Workers.Headers.GetEnumerator", error.Message);
+
+        var binding = Assert.Throws<NotSupportedException>(() => Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx)
+                {
+                    var values = request.QueryParameters.As<object>();
+                    return Response.Text("ok");
+                }
+            }
+            """));
+
+        Assert.StartsWith("WRK119:", binding.Message);
     }
 }

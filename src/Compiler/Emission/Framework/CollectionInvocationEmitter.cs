@@ -51,8 +51,11 @@ internal sealed partial class JavaScriptEmitter
                 $"{_helpers.Name("stringBuilderAppend")}({receiver}, {arguments[0]}, true)",
             ("Append", 1) when method.Parameters[0].Type.SpecialType == SpecialType.System_Boolean =>
                 $"{_helpers.Name("stringBuilderAppendValue")}({receiver}, {arguments[0]}, 1)",
+            ("Append", 1) when method.Parameters[0].Type.SpecialType is SpecialType.System_Single or SpecialType.System_Double =>
+                $"{_helpers.Name("stringBuilderAppend")}({receiver}, {_helpers.Require(JavaScriptHelper.NumberText)}({arguments[0]}" +
+                $"{(method.Parameters[0].Type.SpecialType == SpecialType.System_Single ? ", true" : "")}), false)",
             ("Append", 1) when method.Parameters[0].Type.SpecialType is SpecialType.System_Int32
-                or SpecialType.System_UInt32 or SpecialType.System_Single or SpecialType.System_Double =>
+                or SpecialType.System_UInt32 =>
                 $"{_helpers.Name("stringBuilderAppendValue")}({receiver}, {arguments[0]}, 0)",
             ("Append", 2) when method.Parameters[0].Type.SpecialType == SpecialType.System_Char
                                 && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32 =>

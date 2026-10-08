@@ -31,8 +31,18 @@ internal sealed partial class JavaScriptEmitter
         AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.SimpleAssignmentExpression) => SimpleAssignment(value),
         AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.AddAssignmentExpression) => CompoundMutation(value, "+"),
         AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.SubtractAssignmentExpression) => CompoundMutation(value, "-"),
+        AssignmentExpressionSyntax value when value.Kind() is SyntaxKind.MultiplyAssignmentExpression
+            or SyntaxKind.DivideAssignmentExpression or SyntaxKind.ModuloAssignmentExpression => CompoundArithmetic(value),
+        WithExpressionSyntax value => WithExpression(value),
+        SwitchExpressionSyntax value => SwitchExpression(value),
+        CastExpressionSyntax value => Cast(value),
+        ArrayCreationExpressionSyntax value => ArrayCreation(value, value.Initializer),
+        ImplicitArrayCreationExpressionSyntax value => ArrayCreation(value, value.Initializer),
+        ThrowExpressionSyntax value => $"(() => {{ throw {Expression(value.Expression)}; }})()",
         IsPatternExpressionSyntax value => IsPattern(value),
         MemberAccessExpressionSyntax value => Member(value),
+        InvocationExpressionSyntax value when _model.GetConstantValue(value) is { HasValue: true, Value: string text } =>
+            LiteralConstant(text, value),
         InvocationExpressionSyntax value => Invocation(value),
         ElementAccessExpressionSyntax value => ElementAccess(value),
         AnonymousObjectCreationExpressionSyntax value => "{ " + string.Join(", ", value.Initializers.Select(AnonymousMember)) + " }",
@@ -97,6 +107,8 @@ internal sealed partial class JavaScriptEmitter
         if (unary?.OperatorMethod is not null)
             throw UnsupportedSymbol(unary.OperatorMethod, value);
         var type = unary?.Type?.SpecialType ?? SpecialType.None;
+        if (_model.GetConstantValue(value) is { HasValue: true, Value: int or uint or double } constant)
+            return LiteralConstant(constant.Value, value);
         return NumericResult($"{operation}{Expression(value.Operand)}", type, value);
     }
 
@@ -108,7 +120,7 @@ internal sealed partial class JavaScriptEmitter
             PostfixUnaryExpressionSyntax postfixValue => postfixValue.Operand,
             _ => throw new InvalidOperationException()
         };
-        if (operand is not IdentifierNameSyntax)
+        if (!IsSimpleMutationTarget(operand))
             throw Unsupported("WRK108", value);
         var type = _model.GetTypeInfo(operand).Type?.SpecialType ?? SpecialType.None;
         var target = Expression(operand);
@@ -120,7 +132,7 @@ internal sealed partial class JavaScriptEmitter
 
     private string CompoundMutation(AssignmentExpressionSyntax value, string operation)
     {
-        if (value.Left is not IdentifierNameSyntax)
+        if (!IsSimpleMutationTarget(value.Left))
             throw Unsupported("WRK108", value);
         var type = _model.GetTypeInfo(value).Type?.SpecialType ?? SpecialType.None;
         var target = Expression(value.Left);
@@ -131,14 +143,66 @@ internal sealed partial class JavaScriptEmitter
         if (_model.GetTypeInfo(value).Type?.ToDisplayString() == "System.TimeSpan")
             return $"({target} = {TimeSpanArithmetic(target, Expression(value.Right), operation)})";
         if (type == SpecialType.System_String && operation == "+")
-            return $"({target} = ({target} ?? \"\") + ({Expression(value.Right)} ?? \"\"))";
+            return $"({target} = ({target} ?? \"\") + {StringConcatOperand(value.Right, Expression(value.Right), value)})";
         return $"({target} = {NumericResult($"{target} {operation} {Expression(value.Right)}", type, value)})";
     }
 
+    private string CompoundArithmetic(AssignmentExpressionSyntax value)
+    {
+        if (!IsSimpleMutationTarget(value.Left) || _model.GetOperation(value) is not ICompoundAssignmentOperation operation
+            || operation.OperatorMethod is not null || operation.InConversion is { IsIdentity: false } || operation.IsChecked)
+            throw Unsupported("WRK108", value);
+        var type = operation.Type?.SpecialType ?? SpecialType.None;
+        var target = Expression(value.Left);
+        var right = Expression(value.Right);
+        var integral = type is SpecialType.System_Int32 or SpecialType.System_UInt32;
+        var unsigned = type == SpecialType.System_UInt32 ? "true" : "false";
+        var result = value.Kind() switch
+        {
+            SyntaxKind.MultiplyAssignmentExpression when type == SpecialType.System_Int32 => $"Math.imul({target}, {right})",
+            SyntaxKind.MultiplyAssignmentExpression when type == SpecialType.System_UInt32 => $"(Math.imul({target}, {right}) >>> 0)",
+            SyntaxKind.DivideAssignmentExpression when integral =>
+                $"{_helpers.Require(JavaScriptHelper.IntegerDivide)}({target}, {right}, {unsigned})",
+            SyntaxKind.ModuloAssignmentExpression when integral =>
+                $"{_helpers.Require(JavaScriptHelper.IntegerRemainder)}({target}, {right}, {unsigned})",
+            SyntaxKind.MultiplyAssignmentExpression => NumericResult($"{target} * {right}", type, value),
+            SyntaxKind.DivideAssignmentExpression => NumericResult($"{target} / {right}", type, value),
+            _ => NumericResult($"{target} % {right}", type, value)
+        };
+        return $"({target} = {result})";
+    }
+
+    // A record "with" expression is a memberwise clone that keeps the prototype, so class-backed
+    // records keep their methods, followed by the initializer assignments.
+    private string WithExpression(WithExpressionSyntax value)
+    {
+        if (_model.GetTypeInfo(value.Expression).Type is not INamedTypeSymbol { IsRecord: true } type || !IsUserInstanceType(type))
+            throw Unsupported("WRK101", value);
+        var assignments = value.Initializer.Expressions.Select(expression => expression switch
+        {
+            AssignmentExpressionSyntax { Left: IdentifierNameSyntax } assignment =>
+                $"{JavaScriptObjectKey(UserInitializerMemberName(assignment.Left))}: {Expression(assignment.Right)}",
+            _ => throw Unsupported("WRK106", expression)
+        });
+        return $"((source) => Object.assign(Object.create(Object.getPrototypeOf(source)), source, {{ {string.Join(", ", assignments)} }}))" +
+               $"({Expression(value.Expression)})";
+    }
+
+    // Mutations read and write their target, so the target must be safe to evaluate twice.
+    private bool IsSimpleMutationTarget(ExpressionSyntax target) => target switch
+    {
+        IdentifierNameSyntax => true,
+        MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax or ThisExpressionSyntax } access =>
+            _model.GetSymbolInfo(access).Symbol is IFieldSymbol { HasConstantValue: false }
+                or IPropertySymbol { IsIndexer: false, SetMethod: not null }
+            && _model.GetSymbolInfo(access).Symbol!.DeclaringSyntaxReferences.Length != 0,
+        _ => false
+    };
+
     private static string NumericResult(string expression, SpecialType type, SyntaxNode source) => type switch
     {
-        SpecialType.System_Int32 => $"({expression}) | 0",
-        SpecialType.System_UInt32 => $"({expression}) >>> 0",
+        SpecialType.System_Int32 => $"(({expression}) | 0)",
+        SpecialType.System_UInt32 => $"(({expression}) >>> 0)",
         SpecialType.System_Single => $"Math.fround({expression})",
         SpecialType.System_Double => $"({expression})",
         _ => throw Unsupported("WRK108", source)
@@ -166,6 +230,27 @@ internal sealed partial class JavaScriptEmitter
         var statements = _output.ToString(start, _output.Length - start).TrimEnd();
         _output.Length = start;
         return statements.Length == 0 ? "{}" : $"{{\n{statements}\n}}";
+    }
+
+    // Single-dimensional arrays: byte arrays are Uint8Array, other arrays are JavaScript arrays whose
+    // elements start at the element type's default value.
+    private string ArrayCreation(ExpressionSyntax value, InitializerExpressionSyntax? initializer)
+    {
+        if (_model.GetTypeInfo(value).Type is not IArrayTypeSymbol { Rank: 1 } array)
+            throw Unsupported("WRK101", value);
+        var bytes = array.ElementType.SpecialType == SpecialType.System_Byte;
+        if (initializer is not null)
+        {
+            var items = "[" + string.Join(", ", initializer.Expressions.Select(Expression)) + "]";
+            return bytes ? $"Uint8Array.from({items})" : items;
+        }
+        if (value is not ArrayCreationExpressionSyntax { Type.RankSpecifiers: [{ Sizes: [var size] }] })
+            throw Unsupported("WRK101", value);
+        var length = Expression(size);
+        if (bytes) return $"new Uint8Array({length})";
+        var fallback = DefaultValueText(array.ElementType, value);
+        return $"((length) => {{ if (!Number.isInteger(length) || length < 0) throw new RangeError(\"Arithmetic operation resulted in an overflow.\"); " +
+               $"return Array.from({{ length }}, () => {fallback}); }})({length})";
     }
 
     private string Collection(CollectionExpressionSyntax value)

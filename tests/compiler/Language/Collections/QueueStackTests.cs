@@ -68,8 +68,6 @@ public sealed class QueueStackTests
     }
 
     [Theory]
-    [InlineData("queue.TryDequeue(out value)")]
-    [InlineData("queue.TryPeek(out value)")]
     [InlineData("queue.TrimExcess()")]
     public void RejectsQueueApisOutsideTheFocusedProfile(string operation)
     {

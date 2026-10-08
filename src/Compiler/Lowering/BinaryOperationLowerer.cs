@@ -32,6 +32,12 @@ internal sealed partial class JavaScriptEmitter
             && cancellationOperation.RightOperand.Type?.ToDisplayString() == "System.Threading.CancellationToken"
             && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
             return $"{Expression(expression.Left)} {BinaryOperator(expression.Kind())} {Expression(expression.Right)}";
+        if (operation?.OperatorMethod is { } recordOperator && IsSynthesizedRecordMember(recordOperator)
+            && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
+        {
+            var equals = RecordEquals(recordOperator.ContainingType, Expression(expression.Left), Expression(expression.Right), expression);
+            return expression.IsKind(SyntaxKind.EqualsExpression) ? equals : $"!{equals}";
+        }
         if (operation?.OperatorMethod is not null)
             throw UnsupportedSymbol(operation.OperatorMethod, expression);
         if (operation is { IsLifted: true }
@@ -85,21 +91,16 @@ internal sealed partial class JavaScriptEmitter
         if (integral32)
         {
             if (expression.IsKind(SyntaxKind.MultiplyExpression))
-                return type == SpecialType.System_UInt32 ? $"Math.imul({left}, {right}) >>> 0" : $"Math.imul({left}, {right})";
+                return type == SpecialType.System_UInt32 ? $"(Math.imul({left}, {right}) >>> 0)" : $"Math.imul({left}, {right})";
             if (expression.Kind() is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression)
             {
                 var native = $"({left} {BinaryOperator(expression.Kind())} {right})";
-                return type == SpecialType.System_UInt32 ? $"{native} >>> 0" : $"{native} | 0";
+                return type == SpecialType.System_UInt32 ? $"({native} >>> 0)" : $"({native} | 0)";
             }
         }
 
         if (expression.IsKind(SyntaxKind.AddExpression) && type == SpecialType.System_String)
-        {
-            if (operation?.LeftOperand.Type?.SpecialType != SpecialType.System_String
-                || operation.RightOperand.Type?.SpecialType != SpecialType.System_String)
-                throw Unsupported("WRK108", expression);
-            return $"({left} ?? \"\") + ({right} ?? \"\")";
-        }
+            return $"{StringConcatOperand(expression.Left, left, expression)} + {StringConcatOperand(expression.Right, right, expression)}";
 
         if (type == SpecialType.System_Single
             && expression.Kind() is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression)
@@ -112,6 +113,39 @@ internal sealed partial class JavaScriptEmitter
                    ComparisonOperand(expression.Right, right);
 
         return $"{left} {BinaryOperator(expression.Kind())} {right}";
+    }
+
+    // Converts an operand of string concatenation the way String.Concat calls ToString().
+    private string StringConcatOperand(ExpressionSyntax syntax, string value, SyntaxNode source)
+    {
+        var type = _model.GetTypeInfo(syntax).Type;
+        var underlying = UnwrapNullable(type!);
+        var nullable = type is null || type.IsReferenceType || !SymbolEqualityComparer.Default.Equals(type, underlying);
+        if (_model.GetConstantValue(syntax) is { HasValue: true, Value: string or char })
+            return value;
+        if (underlying.SpecialType == SpecialType.System_String)
+            return syntax is InterpolatedStringExpressionSyntax
+                   || syntax is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.AddExpression)
+                ? $"({value})"
+                : $"({value} ?? \"\")";
+        string Convert(string item) => underlying.SpecialType switch
+        {
+            SpecialType.System_Char or SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16
+                or SpecialType.System_UInt16 or SpecialType.System_Int32 or SpecialType.System_UInt32 => $"String({item})",
+            SpecialType.System_Boolean => $"({item} ? \"True\" : \"False\")",
+            SpecialType.System_Single => $"{_helpers.Require(JavaScriptHelper.NumberText)}({item}, true)",
+            SpecialType.System_Double => $"{_helpers.Require(JavaScriptHelper.NumberText)}({item})",
+            _ when underlying.ToDisplayString() == "System.Guid" => item,
+            _ when IsTextEnum(underlying) => EnumText(underlying, item),
+            _ when underlying.ToDisplayString() == "System.Text.StringBuilder" =>
+                $"{RequireHelperName(JavaScriptHelper.StringBuilder, "stringBuilderText")}({item})",
+            _ when underlying is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record) =>
+                RecordText(record, item, source),
+            _ => throw Unsupported("WRK108", source)
+        };
+        return nullable
+            ? $"(($workers$value) => $workers$value == null ? \"\" : {Convert("$workers$value")})({value})"
+            : $"({Convert(value)})";
     }
 
     private string NullableBooleanBinary(BinaryExpressionSyntax expression, string left, string right)
@@ -159,7 +193,7 @@ internal sealed partial class JavaScriptEmitter
             SyntaxKind.AddExpression or SyntaxKind.SubtractExpression =>
                 NumericResult($"{left} {BinaryOperator(kind)} {right}", underlying, expression),
             SyntaxKind.MultiplyExpression when underlying == SpecialType.System_Int32 => $"Math.imul({left}, {right})",
-            SyntaxKind.MultiplyExpression when underlying == SpecialType.System_UInt32 => $"Math.imul({left}, {right}) >>> 0",
+            SyntaxKind.MultiplyExpression when underlying == SpecialType.System_UInt32 => $"(Math.imul({left}, {right}) >>> 0)",
             SyntaxKind.DivideExpression when underlying is SpecialType.System_Int32 or SpecialType.System_UInt32 =>
                 $"{_helpers.Require(JavaScriptHelper.IntegerDivide)}({left}, {right}, {(underlying == SpecialType.System_UInt32 ? "true" : "false")})",
             SyntaxKind.ModuloExpression when underlying is SpecialType.System_Int32 or SpecialType.System_UInt32 =>
@@ -288,17 +322,10 @@ internal sealed partial class JavaScriptEmitter
     private static string LowerFirst(string value) => value.Length == 0 ? value : char.ToLowerInvariant(value[0]) + value[1..];
     private static string LowerNativeMethodName(string value) => LowerFirst(
         value.EndsWith("Async", StringComparison.Ordinal) ? value[..^"Async".Length] : value);
-    private string IsPattern(IsPatternExpressionSyntax value) => value.Pattern switch
-    {
-        ConstantPatternSyntax constant when constant.Expression.IsKind(SyntaxKind.NullLiteralExpression) => $"{Expression(value.Expression)} == null",
-        UnaryPatternSyntax unary
-            when unary.IsKind(SyntaxKind.NotPattern)
-                && unary.Pattern is ConstantPatternSyntax constant
-                && constant.Expression.IsKind(SyntaxKind.NullLiteralExpression) =>
-            $"{Expression(value.Expression)} != null",
-        _ => throw Unsupported("WRK104", value)
-    };
-    private static NotSupportedException Unsupported(string code, SyntaxNode node) => new($"{code}: '{node.Kind()}' is not supported yet: {node}");
+    private static NotSupportedException Locate(NotSupportedException exception, SyntaxNode node) =>
+        WorkerDiagnostics.WithLocation(exception, node);
+    private static NotSupportedException Unsupported(string code, SyntaxNode node) =>
+        Locate(new($"{code}: '{node.Kind()}' is not supported yet: {node}"), node);
     private static NotSupportedException UnsupportedSymbol(ISymbol? symbol, SyntaxNode node) =>
-        new($"WRK105: '{symbol?.ToDisplayString() ?? node.ToString()}' is outside the supported Workers C# profile.");
+        Locate(new($"WRK105: '{symbol?.ToDisplayString() ?? node.ToString()}' is outside the supported Workers C# profile."), node);
 }

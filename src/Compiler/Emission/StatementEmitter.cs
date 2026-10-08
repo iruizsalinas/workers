@@ -7,6 +7,10 @@ internal sealed partial class JavaScriptEmitter
     private void EmitStatement(StatementSyntax statement, int depth)
     {
         var indent = new string(' ', depth * 2);
+        _diagnosticNode = statement;
+        EmitOutVariableDeclarations(statement, indent);
+        DeclarePatternVariables(StatementPatternDesignations(statement),
+            name => _output.Append(indent).Append("let ").Append(name).AppendLine(";"));
         switch (statement)
         {
             case ReturnStatementSyntax value:

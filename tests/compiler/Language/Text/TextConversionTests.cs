@@ -96,7 +96,7 @@ public sealed class TextConversionTests
 
         Assert.Contains("length: text.length", module);
         Assert.Contains("stringContains(text, \"alu\")", module);
-        Assert.Contains("optionalLength: optional?.length", module);
+        Assert.Contains("optionalLength: (optional?.length ?? null)", module);
         Assert.DoesNotContain("@Length", module);
         Assert.DoesNotContain("@Contains", module);
     }
@@ -150,7 +150,7 @@ public sealed class TextConversionTests
         Assert.Contains("new TextDecoder(\"utf-8\", { fatal: true, ignoreBOM: false })", module);
         Assert.Contains("stringReplace(decoded, \"\\u002B\", \" \")", module);
         Assert.Contains("encodeURIComponent(", module);
-        Assert.Contains("escaped.toUpperCase()", module);
+        Assert.Contains("$workers$stringCase(escaped, true)", module);
         Assert.Contains("$workers$stringOrdinal(upper, \"%\", false, 4", module);
         Assert.Contains("new Request(new URL(\"/accepted\", new URL(request.url).origin), request)", module);
     }

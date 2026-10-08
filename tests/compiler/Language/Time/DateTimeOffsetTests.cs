@@ -144,7 +144,7 @@ public sealed class DateTimeOffsetTests
         Assert.Contains("function $workers$dateTimeAddMonths(input, months)", module);
         Assert.Contains("$workers$dateTimeAddMonths(value, 1)", module);
         Assert.Contains("$workers$dateTimeAddMonths(value, (1) * 12)", module);
-        Assert.Contains("$workers$dateTimeFromUnixTime((-1) | 0, false)", module);
+        Assert.Contains("$workers$dateTimeFromUnixTime(-1, false)", module);
         Assert.Contains("$workers$dateTimeFromUnixTime(0, true)", module);
         Assert.Contains("Math.floor(new Date(previous).getTime() / 1000)", module);
     }

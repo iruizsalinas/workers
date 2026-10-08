@@ -60,7 +60,7 @@ public sealed class NumericApiTests
             }
             """);
 
-        Assert.Contains("$workers$mathAbsInt((-42) | 0)", module);
+        Assert.Contains("$workers$mathAbsInt(-42)", module);
         Assert.Contains("$workers$mathClamp(12, 0, 10)", module);
         Assert.Contains("$workers$mathRound(2.5, 0, 15)", module);
         Assert.Contains("$workers$mathLog(8, 2)", module);
@@ -90,11 +90,9 @@ public sealed class NumericApiTests
     }
 
     [Theory]
-    [InlineData("int.TryParse(\"1\", out var value)")]
     [InlineData("long.Parse(\"1\")")]
     [InlineData("decimal.Parse(\"1\")")]
     [InlineData("42.ToString(\"D4\")")]
-    [InlineData("42.ToString(\"N\", CultureInfo.InvariantCulture)")]
     public void RejectsOutBasedWideOrCultureSensitiveNumericApis(string operation)
     {
         var error = Assert.Throws<NotSupportedException>(() => Compile($$"""

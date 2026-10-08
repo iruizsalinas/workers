@@ -86,21 +86,38 @@ public sealed class ArithmeticTests
     }
 
     [Fact]
-    public void RejectsUserDefinedOperators()
+    public void LowersRecordEqualityAndRejectsUserDefinedOperators()
     {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context ctx) =>
+                    Response.Json(new { equal = new Key(1) == new Key(1), different = new Key(1) != new Key(2) });
+            }
+            public sealed record Key(int Value);
+            """);
+        Assert.Contains("function $workers$recordEquals$Key(left, right)", module);
+        Assert.Contains("!$workers$recordEquals$Key(", module);
+
         var error = Assert.Throws<NotSupportedException>(() => Compile("""
             using Workers;
             public static class Worker
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context ctx) =>
-                    Response.Json(new { equal = new Key(1) == new Key(1) });
+                    Response.Json(new { equal = new Money(1) == new Money(1) });
             }
-            public sealed record Key(int Value);
+            public sealed class Money(int cents)
+            {
+                public int Cents { get; } = cents;
+                public static bool operator ==(Money left, Money right) => left.Cents == right.Cents;
+                public static bool operator !=(Money left, Money right) => !(left == right);
+            }
             """));
-
         Assert.StartsWith("WRK105:", error.Message);
-        Assert.Contains("Key.operator ==", error.Message);
+        Assert.Contains("Money.operator ==", error.Message);
     }
 
     [Fact]
@@ -196,7 +213,7 @@ public sealed class ArithmeticTests
             }
             """);
 
-        Assert.Contains("return (-value) | 0;", module);
+        Assert.Contains("return ((-value) | 0);", module);
         Assert.Contains("return Math.fround(-value);", module);
     }
 
@@ -244,18 +261,25 @@ public sealed class ArithmeticTests
     }
 
     [Fact]
-    public void ContinuesToRejectCharacterCasts()
+    public void LowersCharacterAndNumericCasts()
     {
-        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+        var module = Compile("""
             using Workers;
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
-                    Response.Text(((char)65).ToString());
+                public static Response Fetch(Request request, Env env, Context ctx)
+                {
+                    var code = 66;
+                    var ratio = 2.75;
+                    return Response.Text(((char)65).ToString() + (char)code + (int)ratio + (byte)code);
+                }
             }
-            """));
+            """);
 
-        Assert.Contains("WRK101", error.Message);
+        Assert.Contains("\"A\"", module);
+        Assert.Contains("String.fromCharCode(", module);
+        Assert.Contains("Math.trunc(", module);
+        Assert.Contains("& 255", module);
     }
 }

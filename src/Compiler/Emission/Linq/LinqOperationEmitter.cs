@@ -27,11 +27,16 @@ internal sealed partial class JavaScriptEmitter
         bool descending,
         bool append)
     {
-        if (arguments.Length != 1 || parameters.Length != 1
+        if (arguments.Length is not (1 or 2) || parameters.Length != arguments.Length
             || parameters[0].Type is not INamedTypeSymbol { DelegateInvokeMethod: { } selector }
             || selector.Parameters.Length != 1)
             throw UnsupportedSymbol(method, sourceNode);
-        var keyKind = GetLinqOrderKeyKind(selector.ReturnType);
+        var keyKind = arguments.Length == 2
+            ? StringComparerOrderKind(sourceNode, selector.ReturnType)
+            : GetLinqOrderKeyKind(selector.ReturnType);
+        if (keyKind is null && selector.ReturnType.SpecialType == SpecialType.System_String && arguments.Length == 1)
+            throw new NotSupportedException(
+                $"WRK105: '{method.ToDisplayString()}' uses culture-sensitive string ordering; pass StringComparer.Ordinal or StringComparer.OrdinalIgnoreCase.");
         if (keyKind is null) throw UnsupportedSymbol(method, sourceNode);
         return Linq(JavaScriptHelper.LinqOrder, source,
             [arguments[0], descending ? "true" : "false", ((int)keyKind).ToString(), append ? "true" : "false"]);
@@ -50,7 +55,25 @@ internal sealed partial class JavaScriptEmitter
         return null;
     }
 
-    private enum LinqOrderKeyKind { Numeric, Character, DateTime }
+    private enum LinqOrderKeyKind { Numeric, Character, DateTime, Ordinal, OrdinalIgnoreCase }
+
+    private LinqOrderKeyKind? StringComparerOrderKind(SyntaxNode source, ITypeSymbol keyType)
+    {
+        if (keyType.SpecialType != SpecialType.System_String
+            || source is not InvocationExpressionSyntax { ArgumentList.Arguments: [_, { } comparer] }
+            || _model.GetSymbolInfo(comparer.Expression).Symbol is not IPropertySymbol
+            {
+                IsStatic: true, ContainingType: { } comparerType, Name: var name
+            }
+            || comparerType.ToDisplayString() != "System.StringComparer")
+            return null;
+        return name switch
+        {
+            "Ordinal" => LinqOrderKeyKind.Ordinal,
+            "OrdinalIgnoreCase" => LinqOrderKeyKind.OrdinalIgnoreCase,
+            _ => null
+        };
+    }
 
     private string LinqGroupBy(
         SyntaxNode sourceNode, IMethodSymbol method, IParameterSymbol[] parameters,
