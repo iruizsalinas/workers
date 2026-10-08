@@ -55,7 +55,8 @@ describe("R2 file gateway scenario", () => {
     expect(response.headers.get("allow")).toBe("GET, HEAD, PUT, DELETE");
   });
 
-  it("follows native R2 cursors across multiple list pages", async () => {
+  // Seeding 105 objects into the local R2 simulator is slow on CI runners.
+  it("follows native R2 cursors across multiple list pages", { timeout: 30_000 }, async () => {
     const prefix = `pages-${crypto.randomUUID()}/`;
     const keys = Array.from({ length: 105 }, (_, index) => `${prefix}${index}`);
     await Promise.all(keys.map(key => env.FILES.put(key, "value")));
