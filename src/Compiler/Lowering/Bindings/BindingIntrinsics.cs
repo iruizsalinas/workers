@@ -53,7 +53,11 @@ internal enum BindingIntrinsicKind
     SqlCursorNext,
     SqlTransactionRaw,
     SyncStorageGet,
-    QueryAs
+    QueryAs,
+    DatabaseConnect,
+    SqlQuery,
+    MongoOperation,
+    MongoObjectId
 }
 
 internal sealed record BindingIntrinsic(string JavascriptName, BindingIntrinsicKind Kind = BindingIntrinsicKind.Direct);
@@ -74,7 +78,8 @@ internal static class BindingIntrinsicRegistry
         NetworkIntrinsics.Methods,
         DurableObjectIntrinsics.Methods,
         PlatformIntrinsics.Methods,
-        RuntimeIntrinsics.Methods
+        RuntimeIntrinsics.Methods,
+        DatabaseIntrinsics.Methods
     ];
 
     public static bool TryGet(IMethodSymbol method, out BindingIntrinsic intrinsic)

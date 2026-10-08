@@ -28,6 +28,42 @@ jobs:
         run: ./eng/verify-worker-artifacts.ps1 -SkipPublish
       - run: dotnet pack src/Workers.csproj -c Release --no-restore -o .artifacts/package
 
+  databases:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: mysql
+          MYSQL_DATABASE: workers
+        ports: ["3306:3306"]
+        options: --health-cmd "mysqladmin ping -h 127.0.0.1" --health-interval 5s --health-retries 20
+      mongodb:
+        image: mongo:8
+        ports: ["27017:27017"]
+    env:
+      WORKERS_POSTGRES_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      WORKERS_MYSQL_URL: mysql://root:mysql@127.0.0.1:3306/workers
+      WORKERS_MONGODB_URL: mongodb://127.0.0.1:27017
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: dotnet build tests/runtime/fixtures/Databases/Databases.csproj -c Release -p:NuGetAudit=false
+      - run: node node_modules/vitest/vitest.mjs run --config tests/runtime/vitest.databases.config.js
+
   packed-package-consumer:
     strategy:
       matrix:

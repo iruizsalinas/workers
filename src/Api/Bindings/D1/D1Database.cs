@@ -35,6 +35,7 @@ public sealed class D1Result<T>
     public IReadOnlyList<T> Results { get; init; } = [];
     public bool Success { get; init; }
     public string? Error { get; init; }
+    public D1ResultMetadata Meta { get; init; } = new();
 }
 
 public sealed class D1ExecResult
@@ -66,5 +67,21 @@ public sealed class D1DatabaseSession
 public sealed class D1ResultMetadata
 {
     public int Changes { get; init; }
+    public long LastRowId { get; init; }
+    public bool ChangedDb { get; init; }
+    public double Duration { get; init; }
+    public long RowsRead { get; init; }
+    public long RowsWritten { get; init; }
+    public long SizeAfter { get; init; }
+    public string? ServedByRegion { get; init; }
+    public string? ServedByColo { get; init; }
+    public bool? ServedByPrimary { get; init; }
+    public int? TotalAttempts { get; init; }
+    public D1Timings? Timings { get; init; }
+}
+
+public sealed class D1Timings
+{
+    public double SqlDurationMs { get; init; }
 }
 public readonly record struct D1Value(object? Value);

@@ -14,6 +14,11 @@ internal sealed partial class JavaScriptEmitter
         if (literal.IsKind(SyntaxKind.FalseLiteralExpression)) return "false";
         var type = _model.GetTypeInfo(literal).Type?.SpecialType ?? SpecialType.None;
         if (type is SpecialType.System_String or SpecialType.System_Char) return JsonSerializer.Serialize(literal.Token.ValueText);
+        // 64-bit integers are JavaScript numbers, so only literals in the safe integer range are exact.
+        if (type is SpecialType.System_Int64 or SpecialType.System_UInt64
+            && literal.Token.Value is long or ulong
+            && Convert.ToDecimal(literal.Token.Value, CultureInfo.InvariantCulture) is <= 9007199254740991m and >= -9007199254740991m)
+            return Convert.ToString(literal.Token.Value, CultureInfo.InvariantCulture)!;
         if (type is SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal) throw Unsupported("WRK108", literal);
         // A float value is the nearest single-precision number, so emit that exact double. This also
         // covers integer constants implicitly converted to float.

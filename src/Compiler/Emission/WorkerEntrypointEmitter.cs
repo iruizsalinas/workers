@@ -37,7 +37,7 @@ internal sealed partial class JavaScriptEmitter
             if (constructor?.ExpressionBody is not null)
                 _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
             else
-                foreach (var statement in constructor?.Body?.Statements ?? []) EmitStatement(statement, 2);
+                EmitStatements(constructor?.Body?.Statements ?? [], 2);
             _output.AppendLine("  }");
         }
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())

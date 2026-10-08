@@ -96,6 +96,12 @@ internal sealed partial class JavaScriptEmitter
                 EmitEmbedded(value.Statement, depth + 1);
                 _output.Append(indent).AppendLine("}");
                 break;
+            case UsingStatementSyntax { Declaration: { } resources } value:
+                _output.Append(indent).AppendLine("{");
+                EmitUsing(resources, value.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword),
+                    body => EmitEmbedded(value.Statement, body), depth + 1);
+                _output.Append(indent).AppendLine("}");
+                break;
             case ContinueStatementSyntax:
                 _output.Append(indent).AppendLine("continue;");
                 break;
@@ -109,7 +115,64 @@ internal sealed partial class JavaScriptEmitter
 
     private void EmitEmbedded(StatementSyntax statement, int depth)
     {
-        if (statement is BlockSyntax block) foreach (var child in block.Statements) EmitStatement(child, depth);
+        if (statement is BlockSyntax block) EmitStatements(block.Statements, depth);
         else EmitStatement(statement, depth);
     }
+
+    // A using declaration owns the rest of its block, so the remaining statements become the
+    // body of the try whose finally disposes the resource.
+    private void EmitStatements(IReadOnlyList<StatementSyntax> statements, int depth)
+    {
+        for (var index = 0; index < statements.Count; index++)
+        {
+            if (statements[index] is LocalDeclarationStatementSyntax { UsingKeyword.RawKind: not 0 } local)
+            {
+                var rest = statements.Skip(index + 1).ToArray();
+                EmitUsing(local.Declaration, local.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword),
+                    body => EmitStatements(rest, body), depth);
+                return;
+            }
+            EmitStatement(statements[index], depth);
+        }
+    }
+
+    private void EmitUsing(VariableDeclarationSyntax declaration, bool isAsync, Action<int> body, int depth, int index = 0)
+    {
+        if (index == declaration.Variables.Count)
+        {
+            body(depth);
+            return;
+        }
+        var indent = new string(' ', depth * 2);
+        var variable = declaration.Variables[index];
+        var local = (ILocalSymbol)_model.GetDeclaredSymbol(variable)!;
+        var name = UserIdentifier(local, variable.Identifier);
+        _output.Append(indent).Append("const ").Append(name).Append(" = ")
+            .Append(Expression(variable.Initializer!.Value)).AppendLine(";");
+        var dispose = DisposeInvocation(local.Type, name, isAsync, variable);
+        _output.Append(indent).AppendLine("try {");
+        EmitUsing(declaration, isAsync, body, depth + 1, index + 1);
+        _output.Append(indent).AppendLine("} finally {");
+        _output.Append(indent).Append("  if (").Append(name).Append(" != null) ")
+            .Append(isAsync ? "await " : "").Append(dispose).AppendLine(";");
+        _output.Append(indent).AppendLine("}");
+    }
+
+    private string DisposeInvocation(ITypeSymbol type, string receiver, bool isAsync, SyntaxNode source)
+    {
+        var method = (isAsync ? DisposeMethod(type, "System.IAsyncDisposable", "DisposeAsync") : null)
+            ?? DisposeMethod(type, "System.IDisposable", "Dispose");
+        if (method is not null && BindingIntrinsicRegistry.TryGet(method, out var intrinsic))
+            return EmitBindingIntrinsic(receiver, method, intrinsic, []);
+        if (method is { IsStatic: false } && IsUserInstanceType(method.ContainingType))
+            return $"{receiver}.{UserInstanceMethodName(method)}()";
+        if (method?.ContainingType.ToDisplayString() == "System.Threading.CancellationTokenSource")
+            return HelperInvocation(JavaScriptHelper.CancellationCancelAfter, [receiver, "-1"]);
+        throw Unsupported("WRK108", source);
+    }
+
+    private IMethodSymbol? DisposeMethod(ITypeSymbol type, string interfaceName, string methodName) =>
+        _compilation.GetTypeByMetadataName(interfaceName)?.GetMembers(methodName).SingleOrDefault() is { } member
+            ? type.FindImplementationForInterfaceMember(member) as IMethodSymbol
+            : null;
 }

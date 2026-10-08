@@ -198,6 +198,8 @@ internal sealed partial class JavaScriptEmitter
             return $"{Expression(member.Expression)}.{(property.Name == "Environment" ? "env" : "ctx")}";
         if (property?.ContainingType.ToDisplayString() == "Workers.KvListResult" && property.Name == "ListComplete")
             return $"{Expression(member.Expression)}.list_complete";
+        if (property?.ContainingType.ToDisplayString() is "Workers.D1ResultMetadata" or "Workers.D1Timings")
+            return $"{Expression(member.Expression)}.{SnakeCase(property.Name)}";
         if (property?.ContainingType.ToDisplayString() == "Workers.DurableObjectStorage" && property.Name == "Kv")
             return $"{Expression(member.Expression)}.kv";
         if (property?.ContainingType.ToDisplayString() == "System.Exception" && property.Name == "Message")

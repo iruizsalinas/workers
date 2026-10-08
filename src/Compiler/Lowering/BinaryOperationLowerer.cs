@@ -320,6 +320,10 @@ internal sealed partial class JavaScriptEmitter
         "static", "super", "switch", "this", "throw", "true", "try", "typeof", "var", "void", "while", "with", "yield"
     };
     private static string LowerFirst(string value) => value.Length == 0 ? value : char.ToLowerInvariant(value[0]) + value[1..];
+    private static string SnakeCase(string value) =>
+        string.Concat(value.Select((character, index) => char.IsUpper(character)
+            ? (index == 0 ? "" : "_") + char.ToLowerInvariant(character)
+            : character.ToString()));
     private static string LowerNativeMethodName(string value) => LowerFirst(
         value.EndsWith("Async", StringComparison.Ordinal) ? value[..^"Async".Length] : value);
     private static NotSupportedException Locate(NotSupportedException exception, SyntaxNode node) =>

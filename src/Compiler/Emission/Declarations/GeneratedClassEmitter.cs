@@ -34,7 +34,7 @@ internal sealed partial class JavaScriptEmitter
             if (constructor?.ExpressionBody is not null)
                 _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
             else
-                foreach (var statement in constructor?.Body?.Statements ?? []) EmitStatement(statement, 2);
+                EmitStatements(constructor?.Body?.Statements ?? [], 2);
             _output.AppendLine("  }");
         }
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())
@@ -48,7 +48,7 @@ internal sealed partial class JavaScriptEmitter
             if (method.ExpressionBody is not null)
                 _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
             else
-                foreach (var statement in method.Body?.Statements ?? []) EmitStatement(statement, 2);
+                EmitStatements(method.Body?.Statements ?? [], 2);
             _output.AppendLine("  }");
         }
         _output.AppendLine("}").AppendLine();
@@ -95,7 +95,7 @@ internal sealed partial class JavaScriptEmitter
         if (constructor?.ExpressionBody is not null)
             _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
         else
-            foreach (var statement in constructor?.Body?.Statements ?? []) EmitStatement(statement, 2);
+            EmitStatements(constructor?.Body?.Statements ?? [], 2);
         _output.AppendLine("  }");
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())
         {
@@ -127,12 +127,12 @@ internal sealed partial class JavaScriptEmitter
         }
         if (rpcValue is null)
         {
-            foreach (var statement in method.Body?.Statements ?? []) EmitStatement(statement, 2);
+            EmitStatements(method.Body?.Statements ?? [], 2);
             return;
         }
         var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);
         _output.Append("    return ").Append(rpcValue).AppendLine(isAsync ? "(await (async () => {" : "((() => {");
-        foreach (var statement in method.Body?.Statements ?? []) EmitStatement(statement, 3);
+        EmitStatements(method.Body?.Statements ?? [], 3);
         _output.AppendLine("    })());");
     }
 

@@ -80,6 +80,23 @@ public static class Worker
             });
         }
 
+        if (request.Path == "/d1-rows")
+        {
+            var filesDatabase = environment.D1("DB");
+            await filesDatabase.ExecAsync("CREATE TABLE IF NOT EXISTS files (id INTEGER PRIMARY KEY, name TEXT NOT NULL, data BLOB NOT NULL); DELETE FROM files;");
+            var inserted = await filesDatabase.Prepare("INSERT INTO files (name, data) VALUES (?, ?)").Bind("a.bin", new byte[] { 1, 2, 3 }).RunAsync();
+            var batch = await filesDatabase.BatchAsync<StoredFile>([filesDatabase.Prepare("SELECT id, name, data FROM files")]);
+            return Response.Json(new
+            {
+                lastRowId = inserted.Meta.LastRowId,
+                changes = inserted.Meta.Changes,
+                changedDb = inserted.Meta.ChangedDb,
+                rowsWritten = inserted.Meta.RowsWritten,
+                rowsRead = batch[0].Meta.RowsRead,
+                file = batch[0].Results[0].Describe()
+            });
+        }
+
         var database = environment.D1("DB");
         await database.ExecAsync("CREATE TABLE IF NOT EXISTS people (name TEXT NOT NULL); DELETE FROM people;");
         await database.Prepare("INSERT INTO people (name) VALUES (?)").Bind("Ada").RunAsync();
@@ -151,3 +168,8 @@ public sealed class EchoObject
 }
 
 public sealed record StoredValue(int Value);
+
+public sealed record StoredFile(int Id, string Name, byte[] Data)
+{
+    public string Describe() => $"{Id}:{Name}:{Convert.ToBase64String(Data)}";
+}

@@ -11,6 +11,17 @@ internal static partial class HelperSource
           if ((mode === 1 || mode === 3) && kind >= 2 && kind <= 4 && typeof value === "string"
             && /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/.test(value)) value = Number(value);
           if (mode === 2 && kind === 1 && (value === 0 || value === 1)) return value === 1;
+          // Database rows carry 64-bit and exact numerics as strings or bigints, and binary as buffers
+          // (or, from D1, as arrays of byte values).
+          if (mode === 2 && kind >= 2 && kind <= 4 && (typeof value === "bigint" || typeof value === "string"
+            && /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/.test(value))) value = Number(value);
+          if (mode === 2 && kind === 6 && (ArrayBuffer.isView(value) || value instanceof ArrayBuffer))
+            return ArrayBuffer.isView(value)
+              ? new Uint8Array(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength))
+              : new Uint8Array(value.slice(0));
+          if (mode === 2 && kind === 6 && Array.isArray(value)
+            && value.every(item => Number.isInteger(item) && item >= 0 && item <= 255))
+            return Uint8Array.from(value);
           if (kind === 0 && (value === null || typeof value === "string")) return value;
           if (kind === 1 && typeof value === "boolean") return value;
           if (kind === 2 && Number.isInteger(value) && value >= minimum && value <= maximum) return value;

@@ -8,6 +8,11 @@ for (const config of [
   "tests/runtime/vitest.chat.config.js",
   "tests/runtime/vitest.accumulator.config.js",
   "tests/runtime/vitest.services.config.js",
+  // Database drivers need real servers, provided through WORKERS_POSTGRES_URL, WORKERS_MYSQL_URL
+  // and WORKERS_MONGODB_URL.
+  ...(process.env.WORKERS_POSTGRES_URL || process.env.WORKERS_MYSQL_URL || process.env.WORKERS_MONGODB_URL
+    ? ["tests/runtime/vitest.databases.config.js"]
+    : []),
 ]) {
   const result = spawnSync(process.execPath, [vitest, "run", "--reporter", "minimal", "--config", config], {
     cwd: repositoryRoot,

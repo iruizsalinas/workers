@@ -137,8 +137,7 @@ internal sealed partial class JavaScriptEmitter
         if (staticConstructor?.ExpressionBody is not null)
             _output.Append("  ").Append(Expression(staticConstructor.ExpressionBody.Expression)).AppendLine(";");
         else
-            foreach (var statement in staticConstructor?.Body?.Statements ?? [])
-                EmitStatement(statement, 1);
+            EmitStatements(staticConstructor?.Body?.Statements ?? [], 1);
         _output.Append("  return ").Append(storage).AppendLine(";");
         _output.AppendLine("}").AppendLine();
     }
@@ -156,8 +155,7 @@ internal sealed partial class JavaScriptEmitter
         if (expression is not null)
             _output.Append("  return ").Append(Expression(expression)).AppendLine(";");
         else
-            foreach (var statement in getter?.Body?.Statements ?? [])
-                EmitStatement(statement, 1);
+            EmitStatements(getter?.Body?.Statements ?? [], 1);
         _output.AppendLine("}").AppendLine();
     }
 }

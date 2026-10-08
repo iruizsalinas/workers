@@ -16,7 +16,8 @@ internal static class BindingClassification
         "Workers.ImagesOutputOptions", "Workers.MediaOutputOptions", "Workers.VectorizeVector",
         "Workers.VectorizeQueryOptions", "Workers.DurableObjectStorageReadOptions", "Workers.DurableObjectStorageWriteOptions",
         "Workers.DurableObjectStorageListOptions", "Workers.DurableObjectKvListOptions", "Workers.ContainerStartOptions",
-        "Workers.ContainerExecOptions", "Workers.TcpSocketAddress", "Workers.TcpSocketOptions"
+        "Workers.ContainerExecOptions", "Workers.TcpSocketAddress", "Workers.TcpSocketOptions",
+        "Workers.MongoFindOptions", "Workers.MongoUpdateOptions"
     ];
 
     private static readonly HashSet<(string Type, string Method)> SpecialMethods =

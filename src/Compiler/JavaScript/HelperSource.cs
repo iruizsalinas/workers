@@ -30,6 +30,8 @@ internal static partial class HelperSource
         JavaScriptHelper.JsonDeserializeValue => JsonDeserializeValue(name),
         JavaScriptHelper.JsonSerializeClr => JsonSerializeClr(name),
         JavaScriptHelper.SqlStatement => SqlStatement(name),
+        JavaScriptHelper.SqlParameters => SqlParameters(name),
+        JavaScriptHelper.MongoValues => MongoValues(name),
         JavaScriptHelper.NumberText => NumberText(name),
         JavaScriptHelper.StringCase => StringCase(name),
         JavaScriptHelper.TryCall => TryCall(name),

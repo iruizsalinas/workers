@@ -48,6 +48,8 @@ internal sealed partial class JavaScriptEmitter
             ("Workers.D1PreparedStatement", "FirstAsync") => Then(Converter(JsonRowMode, hasColumn)),
             ("Workers.D1PreparedStatement", "AllAsync") =>
                 ThenMap(Converter(JsonRowMode, false), "(value.results = value.results.map({0}), value)"),
+            ("Workers.ID1Database" or "Workers.D1DatabaseSession", "BatchAsync") =>
+                ThenMap(Converter(JsonRowMode, false), "value.map(result => (result.results = result.results.map({0}), result))"),
             ("Workers.DurableObjectStorage" or "Workers.DurableObjectTransaction", "GetAsync")
                 when method.Parameters[0].Type.SpecialType == SpecialType.System_String =>
                 Then(Converter(JsonRowMode, true)),
@@ -59,6 +61,10 @@ internal sealed partial class JavaScriptEmitter
             ("Workers.DurableObjectSqlCursor<T>", "ToArray" or "ReadAllAsync") =>
                 Converter(JsonRowMode, false) is { } rows ? $"{result}.map({rows})" : result,
             ("Workers.DurableObjectSqlCursor<T>", "NextAsync") => Call(Converter(JsonRowMode, false)),
+            ("Workers.PostgresClient" or "Workers.MySqlClient", "QueryAsync")
+                or ("Workers.MongoCollection<T>", "FindAsync" or "AggregateAsync") =>
+                ThenMap(Converter(JsonRowMode, false), "value.map({0})"),
+            ("Workers.MongoCollection<T>", "FindOneAsync") => Then(Converter(JsonRowMode, false)),
             _ => result
         };
     }
@@ -160,6 +166,10 @@ internal sealed partial class JavaScriptEmitter
             // Every name maps to all of its values; scalar members take the first one.
             BindingIntrinsicKind.QueryAs =>
                 $"((parameters) => Object.fromEntries(Array.from(new Set(parameters.keys()), name => [name, parameters.getAll(name)])))({receiver})",
+            BindingIntrinsicKind.DatabaseConnect => EmitDatabaseConnect(intrinsic.JavascriptName, method, arguments),
+            BindingIntrinsicKind.SqlQuery => EmitSqlQuery(receiver, method, intrinsic.JavascriptName, arguments),
+            BindingIntrinsicKind.MongoOperation => EmitMongoOperation(receiver, intrinsic.JavascriptName, arguments, cancellation),
+            BindingIntrinsicKind.MongoObjectId => $"new {_imports.Require("mongodb", "ObjectId", "ObjectId")}({arguments[0].Value})",
             _ => throw new InvalidOperationException($"Unknown binding intrinsic kind '{intrinsic.Kind}'.")
         };
         return cancellation is null

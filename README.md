@@ -59,6 +59,25 @@ Familiar C# APIs such as `Task`, `Console`, `Guid`, and `DateTimeOffset` are sup
 
 See [Compatibility](./COMPATIBILITY.md) for an overview of the supported C# language, .NET API, and Cloudflare Workers profiles.
 
+## Databases
+
+PostgreSQL, MySQL, and MongoDB clients map directly to the drivers Cloudflare recommends for Workers. They cover Hyperdrive and services such as Neon, Supabase, PlanetScale, Xata, TiDB Cloud, and MongoDB Atlas.
+
+| Client | npm package | Parameters |
+| --- | --- | --- |
+| `PostgresClient` | `pg` | `$1`, `$2`, ... |
+| `MySqlClient` | `mysql2` | `?` |
+| `MongoClient` | `mongodb` | Filter objects |
+
+Install the package next to your project with `npm install pg`, and enable `"compatibility_flags": ["nodejs_compat"]` in your Wrangler configuration. Wrangler bundles the driver when it deploys `dist/worker.js`.
+
+`mysql2` cannot negotiate TLS inside Workers, so connect to MySQL services that require it, such as PlanetScale and TiDB Cloud, through Hyperdrive. PostgreSQL and MongoDB support TLS directly, including `mongodb+srv://` connection strings.
+
+```csharp
+await using var db = await PostgresClient.ConnectAsync(env.Hyperdrive("HYPERDRIVE"));
+var users = await db.QueryAsync<User>("select id, name from users where team = $1", [teamId]);
+```
+
 ## Version 0.3
 
 Versions through `0.2.0` ran .NET on WebAssembly and supported managed assemblies and compatible NuGet packages. Every Worker also had to ship and initialize the .NET runtime, framework files, and a JavaScript interoperability adapter, resulting in large bundles, slow startup, and high CPU usage.

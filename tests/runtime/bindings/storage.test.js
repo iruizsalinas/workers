@@ -60,6 +60,19 @@ describe("native storage bindings", () => {
       hasBookmark: true,
     });
   });
+
+  it("reads D1 metadata and materializes typed batch rows with blobs", async () => {
+    const response = await invokeNative("/d1-rows");
+
+    await expect(response.json()).resolves.toEqual({
+      lastRowId: 1,
+      changes: 1,
+      changedDb: true,
+      rowsWritten: 1,
+      rowsRead: 1,
+      file: "1:a.bin:AQID",
+    });
+  });
   it("reads text from the local KV simulator and handles misses", async () => {
     const key = `key-${crypto.randomUUID()}`;
     await env.KV.put(key, "stored value");

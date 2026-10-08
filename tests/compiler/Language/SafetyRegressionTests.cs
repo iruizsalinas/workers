@@ -61,16 +61,21 @@ public sealed class SafetyRegressionTests
     }
 
     [Fact]
-    public void RejectsUsingUntilDisposalSemanticsAreImplemented()
+    public void RejectsUsingResourcesWithoutAMappedDisposal()
     {
         var error = Assert.Throws<NotSupportedException>(() => Compile("""
+            using System;
             using Workers;
+            public sealed class Lease : IDisposable
+            {
+                public void Dispose() { }
+            }
             public static class Worker
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context)
                 {
-                    using var stream = new MemoryStream();
+                    using IDisposable lease = new Lease();
                     return Response.Text("ok");
                 }
             }

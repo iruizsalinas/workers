@@ -65,6 +65,8 @@ internal sealed partial class JavaScriptEmitter
             ("Cancel", 0) => $"{receiver}.abort()",
             ("CancelAfter", 1) when method.Parameters[0].Type.SpecialType == SpecialType.System_Int32 =>
                 HelperInvocation(JavaScriptHelper.CancellationCancelAfter, [receiver, arguments[0]]),
+            // Disposing releases a pending CancelAfter timer without canceling the token.
+            ("Dispose", 0) => HelperInvocation(JavaScriptHelper.CancellationCancelAfter, [receiver, "-1"]),
             _ => throw UnsupportedSymbol(method, source)
         };
 

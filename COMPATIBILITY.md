@@ -18,6 +18,7 @@ This is a quick overview, not a list of every overload. If something is unsuppor
 | Events | Fetch, scheduled, queue, email, and tail handlers | 🟢 |
 | Storage | KV, R2, and Cache | 🟢 |
 | Data | D1 and Hyperdrive | 🟢 |
+| Databases | PostgreSQL, MySQL, and MongoDB clients mapped to `pg`, `mysql2`, and `mongodb` | 🔵 |
 | Durable Objects | Bindings, storage, alarms, SQL, WebSockets, and containers | 🟢 |
 | Messaging | Queues and email bindings | 🟢 |
 | Services | Service bindings, dynamic dispatch, RPC, and Worker entrypoints | 🟢 |
@@ -38,6 +39,7 @@ The API follows Cloudflare's runtime closely. A few methods are left out when wo
 | Classes, records, constructors, fields, and instance methods | 🟢 | Records include value equality, `with`, and `ToString()` |
 | Static fields, properties, and constructors | 🟢 | Initialized lazily on first use, like the CLR |
 | Async methods, `await`, and iterators | 🟢 | Sync and async iterators are supported |
+| `using` and `await using` | 🔵 | Workers clients, `CancellationTokenSource`, and Worker types with a `Dispose` or `DisposeAsync` method |
 | Properties and object initializers | 🔵 | Auto, init, and getter-only computed properties |
 | Exceptions and control flow | 🔵 | Custom exceptions, typed `catch` clauses, and `when` filters |
 | Pattern matching and `switch` expressions | 🔵 | Type, constant, relational, logical, property, positional, and list patterns |
@@ -71,6 +73,8 @@ Supporting a type does not mean every constructor, method, or overload is availa
 - **String ordering.** Ordering by a string key needs `StringComparer.Ordinal` or `StringComparer.OrdinalIgnoreCase`, because the .NET default comparison is culture-aware.
 - **JSON contracts.** Workers APIs such as `Request.JsonAsync<T>`, `Response.Json`, KV JSON values, and query binding use web conventions: camelCase names, case-insensitive matching, and numbers given as strings. `JsonSerializer` keeps the .NET defaults: exact property names and strict number handling.
 - **Dictionary order.** Dictionaries are JavaScript objects, so keys that look like array indexes (`"1"`, `"42"`) are enumerated first, in numeric order, followed by the other keys in insertion order.
+- **Database rows.** Rows from D1, Durable Object SQL, and the database clients map to classes and records by case-insensitive column name. 64-bit and exact numerics returned as strings convert to numeric members when they fit, and binary columns convert to `byte[]`. MongoDB ObjectIds are read as hexadecimal strings: map `_id` with `[JsonPropertyName("_id")]` and filter with `MongoClient.ObjectId(id)`.
+- **Database cancellation.** MongoDB reads (`FindAsync`, `FindOneAsync`, `CountDocumentsAsync`, `AggregateAsync`) are aborted when their token is canceled. PostgreSQL, MySQL, and MongoDB writes check the token before they start, because the drivers cannot abandon a statement in flight.
 - **RPC values.** Class and record instances passed to or returned from RPC methods arrive as plain data. Their properties are kept but their methods are not.
 
 ## Contributing

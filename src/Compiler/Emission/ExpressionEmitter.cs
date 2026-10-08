@@ -225,8 +225,7 @@ internal sealed partial class JavaScriptEmitter
     private string LambdaBlock(BlockSyntax block)
     {
         var start = _output.Length;
-        foreach (var statement in block.Statements)
-            EmitStatement(statement, 1);
+        EmitStatements(block.Statements, 1);
         var statements = _output.ToString(start, _output.Length - start).TrimEnd();
         _output.Length = start;
         return statements.Length == 0 ? "{}" : $"{{\n{statements}\n}}";

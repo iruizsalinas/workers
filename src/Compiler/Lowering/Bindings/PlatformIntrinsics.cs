@@ -43,6 +43,7 @@ PlatformIntrinsics
             [Key("Workers.IVectorizeIndex", "DescribeAsync")] = Direct("describe"),
             [Key("Workers.ISecretStoreBinding", "GetAsync")] = Direct("get"),
             [Key("Workers.IHyperdriveBinding", "GetConnectionInfoAsync")] = new("", BindingIntrinsicKind.Identity),
+            [Key("Workers.IHyperdriveBinding", "Connect")] = Direct("connect"),
             [Key("Workers.RpcStub", "DisposeAsync")] = new("", BindingIntrinsicKind.Dispose),
             [Key("Workers.ForwardableEmailMessage", "Reject")] = Direct("setReject"),
             [Key("Workers.ForwardableEmailMessage", "ForwardAsync")] = Direct("forward"),

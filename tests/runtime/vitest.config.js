@@ -15,6 +15,7 @@ export default defineConfig({
       "tests/runtime/scenarios/chat.test.js",
       "tests/runtime/scenarios/accumulator.test.js",
       "tests/runtime/scenarios/services.test.js",
+      "tests/runtime/scenarios/databases.test.js",
     ],
   },
 });

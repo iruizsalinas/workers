@@ -12,6 +12,8 @@ internal sealed partial class JavaScriptEmitter
         if (type.TypeKind == TypeKind.Enum || type.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Double)
             return "0";
         if (type.ToDisplayString() == "System.Guid") return "\"00000000-0000-0000-0000-000000000000\"";
+        if (type.ToDisplayString() is "System.DateTimeOffset" or "System.DateTime") return "new Date(-62135596800000)";
+        if (type.ToDisplayString() == "System.TimeSpan") return "0";
         // default(JsonElement) has ValueKind Undefined, which the JsonElement helpers report for undefined.
         if (type.ToDisplayString() == "System.Text.Json.JsonElement") return "undefined";
         throw Unsupported("WRK108", source);
@@ -27,7 +29,7 @@ internal sealed partial class JavaScriptEmitter
         if (method.ExpressionBody is not null)
             _output.Append("  return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
         else
-            foreach (var statement in method.Body?.Statements ?? []) EmitStatement(statement, 1);
+            EmitStatements(method.Body?.Statements ?? [], 1);
         _output.AppendLine("}").AppendLine();
     }
 
@@ -69,7 +71,7 @@ internal sealed partial class JavaScriptEmitter
             if (declaration.ExpressionBody is not null)
                 _output.Append("  return ").Append(Expression(declaration.ExpressionBody.Expression)).AppendLine(";");
             else
-                foreach (var statement in declaration.Body?.Statements ?? []) EmitStatement(statement, 1);
+                EmitStatements(declaration.Body?.Statements ?? [], 1);
             _output.AppendLine("}").AppendLine();
         }
     }

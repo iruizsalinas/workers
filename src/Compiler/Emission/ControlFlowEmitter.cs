@@ -80,8 +80,7 @@ internal sealed partial class JavaScriptEmitter
                 };
                 _output.Append("case ").Append(condition).AppendLine(":");
             }
-            foreach (var child in section.Statements)
-                EmitStatement(child, depth + 2);
+            EmitStatements(section.Statements, depth + 2);
         }
         _output.Append(indent).AppendLine("}");
     }
@@ -139,8 +138,7 @@ internal sealed partial class JavaScriptEmitter
                 else
                     throw Unsupported("WRK100", label);
             }
-            foreach (var child in section.Statements)
-                EmitStatement(child, depth + 2);
+            EmitStatements(section.Statements, depth + 2);
         }
         _output.Append(indent).AppendLine("}");
     }
