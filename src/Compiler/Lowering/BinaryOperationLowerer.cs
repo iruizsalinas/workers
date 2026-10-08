@@ -35,7 +35,7 @@ internal sealed partial class JavaScriptEmitter
         if (operation?.OperatorMethod is { } recordOperator && IsSynthesizedRecordMember(recordOperator)
             && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
         {
-            var equals = RecordEquals(recordOperator.ContainingType, Expression(expression.Left), Expression(expression.Right), expression);
+            var equals = RecordEquals(recordOperator.ContainingType, Expression(expression.Left), Expression(expression.Right), expression, referenceComparison: true);
             return expression.IsKind(SyntaxKind.EqualsExpression) ? equals : $"!{equals}";
         }
         if (operation?.OperatorMethod is not null)

@@ -51,7 +51,7 @@ internal sealed partial class JavaScriptEmitter
                 ("RemoveAt", 1) => Helper("listRemoveAt", receiver, arguments[0]),
                 ("Insert", 2) => Helper("listInsert", receiver, arguments[0], arguments[1]),
                 ("Clear", 0) => $"({receiver}.length = 0, undefined)",
-                ("AddRange", 1) => $"{receiver}.push(...Array.from({_helpers.Require(JavaScriptHelper.LinqValues)}({arguments[0]})))",
+                ("AddRange", 1) => Helper("listAddRange", receiver, arguments[0]),
                 ("RemoveAll", 1) => Helper("listRemoveAll", receiver, arguments[0]),
                 ("Find", 1) => $"(({receiver}).find({arguments[0]}) ?? {DefaultValueText(element, source)})",
                 ("FindAll", 1) => $"{receiver}.filter({arguments[0]})",

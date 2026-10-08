@@ -131,7 +131,7 @@ internal sealed partial class JavaScriptEmitter
         if (kind < 0) throw UnsupportedSymbol(method, sourceNode);
         return Linq(JavaScriptHelper.LinqNumericAggregate, source,
             [method.Name == "Sum" ? "0" : "1", arguments.Length == 0 ? "null" : arguments[0],
-                kind.ToString(), IsNullable(method.ReturnType) ? "true" : "false"]);
+                kind.ToString(), IsNullable(method.ReturnType) ? "true" : "false", arguments.Length == 1 ? "true" : "false"]);
     }
 
     private string LinqExtremum(
@@ -150,10 +150,12 @@ internal sealed partial class JavaScriptEmitter
         var kind = GetLinqOrderKeyKind(keyType);
         if (kind is null) throw UnsupportedSymbol(method, sourceNode);
         var canBeNull = IsNullable(method.ReturnType) || method.ReturnType.IsReferenceType;
+        var floating = (UnwrapNullable(keyType).SpecialType is SpecialType.System_Single or SpecialType.System_Double)
+            && method.OriginalDefinition.ReturnType.TypeKind != TypeKind.TypeParameter;
         return Linq(JavaScriptHelper.LinqExtremum, source,
             [hasSelector ? arguments[0] : "null", method.Name.StartsWith("Max", StringComparison.Ordinal) ? "true" : "false",
                 ((int)kind).ToString(), canBeNull ? "true" : "false", by ? "true" : "false",
-                hasSelector && !by ? "true" : "false"]);
+                hasSelector && !by ? "true" : "false", floating ? "true" : "false"]);
     }
 
     private string LinqSet(
@@ -171,7 +173,7 @@ internal sealed partial class JavaScriptEmitter
         var mode = method.Name.StartsWith("Union", StringComparison.Ordinal) ? 0
             : method.Name.StartsWith("Intersect", StringComparison.Ordinal) ? 1 : 2;
         return Linq(JavaScriptHelper.LinqSet, source,
-            [arguments[0], by ? arguments[1] : "null", mode.ToString(), by && mode != 0 ? "true" : "false"]);
+            [arguments[0], by ? arguments[1] : "null", mode.ToString(), by && mode != 0 ? "true" : "false", by ? "true" : "false"]);
     }
 
     private string LinqDefaultIfEmpty(
@@ -204,7 +206,7 @@ internal sealed partial class JavaScriptEmitter
             throw UnsupportedSymbol(method, sourceNode);
         return Linq(JavaScriptHelper.LinqAggregate, source,
             [arguments[accumulatorIndex], seedless ? "null" : arguments[0], seedless ? "false" : "true",
-                arguments.Length == 3 ? arguments[2] : "null"]);
+                arguments.Length == 3 ? arguments[2] : "null", arguments.Length == 3 ? "true" : "false"]);
     }
 
     private string LinqJoin(

@@ -14,6 +14,14 @@ public static class Worker
             return await InspectCloneAsync(request);
         if (request.Path == "/decompress" && request.Method == "POST")
             return await DecompressAsync(request);
+        if (request.Path == "/fingerprint" && request.Method == "POST")
+            return await FingerprintAsync(request);
+        if (request.Path == "/preview" && request.Method == "POST")
+            return await PreviewAsync(request);
+        if (request.Path == "/remainder" && request.Method == "POST")
+            return await RemainderAsync(request);
+        if (request.Path == "/verify" && request.Method == "POST")
+            return await VerifyAsync(request);
         if (request.Path == "/stream")
             return Stream(request);
         return Response.Text("Not found", 404);
@@ -54,6 +62,66 @@ public static class Worker
         if (body is null)
             return Response.Text("Missing body", 400);
         return Response.Json(new { decompressed = await Response.FromStream(body.Decompress(CompressionFormat.Gzip)).TextAsync() });
+    }
+
+    private static async Task<Response> FingerprintAsync(Request request)
+    {
+        var digest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, request.Body);
+        var emptyDigest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, Body.Empty);
+        var calls = new int[2];
+        var generatedDigest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, CreateBody(calls));
+        var byteDigest = await Crypto.DigestBytesAsync(DigestAlgorithm.Sha256, CreateBytes(calls));
+        return Response.Json(new
+        {
+            sha256 = Convert.ToHexString(digest),
+            emptySha256 = Convert.ToHexString(emptyDigest),
+            generatedSha256 = Convert.ToHexString(generatedDigest),
+            byteSha256 = Convert.ToHexString(byteDigest),
+            factoryCalls = calls[0],
+            byteFactoryCalls = calls[1]
+        });
+    }
+
+    private static Body CreateBody(int[] calls)
+    {
+        calls[0] = calls[0] + 1;
+        return Body.Text("generated");
+    }
+
+    private static byte[] CreateBytes(int[] calls)
+    {
+        calls[1] = calls[1] + 1;
+        return Encoding.UTF8.GetBytes("generated");
+    }
+
+    private static async Task<Response> PreviewAsync(Request request)
+    {
+        var stream = request.BodyStream();
+        if (stream is null)
+            return Response.Text("Missing body", 400);
+        var first = await stream.ReadAsync();
+        await stream.CancelAsync();
+        return Response.Json(new { first.Done, preview = TextCodec.DecodeUtf8(first.Bytes) });
+    }
+
+    private static async Task<Response> RemainderAsync(Request request)
+    {
+        var stream = request.BodyStream();
+        if (stream is null)
+            return Response.Text("Missing body", 400);
+        var first = await stream.ReadAsync();
+        var remainder = await stream.ReadAllBytesAsync();
+        return Response.Json(new { first = TextCodec.DecodeUtf8(first.Bytes), remainder = TextCodec.DecodeUtf8(remainder) });
+    }
+
+    private static async Task<Response> VerifyAsync(Request request)
+    {
+        var payload = await request.BytesAsync();
+        var signature = Convert.FromHexString(request.Headers.Get("x-signature") ?? "");
+        var pending = Crypto.VerifyHmacSha256Async("body-signing-secret", signature, payload);
+        signature = new byte[signature.Length];
+        payload = Encoding.UTF8.GetBytes("changed");
+        return Response.Json(new { valid = await pending });
     }
 
     private static Response Stream(Request request)

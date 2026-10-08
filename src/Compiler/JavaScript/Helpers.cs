@@ -1,6 +1,6 @@
 internal enum JavaScriptHelper
 {
-    WithHeader, Delay, CancellationCheck, CancellationDelay, CancellationCancelAfter,
+    WithHeader, Delay, TaskWhenAll, CancellationCheck, CancellationDelay, CancellationCancelAfter,
     Stream, Socket, Digest, WebSocketEvents, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
     RandomNext, SetAdd, QueueStack, Base64, RpcArguments, HexDecode, EscapeDataString, JsonElementToString,
     JsonElementValueKind, JsonElementGetValue, JsonElementGetProperty, JsonElementGetIndex, JsonDeserializeValue, JsonSerializeClr, SqlStatement, SqlParameters, MongoValues, NumberText, StringCase, TryCall, CollectionMembers, DateFormat,
@@ -31,11 +31,9 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
         }
         if (helper == JavaScriptHelper.DateTimeDaysInMonth)
             _required.Add(JavaScriptHelper.DateTimeIsLeapYear);
-        if (helper == JavaScriptHelper.NumericFormat)
-            _required.Add(JavaScriptHelper.MathRound);
         if (helper == JavaScriptHelper.JsonSerializeClr)
             _required.Add(JavaScriptHelper.NumberText);
-        if (helper == JavaScriptHelper.CollectionMembers)
+        if (helper is JavaScriptHelper.CollectionMembers or JavaScriptHelper.QueueStack)
             _required.Add(JavaScriptHelper.LinqValues);
         if (helper.IsLinqOperator())
             _required.Add(JavaScriptHelper.LinqValues);
@@ -53,6 +51,7 @@ internal static class JavaScriptHelperExtensions
     {
         JavaScriptHelper.WithHeader => "withHeader",
         JavaScriptHelper.Delay => "delay",
+        JavaScriptHelper.TaskWhenAll => "taskWhenAll",
         JavaScriptHelper.CancellationCheck => "cancellationCheck",
         JavaScriptHelper.CancellationDelay => "cancellationDelay",
         JavaScriptHelper.CancellationCancelAfter => "cancellationCancelAfter",

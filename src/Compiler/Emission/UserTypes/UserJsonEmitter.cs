@@ -32,6 +32,13 @@ internal sealed partial class JavaScriptEmitter
         if (!constructible)
             throw new NotSupportedException(
                 $"WRK119: User type '{type}' needs a parameterless constructor for JSON deserialization.");
+        foreach (var property in type.GetMembers().OfType<IPropertySymbol>().Where(property =>
+                     property.DeclaredAccessibility == Accessibility.Public && IsJsonRequired(property, type)))
+            if (property.DeclaredAccessibility != Accessibility.Public || property.GetMethod is null
+                || property.SetMethod?.DeclaredAccessibility != Accessibility.Public
+                || HasAttribute(property, "System.Text.Json.Serialization.JsonIgnoreAttribute"))
+                throw new NotSupportedException(
+                    $"WRK119: Required JSON property '{property}' must be public, writable and included in the JSON contract.");
         QueueUserType(type, source);
         _jsonMaterializedUserTypes.Add(type);
         if (strict) _jsonStrictUserTypes.Add(type);
@@ -125,6 +132,11 @@ internal sealed partial class JavaScriptEmitter
         _output.AppendLine("    if (typeof value !== \"object\" || Array.isArray(value)) throw new TypeError(\"Expected a JSON object.\");");
         _helpers.Require(JavaScriptHelper.JsonDeserializeValue);
         _output.Append("    const source = mode === 0 ? value : ").Append(_helpers.Name("jsonFold")).AppendLine("(value);");
+        foreach (var property in JsonContractProperties(type).Where(property => IsJsonRequired(property, type)))
+            _output.Append("    if (!Object.hasOwn(source, ").Append(JsonReadKey(property))
+                .Append(")) throw new TypeError(")
+                .Append(JsonSerializer.Serialize($"Required JSON property '{property.Name}' is missing."))
+                .AppendLine(");");
         var arguments = declaration is RecordDeclarationSyntax { ParameterList: { } parameters }
             ? parameters.Parameters.Select(parameter =>
             {
@@ -222,9 +234,19 @@ internal sealed partial class JavaScriptEmitter
 
     private static List<IPropertySymbol> JsonContractProperties(INamedTypeSymbol type) =>
         type.GetMembers().OfType<IPropertySymbol>()
-            .Where(property => property.DeclaredAccessibility == Accessibility.Public && property.GetMethod is not null
-                && !HasAttribute(property, "System.Text.Json.Serialization.JsonIgnoreAttribute"))
+            .Where(IsJsonContractProperty)
             .ToList();
+
+    private static bool IsJsonContractProperty(IPropertySymbol property) =>
+        property.DeclaredAccessibility == Accessibility.Public && !property.IsStatic && property.GetMethod is not null
+        && !HasAttribute(property, "System.Text.Json.Serialization.JsonIgnoreAttribute");
+
+    // Record copy constructors set required members, but are not JSON constructors.
+    private static bool IsJsonRequired(IPropertySymbol property, INamedTypeSymbol type) =>
+        HasAttribute(property, "System.Text.Json.Serialization.JsonRequiredAttribute")
+        || property.IsRequired && !type.InstanceConstructors.Any(constructor => !constructor.IsImplicitlyDeclared
+            && !IsUserRecordCopyConstructor(constructor)
+            && HasAttribute(constructor, "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute"));
 
     private static void ValidateJsonAttributes(INamedTypeSymbol type)
     {
@@ -241,6 +263,8 @@ internal sealed partial class JavaScriptEmitter
                     && attribute.NamedArguments.Length == 0,
                 "JsonIgnoreAttribute" => attribute.ConstructorArguments.Length == 0
                     && attribute.NamedArguments.Length == 0,
+                "JsonRequiredAttribute" => attribute.ConstructorArguments.Length == 0
+                    && attribute.NamedArguments.Length == 0,
                 _ => false
             };
             if (!supported)
@@ -249,7 +273,7 @@ internal sealed partial class JavaScriptEmitter
         }
 
         var properties = type.GetMembers().OfType<IPropertySymbol>()
-            .Where(property => !HasAttribute(property, "System.Text.Json.Serialization.JsonIgnoreAttribute"))
+            .Where(IsJsonContractProperty)
             .Select(property => new
         {
             Property = property,

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../../differential/VerificationAsyncScenarios.cs" Link="VerificationAsyncScenarios.cs" />
+    <Compile Include="../../../differential/VerificationTaskReviewScenarios.cs" Link="VerificationTaskReviewScenarios.cs" />
+    <ProjectReference Include="../../../../src/Workers.csproj" />
+    <ProjectReference Include="../../../../src/Compiler/Compiler.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+  <Import Project="../../../../src/Build/Workers.targets" />
+</Project>

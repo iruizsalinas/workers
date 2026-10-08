@@ -7,6 +7,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../../differential/ApplicationScenarios.cs" Link="ApplicationScenarios.cs" />
+    <Compile Include="../../../differential/JsonApplicationScenarios.cs" Link="JsonApplicationScenarios.cs" />
+    <Compile Include="../../../differential/CollectionScenarios.cs" Link="CollectionScenarios.cs" />
+    <Compile Include="../../../differential/ApplicationLanguageScenarios.cs" Link="ApplicationLanguageScenarios.cs" />
+    <Compile Include="../../../differential/VerificationJsonScenarios.cs" Link="VerificationJsonScenarios.cs" />
+    <Compile Include="../../../differential/VerificationNumericScenarios.cs" Link="VerificationNumericScenarios.cs" />
+    <Compile Include="../../../differential/VerificationCollectionScenarios.cs" Link="VerificationCollectionScenarios.cs" />
     <Compile Include="../../../differential/Regressions.cs" Link="Regressions.cs" />
     <Compile Include="../../../differential/RegressionsLanguage.cs" Link="RegressionsLanguage.cs" />
     <ProjectReference Include="../../../../src/Workers.csproj" />

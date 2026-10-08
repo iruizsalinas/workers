@@ -5,6 +5,19 @@ object result = args.Contains("--applications")
     {
         Inventory = ApplicationScenarios.Inventory(),
         Reporting = ApplicationScenarios.Reporting(),
+        CollectionApplications = CollectionScenarios.Run(),
+        TelemetryExports = JsonApplicationScenarios.TelemetryExports(),
+        ConstructorContracts = JsonApplicationScenarios.ConstructorContracts(),
+        Language = ApplicationLanguageScenarios.Run(),
+        VerificationAsync = await VerificationAsyncScenarios.RunAsync(),
+        TaskReview = await TaskReviewScenarios.RunAsync(),
+        VerificationJson = VerificationJsonScenarios.Run(),
+        NumericVerification = VerificationNumericScenarios.Run(),
+        CollectionVerification = VerificationCollectionScenarios.Run(),
+        VerificationWeb = VerificationJsonScenarios.ConfigCases()
+            .Select(json => new { Json = json, Result = VerificationJsonScenarios.ReadWebOnClr(json) }).ToArray(),
+        Provisioning = JsonApplicationScenarios.ProvisioningCases()
+            .Select(json => new { Json = json, Result = JsonApplicationScenarios.Provision(json) }).ToArray(),
         Regressions = RegressionScenarios.Run(),
         JsonAudit = ApplicationScenarios.JsonAuditCases()
             .Select(json => new { Json = json, Result = ApplicationScenarios.AuditJson(json) }).ToArray(),

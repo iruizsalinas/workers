@@ -5,6 +5,54 @@ import worker from "../fixtures/BodyPipeline/dist/worker.js";
 const invoke = (path, init) => worker.fetch(new Request(`https://worker.test${path}`, init), {}, createExecutionContext());
 
 describe("request body pipeline", () => {
+  it("fingerprints empty and populated uploads without evaluating body factories twice", async () => {
+    const digest = async text => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))),
+      byte => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+    const emptyDigest = await digest("");
+    const generatedDigest = await digest("generated");
+    for (const body of [undefined, "", "héllo"]) {
+      const response = await invoke("/fingerprint", { method: "POST", body });
+      await expect(response.json()).resolves.toEqual({
+        sha256: await digest(body ?? ""), emptySha256: emptyDigest, generatedSha256: generatedDigest,
+        byteSha256: generatedDigest, factoryCalls: 1, byteFactoryCalls: 1,
+      });
+    }
+  });
+
+  it("cancels an upload after reading a bounded preview", async () => {
+    let cancelled = false;
+    const body = new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode("preview")); },
+      cancel() { cancelled = true; },
+    });
+    const response = await invoke("/preview", { method: "POST", body });
+    await expect(response.json()).resolves.toEqual({ done: false, preview: "preview" });
+    expect(cancelled).toBe(true);
+  });
+
+  it("consumes the remaining upload bytes after inspecting the first chunk", async () => {
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("id,name\n"));
+        controller.enqueue(new TextEncoder().encode("1,one\n"));
+        controller.enqueue(new TextEncoder().encode("2,two\n"));
+        controller.close();
+      },
+    });
+    const response = await invoke("/remainder", { method: "POST", body });
+    await expect(response.json()).resolves.toEqual({ first: "id,name\n", remainder: "1,one\n2,two\n" });
+  });
+
+  it("captures signed upload data when verification starts", async () => {
+    const body = "signed payload";
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode("body-signing-secret"),
+      { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body))),
+      byte => byte.toString(16).padStart(2, "0")).join("");
+    const response = await invoke("/verify", { method: "POST", body, headers: { "x-signature": signature } });
+    await expect(response.json()).resolves.toEqual({ valid: true });
+  });
+
   it("reads multipart fields and file metadata with a bounded preview", async () => {
     const form = new FormData();
     form.append("title", "example");

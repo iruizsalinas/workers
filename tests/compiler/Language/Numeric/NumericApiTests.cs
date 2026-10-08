@@ -85,8 +85,8 @@ public sealed class NumericApiTests
             }
             """);
 
-        Assert.Contains("if (base <= 0 || base === 1 || !Number.isFinite(base)) return NaN;", module);
-        Assert.Contains("$workers$mathRound(value, precision, kind === 2 ? 6 : 15).toFixed(precision)", module);
+        Assert.Contains("if (base === 1 || value !== 1 && (base === 0 || base === Infinity)) return NaN;", module);
+        Assert.Contains("$workers$numericFixed(value, precision, code === \"P\" ? 2 : 0)", module);
     }
 
     [Theory]
@@ -109,4 +109,3 @@ public sealed class NumericApiTests
         Assert.StartsWith("WRK105:", error.Message);
     }
 }
-

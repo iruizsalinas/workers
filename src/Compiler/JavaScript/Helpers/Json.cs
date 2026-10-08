@@ -34,10 +34,21 @@ internal static partial class HelperSource
               throw new TypeError("Invalid JSON base64 value.");
             return Uint8Array.from(atob(base64), character => character.charCodeAt(0));
           }
-          if (kind === 7 && (mode === 2 && value instanceof Date || typeof value === "string"
-            && /^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:T[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?)?$/.test(value))) {
-            const date = new Date(value);
-            if (!Number.isNaN(date.getTime())) return date;
+          if (kind === 7) {
+            if (mode === 2 && value instanceof Date && !Number.isNaN(value.getTime())) return new Date(value);
+            const parts = typeof value === "string" && /^([0-9]{4})-([0-9]{2})-([0-9]{2})(?:T([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.([0-9]{0,16}))?)?(?:Z|[+-]([0-9]{2}):([0-9]{2}))?)?$/.exec(value);
+            if (parts) {
+              const year = Number(parts[1]), month = Number(parts[2]), day = Number(parts[3]);
+              const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+              const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+              const offsetHour = Number(parts[8] ?? 0), offsetMinute = Number(parts[9] ?? 0);
+              if (year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1]
+                && Number(parts[4] ?? 0) <= 23 && Number(parts[5] ?? 0) <= 59 && Number(parts[6] ?? 0) <= 59
+                && offsetHour <= 14 && offsetMinute <= 59 && (offsetHour < 14 || offsetMinute === 0)) {
+                const date = new Date(parts[7] === "" ? value.replace(/\.(?=Z|[+-]|$)/, "") : value);
+                if (!Number.isNaN(date.getTime()) && date.getTime() >= -62135596800000 && date.getTime() <= 253402300799999) return date;
+              }
+            }
           }
           if (kind === 8 && typeof value === "string"
             && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value))
@@ -77,13 +88,18 @@ internal static partial class HelperSource
             if (match.length === 2) return match === "\\\"" ? escape(34) : match;
             return escape(match.charCodeAt(0));
           });
-          if (typeof JSON.rawJSON !== "function") return JSON.stringify(value);
-          return JSON.stringify(value, (key, item) => typeof item === "string"
-            ? JSON.rawJSON('"' + text(JSON.stringify(item).slice(1, -1)) + '"')
-            : item);
+          return JSON.stringify(value, (key, item) => {
+            if (typeof item === "number" && !Number.isFinite(item))
+              throw new TypeError("Nonfinite numbers cannot be written as JSON.");
+            return typeof item === "string" && typeof JSON.rawJSON === "function"
+              ? JSON.rawJSON('"' + text(JSON.stringify(item).slice(1, -1)) + '"')
+              : item;
+          });
         }
         function {{name("jsonClrNumber")}}(value, single) {
-          return typeof value === "number" && Number.isFinite(value) && typeof JSON.rawJSON === "function"
+          if (typeof value === "number" && !Number.isFinite(value))
+            throw new TypeError("Nonfinite numbers cannot be written as JSON.");
+          return typeof value === "number" && typeof JSON.rawJSON === "function"
             ? JSON.rawJSON({{name("numberText")}}(value, single))
             : value;
         }

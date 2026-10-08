@@ -112,9 +112,9 @@ public sealed class CollectionControlFlowTests
             }
             """);
 
-        Assert.Contains("await Promise.all([fetch(\"https://one.example\"), fetch(\"https://two.example\")])", module);
-        Assert.Contains("await Promise.all(pending)", module);
-        Assert.Contains("await Promise.all([fetch(\"https://four.example\")])", module);
+        Assert.Contains("await $workers$taskWhenAll([fetch(\"https://one.example\"), fetch(\"https://two.example\")], true)", module);
+        Assert.Contains("await $workers$taskWhenAll(pending, true)", module);
+        Assert.Contains("await $workers$taskWhenAll([fetch(\"https://four.example\")], true)", module);
     }
 
     [Fact]

@@ -101,6 +101,10 @@ internal sealed partial class JavaScriptEmitter
         };
         if (Argument("paramName") is { } parameter)
             message = $"((message, parameter) => parameter == null ? message : `${{message}} (Parameter '${{parameter}}')`)({message}, {Expression(parameter)})";
+        if (type.ToDisplayString() is "System.OperationCanceledException" or "System.Threading.Tasks.TaskCanceledException")
+            return Argument("innerException") is { } cancellationInner
+                ? $"Object.assign(new DOMException({message}, \"AbortError\"), {{ cause: {Expression(cancellationInner)} }})"
+                : $"new DOMException({message}, \"AbortError\")";
         return Argument("innerException") is { } inner
             ? $"new Error({message}, {{ cause: {Expression(inner)} }})"
             : $"new Error({message})";

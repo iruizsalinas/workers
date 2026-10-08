@@ -4,6 +4,7 @@ internal static partial class HelperSource
     {
         JavaScriptHelper.WithHeader => WithHeader(name),
         JavaScriptHelper.Delay => Delay(name),
+        JavaScriptHelper.TaskWhenAll => TaskWhenAll(name),
         JavaScriptHelper.CancellationCheck => CancellationCheck(name),
         JavaScriptHelper.CancellationDelay => CancellationDelay(name),
         JavaScriptHelper.CancellationCancelAfter => CancellationCancelAfter(name),

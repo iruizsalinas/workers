@@ -131,8 +131,8 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.CryptoTimingSafeEqual => $"{receiver}.subtle.timingSafeEqual({arguments[0].Value}, {arguments[1].Value})",
             BindingIntrinsicKind.CryptoDigestStream => $"new {receiver}.DigestStream({arguments[0].Value})",
             BindingIntrinsicKind.CryptoDigestText => $"{receiver}.subtle.digest({arguments[0].Value}, new TextEncoder().encode({arguments[1].Value})).then(value => new Uint8Array(value))",
-            BindingIntrinsicKind.CryptoDigest => $"{receiver}.subtle.digest({arguments[0].Value}, {arguments[1].Value}.body ?? {arguments[1].Value}).then(value => new Uint8Array(value))",
-            BindingIntrinsicKind.CryptoDigestBody => $"new Response({arguments[1].Value}.body ?? {arguments[1].Value}).arrayBuffer().then(value => {receiver}.subtle.digest({arguments[0].Value}, value)).then(value => new Uint8Array(value))",
+            BindingIntrinsicKind.CryptoDigest => $"{receiver}.subtle.digest({arguments[0].Value}, {arguments[1].Value}).then(value => new Uint8Array(value))",
+            BindingIntrinsicKind.CryptoDigestBody => $"((crypto, algorithm, body) => new Response(body).arrayBuffer().then(value => crypto.subtle.digest(algorithm, value)).then(value => new Uint8Array(value)))({receiver}, {arguments[0].Value}, {arguments[1].Value})",
             BindingIntrinsicKind.DigestWrite => EmitDigestWrite(receiver, arguments[0].Value),
             BindingIntrinsicKind.DigestWriteText => EmitDigestWrite(receiver, $"new TextEncoder().encode({arguments[0].Value})"),
             BindingIntrinsicKind.DigestClose => EmitDigestClose(receiver),
@@ -140,6 +140,7 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.ReadableFromEnumerable => EmitReadableFrom(arguments[0].Value),
             BindingIntrinsicKind.ReadableRead => EmitReadableRead(receiver),
             BindingIntrinsicKind.ReadableAll => EmitReadableAll(receiver),
+            BindingIntrinsicKind.ReadableCancel => EmitReadableCancel(receiver),
             BindingIntrinsicKind.WebSocketEvents => EmitWebSocketEvents(receiver),
             BindingIntrinsicKind.SocketRead => EmitSocketRead(receiver),
             BindingIntrinsicKind.SocketWrite => EmitSocketWrite(receiver, arguments[0].Value),
@@ -148,7 +149,7 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.WebSocketJson => $"{receiver}.send(JSON.stringify({arguments[0].Value}))",
             BindingIntrinsicKind.WebSocketMessageText => $"typeof {receiver} === \"string\" ? {receiver} : new TextDecoder().decode({receiver})",
             BindingIntrinsicKind.Bytes => $"{receiver}.{intrinsic.JavascriptName}().then(value => new Uint8Array(value))",
-            BindingIntrinsicKind.CryptoVerifyHmac => $"(async () => {{ const key = await {receiver}.subtle.importKey(\"raw\", new TextEncoder().encode({arguments[0].Value}), {{ name: \"HMAC\", hash: \"SHA-256\" }}, false, [\"verify\"]); return {receiver}.subtle.verify(\"HMAC\", key, {arguments[1].Value}, {arguments[2].Value}); }})()",
+            BindingIntrinsicKind.CryptoVerifyHmac => $"(async (crypto, secret, signature, payload) => {{ const key = await crypto.subtle.importKey(\"raw\", new TextEncoder().encode(secret), {{ name: \"HMAC\", hash: \"SHA-256\" }}, false, [\"verify\"]); return crypto.subtle.verify(\"HMAC\", key, signature, payload); }})({receiver}, {arguments[0].Value}, {arguments[1].Value}, {arguments[2].Value})",
             BindingIntrinsicKind.BlobSliceBytes => $"{receiver}.slice({arguments[0].Value}, {arguments[1].Value}).arrayBuffer().then(value => new Uint8Array(value))",
             BindingIntrinsicKind.QueryNames => $"Array.from({receiver}.{intrinsic.JavascriptName}())",
             BindingIntrinsicKind.CompressStream => $"{receiver}.pipeThrough(new CompressionStream({arguments[0].Value}))",
@@ -182,6 +183,7 @@ internal sealed partial class JavaScriptEmitter
     private string EmitReadableFrom(string value) { _helpers.Require(JavaScriptHelper.Stream); return $"{_helpers.Name("streamFrom")}({value})"; }
     private string EmitReadableRead(string receiver) { _helpers.Require(JavaScriptHelper.Stream); return $"{_helpers.Name("streamRead")}({receiver})"; }
     private string EmitReadableAll(string receiver) { _helpers.Require(JavaScriptHelper.Stream); return $"{_helpers.Name("streamAll")}({receiver})"; }
+    private string EmitReadableCancel(string receiver) { _helpers.Require(JavaScriptHelper.Stream); return $"{_helpers.Name("streamCancel")}({receiver})"; }
     private string EmitWebSocketEvents(string receiver) { _helpers.Require(JavaScriptHelper.WebSocketEvents); return $"{_helpers.Name("webSocketEvents")}({receiver})"; }
     private string EmitSocketRead(string receiver) { _helpers.Require(JavaScriptHelper.Socket); return $"{_helpers.Name("socketRead")}({receiver})"; }
     private string EmitSocketWrite(string receiver, string value) { _helpers.Require(JavaScriptHelper.Socket); return $"{_helpers.Name("socketWriter")}({receiver}).write({value})"; }

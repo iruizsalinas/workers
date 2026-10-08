@@ -8,7 +8,7 @@ internal static partial class HelperSource
             return [];
           }
           if (source == null) throw new TypeError("Collection cannot be null.");
-          const values = Array.from(source);
+          const values = Array.from({{name("linqValues")}}(source));
           return stack ? values.reverse() : values;
         }
         function {{name("queueStackTake")}}(values, remove) {
@@ -87,6 +87,11 @@ internal static partial class HelperSource
           source.splice(index, 1);
           return true;
         }
+        function {{name("listAddRange")}}(source, items) {
+          if (items == null) throw new TypeError("Collection cannot be null.");
+          if (source === items) items = source.slice();
+          for (const item of {{name("linqValues")}}(items)) source.push(item);
+        }
         function {{name("listCheckIndex")}}(source, index, inclusive) {
           if (!Number.isInteger(index) || index < 0 || index > source.length || !inclusive && index === source.length)
             throw new RangeError("Index was out of range. Must be non-negative and less than the size of the collection.");
@@ -100,6 +105,7 @@ internal static partial class HelperSource
           source.splice(index, 0, item);
         }
         function {{name("listRemoveAll")}}(source, predicate) {
+          if (predicate == null) throw new TypeError("Predicate cannot be null.");
           let kept = 0;
           for (const item of source) if (!predicate(item)) source[kept++] = item;
           const removed = source.length - kept;

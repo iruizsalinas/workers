@@ -74,7 +74,24 @@ internal static partial class HelperSource
           return { done: result.done, bytes: result.value ?? new Uint8Array() };
         }
         async function {{name("streamAll")}}(stream) {
-          return new Uint8Array(await new Response(stream).arrayBuffer());
+          const reader = {{name("streamReaders")}}.get(stream);
+          if (!reader) return new Uint8Array(await new Response(stream).arrayBuffer());
+          const chunks = [];
+          let length = 0;
+          while (true) {
+            const result = await reader.read();
+            if (result.done) break;
+            chunks.push(result.value.slice());
+            length += result.value.length;
+          }
+          const bytes = new Uint8Array(length);
+          let offset = 0;
+          for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+          return bytes;
+        }
+        function {{name("streamCancel")}}(stream) {
+          const reader = {{name("streamReaders")}}.get(stream);
+          return reader ? reader.cancel() : stream.cancel();
         }
         function {{name("streamFrom")}}(chunks) {
           const iterator = chunks[Symbol.asyncIterator]();

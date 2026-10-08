@@ -67,7 +67,7 @@ internal static class RuntimeIntrinsics
             [Key("Workers.ReadableStream", "FromAsyncEnumerable")] = new("", BindingIntrinsicKind.ReadableFromEnumerable),
             [Key("Workers.ReadableStream", "ReadAsync")] = new("", BindingIntrinsicKind.ReadableRead),
             [Key("Workers.ReadableStream", "ReadAllBytesAsync")] = new("", BindingIntrinsicKind.ReadableAll),
-            [Key("Workers.ReadableStream", "CancelAsync")] = Direct("cancel"),
+            [Key("Workers.ReadableStream", "CancelAsync")] = new("", BindingIntrinsicKind.ReadableCancel),
             [Key("Workers.ReadableStream", "Tee")] = Direct("tee"),
             [Key("Workers.ReadableStream", "PipeToAsync")] = Direct("pipeTo"),
             [Key("Workers.ReadableStream", "Compress")] = new("", BindingIntrinsicKind.CompressStream),

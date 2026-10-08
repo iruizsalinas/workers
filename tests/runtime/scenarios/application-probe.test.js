@@ -30,6 +30,18 @@ describe("application correctness probes", () => {
     await expect((await invoke("/reporting")).json()).resolves.toEqual(clr.reporting);
   });
 
+  it("preserves dispatch, shipment merging, invoice audits and tenant report decisions", async () => {
+    await expect((await invoke("/collection-applications")).json()).resolves.toEqual(clr.collectionApplications);
+  });
+
+  it("rejects nonfinite telemetry readings when exporting JSON", async () => {
+    await expect((await invoke("/telemetry-export")).json()).resolves.toEqual(clr.telemetryExports);
+  });
+
+  it("honors constructor defaults while enforcing required record members", async () => {
+    await expect((await invoke("/constructor-contracts")).json()).resolves.toEqual(clr.constructorContracts);
+  });
+
   describe("regression scenarios", () => {
     let regressions;
     beforeAll(async () => {
@@ -62,5 +74,22 @@ describe("shipment submission with nested input, D1 persistence and background K
       expect(rows.results).toEqual([]);
       expect(response.headers.get("location")).toBeNull();
     }
+  });
+});
+
+describe("tenant provisioning validates contracts before persisting resources", () => {
+  beforeEach(async () => {
+    await env.DB.exec("CREATE TABLE IF NOT EXISTS probe_tenants (id TEXT PRIMARY KEY, enabled INTEGER)");
+    await env.DB.exec("DELETE FROM probe_tenants");
+  });
+
+  it.each(clr.provisioning)("preserves provisioning decisions for $json", async ({ json, result }) => {
+    const response = await invoke("/provisioning", json);
+    expect(response.status).toBe(result.status);
+    await expect(response.json()).resolves.toEqual(result);
+    const rows = await env.DB.prepare("SELECT * FROM probe_tenants").all();
+    expect(rows.results).toEqual(result.status === 201
+      ? [{ id: result.tenantId, enabled: result.enabled ? 1 : 0 }]
+      : []);
   });
 });

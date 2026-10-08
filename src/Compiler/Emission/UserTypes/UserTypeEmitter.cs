@@ -92,18 +92,23 @@ internal sealed partial class JavaScriptEmitter
         var used = new HashSet<string>(["__proto__", "constructor", "toJSON"], StringComparer.Ordinal);
         var members = type.GetMembers()
             .Where(member => !member.IsStatic && member.DeclaringSyntaxReferences.Length != 0)
-            .OrderBy(member => member is IPropertySymbol ? 0 : 1)
+            .OrderBy(member => member is IPropertySymbol property
+                ? IsJsonContractProperty(property) ? 0 : 1
+                : 2)
             .ThenBy(member => member.DeclaringSyntaxReferences[0].Span.Start);
         foreach (var member in members)
         {
             var preferred = member switch
             {
-                IPropertySymbol property => JsonPropertyName(property) ?? LowerFirst(property.Name),
+                IPropertySymbol property => IsJsonContractProperty(property)
+                    ? JsonPropertyName(property) ?? LowerFirst(property.Name)
+                    : LowerFirst(property.Name),
                 IFieldSymbol field => field.Name,
                 _ => null
             };
             if (preferred is null) continue;
-            if (member is IPropertySymbol && JsonPropertyName(member) is not null
+            if (member is IPropertySymbol propertySymbol && IsJsonContractProperty(propertySymbol)
+                && JsonPropertyName(member) is not null
                 && (preferred is "constructor" or "toJSON" || used.Contains(preferred)))
                 throw new NotSupportedException(
                     $"WRK119: User type '{type}' contains a conflicting JSON property name '{preferred}'.");

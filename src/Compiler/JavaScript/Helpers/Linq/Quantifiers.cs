@@ -86,7 +86,8 @@ internal static partial class HelperSource
               if (!(a.value === b.value || (a.value !== a.value && b.value !== b.value))) return false;
             }
           } finally {
-            left.return?.(); right.return?.();
+            try { right.return?.(); }
+            finally { left.return?.(); }
           }
         }
 

@@ -30,6 +30,7 @@ internal enum BindingIntrinsicKind
     ReadableFromEnumerable,
     ReadableRead,
     ReadableAll,
+    ReadableCancel,
     WebSocketEvents,
     SocketRead,
     SocketWrite,

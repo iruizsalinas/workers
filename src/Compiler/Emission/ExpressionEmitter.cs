@@ -73,6 +73,8 @@ internal sealed partial class JavaScriptEmitter
 
     private string SimpleAssignment(AssignmentExpressionSyntax value)
     {
+        if (_model.GetOperation(value) is ISimpleAssignmentOperation { Target: IDiscardOperation })
+            return $"({Expression(value.Right)})";
         if (value.Left is MemberAccessExpressionSyntax member
             && _model.GetSymbolInfo(member).Symbol is IPropertySymbol property and
             {
@@ -184,8 +186,14 @@ internal sealed partial class JavaScriptEmitter
                 $"{JavaScriptObjectKey(UserInitializerMemberName(assignment.Left))}: {Expression(assignment.Right)}",
             _ => throw Unsupported("WRK106", expression)
         });
-        return $"((source) => Object.assign(Object.create(Object.getPrototypeOf(source)), source, {{ {string.Join(", ", assignments)} }}))" +
-               $"({Expression(value.Expression)})";
+        if (type.InstanceConstructors.Any(constructor => !constructor.IsImplicitlyDeclared && IsUserRecordCopyConstructor(constructor)))
+        {
+            var record = QueueUserType(type, value);
+            return $"((source) => Object.assign({record}.$copy(source), {{ {string.Join(", ", assignments)} }}))"
+                + $"({Expression(value.Expression)})";
+        }
+        return $"((source) => Object.assign(Object.create(Object.getPrototypeOf(source)), source, {{ {string.Join(", ", assignments)} }}))"
+            + $"({Expression(value.Expression)})";
     }
 
     // Mutations read and write their target, so the target must be safe to evaluate twice.

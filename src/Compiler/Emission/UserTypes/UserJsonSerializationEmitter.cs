@@ -110,7 +110,8 @@ internal sealed partial class JavaScriptEmitter
                 properties.Add(type.GetMembers(parameter.Identifier.ValueText).OfType<IPropertySymbol>().Single());
         properties.AddRange(declaration.Members.OfType<PropertyDeclarationSyntax>()
             .Select(property => (IPropertySymbol)_model.GetDeclaredSymbol(property)!)
-            .Where(property => property.DeclaredAccessibility == Accessibility.Public && property.GetMethod is not null
+            .Where(property => property.DeclaredAccessibility == Accessibility.Public
+                && property.GetMethod?.DeclaredAccessibility == Accessibility.Public
                 && !property.IsStatic));
         var seen = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
         return properties.Where(property => seen.Add(property)

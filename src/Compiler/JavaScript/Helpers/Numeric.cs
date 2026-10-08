@@ -3,12 +3,14 @@ internal static partial class HelperSource
     private static string NumericParse(Func<string, string> name) => $$"""
         function {{name("numericParse")}}(input, kind) {
           if (input == null) throw new TypeError("Value cannot be null.");
-          const value = input.replace(/^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/gu, "");
           if (kind === 4) {
+            const value = input.replace(/^[\u0000\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0000\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/gu, "");
             if (/^true$/i.test(value)) return true;
             if (/^false$/i.test(value)) return false;
             throw new TypeError("Invalid Boolean value.");
           }
+          // Numeric NumberStyles whitespace is ASCII; legacy parsers also allow trailing NULs.
+          const value = input.replace(/\u0000+$/u, "").replace(/^[\u0009-\u000d\u0020]+|[\u0009-\u000d\u0020]+$/gu, "");
           if (kind <= 1) {
             if (!/^[+-]?\d+$/.test(value)) throw new TypeError("Invalid integer value.");
             const number = Number(value), minimum = kind === 0 ? -2147483648 : 0;
@@ -17,11 +19,37 @@ internal static partial class HelperSource
               throw new RangeError("Integer value is out of range.");
             return kind === 0 ? number | 0 : number >>> 0;
           }
-          if (!/^[+-]?(?:(?:\d[\d,]*(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?|nan|infinity)$/i.test(value))
+          // Floating special symbols use Unicode Trim, but do not permit terminal NULs.
+          const special = input.replace(/^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/gu, "");
+          if (/^[+-]?nan$/i.test(special)) return NaN;
+          if (/^[+-]?infinity$/i.test(special)) return special[0] === "-" ? -Infinity : Infinity;
+          if (!/^[+-]?(?:\d[\d,]*(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value))
             throw new TypeError("Invalid floating-point value.");
           // NumberStyles.Float | AllowThousands accepts group separators in the integer part.
-          const number = Number(value.replaceAll(",", ""));
-          return kind === 2 ? Math.fround(number) : number;
+          const normalized = value.replaceAll(",", ""), number = Number(normalized);
+          return kind === 2 ? {{name("numericSingleParse")}}(normalized, number) : number;
+        }
+        function {{name("numericSingleParse")}}(text, number) {
+          const magnitude = Math.abs(number), rounded = Math.fround(magnitude);
+          if (!Number.isFinite(magnitude) || magnitude === rounded) return Math.fround(number);
+          const bits = new DataView(new ArrayBuffer(4));
+          bits.setFloat32(0, rounded);
+          const encoding = bits.getUint32(0);
+          bits.setUint32(0, rounded < magnitude ? encoding + 1 : encoding - 1);
+          const adjacent = bits.getFloat32(0);
+          const lower = Math.min(rounded, adjacent), upper = Math.max(rounded, adjacent);
+          const midpoint = upper === Infinity ? 2 ** 128 - 2 ** 103 : (lower + upper) / 2;
+          if (magnitude !== midpoint) return Math.fround(number);
+          // Decimal-to-double-to-single can round twice at an exact single midpoint.
+          // Compare the original decimal with that midpoint before selecting its neighbor.
+          const parsed = /^[+-]?([0-9]*)(?:[.]([0-9]*))?(?:e([+-]?[0-9]+))?$/i.exec(text);
+          const fraction = parsed[2] ?? "", power = Number(parsed[3] ?? 0) - fraction.length;
+          let numerator = BigInt(parsed[1] + fraction), denominator = 1n;
+          if (power < 0) denominator = 10n ** BigInt(-power);
+          else numerator *= 10n ** BigInt(power);
+          const decimal = numerator << 150n, binary = denominator * BigInt(midpoint * 2 ** 150);
+          const result = decimal < binary ? lower : decimal > binary ? upper : rounded;
+          return number < 0 ? -result : result;
         }
 
         """;
@@ -29,12 +57,11 @@ internal static partial class HelperSource
     private static string NumericFormat(Func<string, string> name) => $$"""
         function {{name("numericFormat")}}(value, format, kind, precision) {
           const code = format[0].toUpperCase();
-          if (code === "N" || code === "P" || kind <= 1 && code === "F") {
-            const scaled = code === "P" ? value * 100 : value;
-            const rounded = {{name("mathRound")}}(scaled, precision, kind === 2 ? 6 : 15);
-            let text = Math.abs(rounded) < 1e21 ? rounded.toFixed(precision)
-              : BigInt(Math.trunc(rounded)).toString() + (precision > 0 ? "." + "0".repeat(precision) : "");
-            if ((scaled < 0 || Object.is(scaled, -0)) && text[0] !== "-") text = "-" + text;
+          if (code === "F" || code === "N" || code === "P") {
+            if (Number.isNaN(value)) return "NaN";
+            if (value === Infinity) return "Infinity";
+            if (value === -Infinity) return "-Infinity";
+            let text = {{name("numericFixed")}}(value, precision, code === "P" ? 2 : 0);
             if (code !== "F") {
               const negative = text[0] === "-", body = negative ? text.slice(1) : text;
               const point = body.indexOf(".");
@@ -57,8 +84,27 @@ internal static partial class HelperSource
             if (code === "D" && value < 0) result = "-" + result;
             return format[0] === "x" ? result.toLowerCase() : result.toUpperCase();
           }
-          const text = {{name("mathRound")}}(value, precision, kind === 2 ? 6 : 15).toFixed(precision);
-          return (value < 0 || Object.is(value, -0)) && text[0] !== "-" ? "-" + text : text;
+        }
+        function {{name("numericFixed")}}(value, precision, decimalShift) {
+          // Formatting rounds the exact binary value. Scaling a Number first can erase the
+          // difference between 2.675 and a true decimal midpoint, or corrupt large integers.
+          const bits = new DataView(new ArrayBuffer(8));
+          bits.setFloat64(0, Math.abs(value));
+          const high = bits.getUint32(0), low = bits.getUint32(4);
+          const exponent = (high >>> 20) & 2047;
+          let numerator = (BigInt(high & 1048575) << 32n) | BigInt(low);
+          if (exponent !== 0) numerator |= 1n << 52n;
+          const power = exponent === 0 ? -1074 : exponent - 1075;
+          let denominator = 1n;
+          if (power < 0) denominator <<= BigInt(-power);
+          else numerator <<= BigInt(power);
+          numerator *= 10n ** BigInt(precision + decimalShift);
+          let rounded = numerator / denominator;
+          const remainder = numerator % denominator, midpoint = remainder * 2n;
+          if (midpoint > denominator || midpoint === denominator && (rounded & 1n) !== 0n) rounded++;
+          let text = rounded.toString().padStart(precision + 1, "0");
+          if (precision > 0) text = text.slice(0, -precision) + "." + text.slice(-precision);
+          return value < 0 || Object.is(value, -0) ? "-" + text : text;
         }
 
         """;
@@ -176,7 +222,9 @@ internal static partial class HelperSource
     private static string MathClamp(Func<string, string> name) => $$"""
         function {{name("mathClamp")}}(value, minimum, maximum) {
           if (minimum > maximum) throw new RangeError("Minimum cannot exceed maximum.");
-          return Math.min(Math.max(value, minimum), maximum);
+          if (value < minimum) return minimum;
+          if (value > maximum) return maximum;
+          return value;
         }
 
         """;
@@ -185,7 +233,9 @@ internal static partial class HelperSource
         function {{name("mathRound")}}(value, digits, maximumDigits) {
           if (!Number.isInteger(digits) || digits < 0 || digits > maximumDigits)
             throw new RangeError("Rounding digits are out of range.");
-          const scale = 10 ** digits, scaled = value * scale;
+          const single = maximumDigits === 6;
+          if (Math.abs(value) >= (single ? 1e8 : 1e16)) return value;
+          const scale = 10 ** digits, scaled = single ? Math.fround(value * scale) : value * scale;
           if (!Number.isFinite(scaled)) return value;
           const floor = Math.floor(scaled), fraction = scaled - floor;
           const rounded = fraction < 0.5 ? floor : fraction > 0.5 ? floor + 1
@@ -206,10 +256,9 @@ internal static partial class HelperSource
 
     private static string MathLog(Func<string, string> name) => $$"""
         function {{name("mathLog")}}(value, base) {
-          if (base <= 0 || base === 1 || !Number.isFinite(base)) return NaN;
+          if (base === 1 || value !== 1 && (base === 0 || base === Infinity)) return NaN;
           return Math.log(value) / Math.log(base);
         }
 
         """;
 }
-

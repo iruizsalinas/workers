@@ -207,11 +207,13 @@ internal sealed partial class JavaScriptEmitter
         IMethodSymbol method,
         IReadOnlyList<string> arguments)
     {
+        var helper = _helpers.Require(JavaScriptHelper.TaskWhenAll);
+        var generic = method.IsGenericMethod ? "true" : "false";
         if (!method.Parameters[0].IsParams)
-            return $"Promise.all({arguments[0]})";
+            return $"{helper}({arguments[0]}, {generic})";
         if (arguments.Count == 1 && IsTaskCollection(_model.GetTypeInfo(invocation.ArgumentList.Arguments[0].Expression).Type))
-            return $"Promise.all({arguments[0]})";
-        return $"Promise.all([{string.Join(", ", arguments)}])";
+            return $"{helper}({arguments[0]}, {generic})";
+        return $"{helper}([{string.Join(", ", arguments)}], {generic})";
     }
 
     private static bool IsTaskCollection(ITypeSymbol? type) => type is IArrayTypeSymbol

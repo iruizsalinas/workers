@@ -12,8 +12,20 @@ internal sealed partial class JavaScriptEmitter
         method is { IsImplicitlyDeclared: true, ContainingType.IsRecord: true }
         && IsUserInstanceType(method.ContainingType);
 
-    private string RecordEquals(INamedTypeSymbol type, string left, string right, SyntaxNode source) =>
-        $"{RecordEqualityFunction(type, source)}({left}, {right})";
+    private string RecordEquals(INamedTypeSymbol type, string left, string right, SyntaxNode source, bool referenceComparison = false)
+    {
+        var helper = RecordEqualityFunction(type, source);
+        // The synthesized == operator short-circuits identical references. A custom typed
+        // Equals invoked by EqualityComparer must still run, including for the same instance.
+        return referenceComparison && UserRecordEqualsMethod(type) is not null
+            ? $"((left, right) => left === right || {helper}(left, right))({left}, {right})"
+            : $"{helper}({left}, {right})";
+    }
+
+    private static IMethodSymbol? UserRecordEqualsMethod(INamedTypeSymbol type) =>
+        type.GetMembers("Equals").OfType<IMethodSymbol>().SingleOrDefault(method =>
+            !method.IsImplicitlyDeclared && !method.IsStatic && method.Parameters is [{ } parameter]
+            && SymbolEqualityComparer.Default.Equals(parameter.Type.OriginalDefinition, type));
 
     private string RecordEqualityFunction(INamedTypeSymbol type, SyntaxNode source)
     {
@@ -35,6 +47,16 @@ internal sealed partial class JavaScriptEmitter
             var (type, source) = pending;
             var declaration = (TypeDeclarationSyntax)type.DeclaringSyntaxReferences[0].GetSyntax();
             _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
+            var customEquals = UserRecordEqualsMethod(type);
+            if (customEquals is not null)
+            {
+                QueueUserType(type, source);
+                _output.Append("function ").Append(_recordEqualityFunctions[type]).AppendLine("(left, right) {");
+                _output.AppendLine("  if (left == null) return right == null;");
+                _output.Append("  return left.").Append(UserInstanceMethodName(customEquals)).AppendLine("(right);");
+                _output.AppendLine("}").AppendLine();
+                continue;
+            }
             var comparisons = RecordEqualityMembers(type)
                 .Select(member => ValueEquality(member.Type,
                     UserMemberAccess("left", member.Symbol), UserMemberAccess("right", member.Symbol), source))

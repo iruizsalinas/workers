@@ -68,7 +68,7 @@ public sealed class LinqAdvancedTests
             public sealed record Item(int Key, int Score);
             """);
 
-        Assert.Contains("$workers$linqNumericAggregate(values, 0, null, 0, false)", module);
+        Assert.Contains("$workers$linqNumericAggregate(values, 0, null, 0, false, false)", module);
         Assert.Contains("$workers$linqExtremum(items, item => item.score", module);
         Assert.Contains("$workers$linqSet(values", module);
         Assert.Contains("$workers$linqReverse(values)", module);

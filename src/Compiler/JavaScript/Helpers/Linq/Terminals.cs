@@ -5,18 +5,27 @@ internal static partial class HelperSource
           if (outer == null || inner == null || outerKey == null || innerKey == null || selector == null)
             throw new TypeError("LINQ argument cannot be null.");
           return { *[Symbol.iterator]() {
-            const lookup = new Map();
-            for (const value of {{name("linqValues")}}(inner)) {
-              const key = innerKey(value);
-              if (key == null) continue;
-              let values = lookup.get(key);
-              if (values === undefined) lookup.set(key, values = []);
-              values.push(value);
-            }
-            for (const value of {{name("linqValues")}}(outer)) {
-              const matches = lookup.get(outerKey(value)) ?? [];
-              if (grouped) yield selector(value, matches);
-              else for (const match of matches) yield selector(value, match);
+            const iterator = {{name("linqValues")}}(outer);
+            try {
+              let item = iterator.next();
+              if (item.done) return;
+              const lookup = new Map();
+              for (const value of {{name("linqValues")}}(inner)) {
+                const key = innerKey(value);
+                if (key == null) continue;
+                let values = lookup.get(key);
+                if (values === undefined) lookup.set(key, values = []);
+                values.push(value);
+              }
+              if (!grouped && lookup.size === 0) return;
+              do {
+                const matches = lookup.get(outerKey(item.value)) ?? [];
+                if (grouped) yield selector(item.value, matches);
+                else for (const match of matches) yield selector(item.value, match);
+                item = iterator.next();
+              } while (!item.done);
+            } finally {
+              iterator.return?.();
             }
           }
           };

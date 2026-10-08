@@ -49,13 +49,15 @@ internal static partial class HelperSource
             const left = {{name("linqValues")}}(first), right = {{name("linqValues")}}(second);
             try {
               while (true) {
-                const leftItem = left.next(), rightItem = right.next();
-                if (leftItem.done || rightItem.done) return;
+                const leftItem = left.next();
+                if (leftItem.done) return;
+                const rightItem = right.next();
+                if (rightItem.done) return;
                 yield selector(leftItem.value, rightItem.value);
               }
             } finally {
-              left.return?.();
-              right.return?.();
+              try { right.return?.(); }
+              finally { left.return?.(); }
             }
           }
           };
@@ -64,17 +66,22 @@ internal static partial class HelperSource
         """;
 
     private static string LinqAggregate(Func<string, string> name) => $$"""
-        function {{name("linqAggregate")}}(source, accumulator, seed, hasSeed, resultSelector) {
-          if (source == null || accumulator == null) throw new TypeError("LINQ argument cannot be null.");
+        function {{name("linqAggregate")}}(source, accumulator, seed, hasSeed, resultSelector, hasResultSelector) {
+          if (source == null || accumulator == null || hasResultSelector && resultSelector == null)
+            throw new TypeError("LINQ argument cannot be null.");
           const iterator = {{name("linqValues")}}(source);
           let result = seed;
-          if (!hasSeed) {
-            const first = iterator.next();
-            if (first.done) throw new TypeError("Sequence contains no elements.");
-            result = first.value;
+          try {
+            if (!hasSeed) {
+              const first = iterator.next();
+              if (first.done) throw new TypeError("Sequence contains no elements.");
+              result = first.value;
+            }
+            for (let item = iterator.next(); !item.done; item = iterator.next())
+              result = accumulator(result, item.value);
+          } finally {
+            iterator.return?.();
           }
-          for (let item = iterator.next(); !item.done; item = iterator.next())
-            result = accumulator(result, item.value);
           return resultSelector == null ? result : resultSelector(result);
         }
 
