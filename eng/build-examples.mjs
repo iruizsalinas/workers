@@ -52,6 +52,14 @@ const generatedDirectory = join(repositoryRoot, "tests", "runtime", "generated")
 mkdirSync(generatedDirectory, { recursive: true });
 writeFileSync(join(generatedDirectory, "differential.json"), `${differentialJson}\n`);
 console.log("Generated CLR differential baseline.");
+const applicationOutput = await runDotnet([
+  "run", "--project", join(repositoryRoot, "tests", "differential", "Differential.csproj"),
+  "-c", "Release", "--no-build", "--", "--applications",
+]);
+const applicationJson = applicationOutput.trim().split(/\r?\n/).at(-1);
+JSON.parse(applicationJson);
+writeFileSync(join(generatedDirectory, "applications.json"), `${applicationJson}\n`);
+console.log("Generated CLR application baseline.");
 
 function findProjects(root) {
   return readdirSync(root, { withFileTypes: true })

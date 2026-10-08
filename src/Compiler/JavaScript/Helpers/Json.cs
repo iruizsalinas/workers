@@ -1,5 +1,32 @@
 internal static partial class HelperSource
 {
+    private static string JsonDeserializeValue(Func<string, string> name) => $$"""
+        function {{name("jsonDeserializeValue")}}(value, kind, minimum = 0, maximum = 0) {
+          if (kind === 0 && (value === null || typeof value === "string")) return value;
+          if (kind === 1 && typeof value === "boolean") return value;
+          if (kind === 2 && Number.isInteger(value) && value >= minimum && value <= maximum) return value;
+          if ((kind === 3 || kind === 4) && typeof value === "number") return value;
+          if (kind === 5 && typeof value === "string" && value.length === 1) return value;
+          if (kind === 6 && value === null) return null;
+          if (kind === 6 && typeof value === "string") {
+            const base64 = value.replace(/[ \t\r\n]/g, "");
+            if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(base64))
+              throw new TypeError("Invalid JSON base64 value.");
+            return Uint8Array.from(atob(base64), character => character.charCodeAt(0));
+          }
+          throw new TypeError("JSON value has an incompatible type or range.");
+        }
+        function {{name("jsonDeserializeArray")}}(value, convert) {
+          if (value === null) return null;
+          if (!Array.isArray(value)) throw new TypeError("Expected a JSON array.");
+          return value.map(convert);
+        }
+        function {{name("jsonDeserializeNullable")}}(value, convert) {
+          return value === null ? null : convert(value);
+        }
+
+        """;
+
     private static string JsonElementValueKind(Func<string, string> name) => $$"""
         function {{name("jsonElementValueKind")}}(value) {
           if (value === null) return 7;
@@ -55,4 +82,3 @@ internal static partial class HelperSource
 
         """;
 }
-

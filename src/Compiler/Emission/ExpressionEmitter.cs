@@ -41,13 +41,20 @@ internal sealed partial class JavaScriptEmitter
         ObjectCreationExpressionSyntax value => ObjectCreation(value),
         ImplicitObjectCreationExpressionSyntax value => ObjectCreation(value),
         ParenthesizedLambdaExpressionSyntax value when value.ExpressionBody is not null =>
-            $"{AsyncPrefix(value.AsyncKeyword)}({string.Join(", ", value.ParameterList.Parameters.Select(ParameterName))}) => {Expression(value.ExpressionBody)}",
+            $"{AsyncPrefix(value.AsyncKeyword)}({string.Join(", ", value.ParameterList.Parameters.Select(ParameterName))}) => {LambdaExpressionBody(value.ExpressionBody)}",
         ParenthesizedLambdaExpressionSyntax value when value.Block is not null => Lambda(value),
         SimpleLambdaExpressionSyntax value when value.ExpressionBody is not null =>
-            $"{AsyncPrefix(value.AsyncKeyword)}{ParameterName(value.Parameter)} => {Expression(value.ExpressionBody)}",
+            $"{AsyncPrefix(value.AsyncKeyword)}{ParameterName(value.Parameter)} => {LambdaExpressionBody(value.ExpressionBody)}",
         SimpleLambdaExpressionSyntax value when value.Block is not null => Lambda(value),
         _ => throw Unsupported("WRK101", expression)
     };
+
+    private string LambdaExpressionBody(ExpressionSyntax expression)
+    {
+        var body = Expression(expression);
+        // Object literals are parsed as statement blocks in arrow-function bodies.
+        return body.StartsWith('{') ? $"({body})" : body;
+    }
 
     private string DefaultValue(ExpressionSyntax expression) =>
         _model.GetTypeInfo(expression).ConvertedType?.ToDisplayString() == "System.Threading.CancellationToken"

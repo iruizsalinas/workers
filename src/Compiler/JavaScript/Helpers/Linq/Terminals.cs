@@ -8,6 +8,7 @@ internal static partial class HelperSource
             const lookup = new Map();
             for (const value of {{name("linqValues")}}(inner)) {
               const key = innerKey(value);
+              if (key == null) continue;
               let values = lookup.get(key);
               if (values === undefined) lookup.set(key, values = []);
               values.push(value);

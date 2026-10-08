@@ -27,6 +27,7 @@ internal static partial class HelperSource
         JavaScriptHelper.JsonElementGetValue => JsonElementGetValue(name),
         JavaScriptHelper.JsonElementGetProperty => JsonElementGetProperty(name),
         JavaScriptHelper.JsonElementGetIndex => JsonElementGetIndex(name),
+        JavaScriptHelper.JsonDeserializeValue => JsonDeserializeValue(name),
         JavaScriptHelper.StringTrim => StringTrim(name),
         JavaScriptHelper.StringContains => StringContains(name),
         JavaScriptHelper.StringStartsWith => StringStartsWith(name),

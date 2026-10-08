@@ -45,7 +45,17 @@ internal sealed partial class JavaScriptEmitter
             RegisterJsonMaterializer(user, source);
             return;
         }
-        if (type.SpecialType != SpecialType.None || type.TypeKind == TypeKind.Enum
+        if (type.TypeKind == TypeKind.Enum && type is INamedTypeSymbol enumeration)
+        {
+            RegisterJsonValueType(enumeration.EnumUnderlyingType!, source);
+            return;
+        }
+        if (type.SpecialType is SpecialType.System_String or SpecialType.System_Boolean
+            or SpecialType.System_Char or SpecialType.System_Object
+            or SpecialType.System_SByte or SpecialType.System_Byte
+            or SpecialType.System_Int16 or SpecialType.System_UInt16
+            or SpecialType.System_Int32 or SpecialType.System_UInt32
+            or SpecialType.System_Single or SpecialType.System_Double
             || type.ToDisplayString() == "System.Text.Json.JsonElement") return;
         throw new NotSupportedException($"WRK119: JSON deserialization does not support member type '{type}'.");
     }
@@ -63,9 +73,13 @@ internal sealed partial class JavaScriptEmitter
             ? parameters.Parameters.Select(parameter =>
             {
                 var property = type.GetMembers(parameter.Identifier.ValueText).OfType<IPropertySymbol>().Single();
+                var symbol = (IParameterSymbol)_model.GetDeclaredSymbol(parameter)!;
+                var fallback = symbol.HasExplicitDefaultValue
+                    ? LiteralConstant(symbol.ExplicitDefaultValue, parameter)
+                    : DefaultFieldValue(property.Type, parameter);
                 if (HasAttribute(property, "System.Text.Json.Serialization.JsonIgnoreAttribute"))
-                    return DefaultFieldValue(property.Type, parameter);
-                return JsonPropertyRead(property, "value", DefaultFieldValue(property.Type, parameter));
+                    return fallback;
+                return JsonPropertyRead(property, "value", fallback);
             })
             : [];
         _output.Append("    const result = new ").Append(_userTypes[type]).Append('(')
@@ -93,15 +107,43 @@ internal sealed partial class JavaScriptEmitter
     private string JsonValueExpression(ITypeSymbol type, string value)
     {
         if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
-            return JsonValueExpression(nullable.TypeArguments[0], value);
+        {
+            _helpers.Require(JavaScriptHelper.JsonDeserializeValue);
+            return $"{_helpers.Name("jsonDeserializeNullable")}({value}, item => {JsonValueExpression(nullable.TypeArguments[0], "item")})";
+        }
+        if (type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
+            return $"{_helpers.Require(JavaScriptHelper.JsonDeserializeValue)}({value}, 6)";
         if (type is IArrayTypeSymbol array)
-            return $"{value} == null ? null : Array.from({value}, item => {JsonValueExpression(array.ElementType, "item")})";
+        {
+            _helpers.Require(JavaScriptHelper.JsonDeserializeValue);
+            return $"{_helpers.Name("jsonDeserializeArray")}({value}, item => {JsonValueExpression(array.ElementType, "item")})";
+        }
         if (type is INamedTypeSymbol list
             && list.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>")
-            return $"{value} == null ? null : Array.from({value}, item => {JsonValueExpression(list.TypeArguments[0], "item")})";
+        {
+            _helpers.Require(JavaScriptHelper.JsonDeserializeValue);
+            return $"{_helpers.Name("jsonDeserializeArray")}({value}, item => {JsonValueExpression(list.TypeArguments[0], "item")})";
+        }
         if (type is INamedTypeSymbol user && IsUserInstanceType(user))
             return $"{_userTypes[user.OriginalDefinition]}.$fromJSON({value})";
-        return value;
+        if (type.TypeKind == TypeKind.Enum && type is INamedTypeSymbol enumeration)
+            return JsonValueExpression(enumeration.EnumUnderlyingType!, value);
+        var kind = type.SpecialType switch
+        {
+            SpecialType.System_String => "0",
+            SpecialType.System_Boolean => "1",
+            SpecialType.System_SByte => "2, -128, 127",
+            SpecialType.System_Byte => "2, 0, 255",
+            SpecialType.System_Int16 => "2, -32768, 32767",
+            SpecialType.System_UInt16 => "2, 0, 65535",
+            SpecialType.System_Int32 => "2, -2147483648, 2147483647",
+            SpecialType.System_UInt32 => "2, 0, 4294967295",
+            SpecialType.System_Single => "3",
+            SpecialType.System_Double => "4",
+            SpecialType.System_Char => "5",
+            _ => null
+        };
+        return kind is null ? value : $"{_helpers.Require(JavaScriptHelper.JsonDeserializeValue)}({value}, {kind})";
     }
 
     private static List<IPropertySymbol> JsonContractProperties(INamedTypeSymbol type) =>

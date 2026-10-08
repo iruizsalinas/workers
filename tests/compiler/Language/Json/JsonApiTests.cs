@@ -3,6 +3,28 @@ namespace Workers.Compiler.Tests;
 public sealed class JsonApiTests
 {
     [Fact]
+    public void KeepsNativeDictionaryDeserializationAvailable()
+    {
+        var module = Compile("""
+            using System.Collections.Generic;
+            using System.Text.Json;
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var stock = JsonSerializer.Deserialize<Dictionary<string, int>>("{\"widget\":5}")!;
+                    return Response.Json(new { count = stock["widget"] });
+                }
+            }
+            """);
+
+        Assert.Contains("JSON.parse(", module);
+        Assert.Contains("dictionaryIndex(stock, \"widget\")", module);
+    }
+
+    [Fact]
     public void EmitsNativeSerializerOperationsWithoutHelpers()
     {
         var module = Compile("""
@@ -121,7 +143,7 @@ public sealed class JsonApiTests
 
         Assert.Contains("$workers$User.$fromJSON(JSON.parse(", module);
         Assert.Contains("Object.hasOwn(value, \"Name\")", module);
-        Assert.Contains("result.name = value[\"Name\"]", module);
+        Assert.Contains("result.name = $workers$jsonDeserializeValue(value[\"Name\"], 0)", module);
         Assert.Contains("return { Name: this.name };", module);
         Assert.Contains("$workers$Item.$fromJSON(JSON.parse(", module);
         Assert.Contains("new $workers$Item(Object.hasOwn(value, \"Label\")", module);
@@ -174,4 +196,3 @@ public sealed class JsonApiTests
         Assert.StartsWith("WRK119:", error.Message);
     }
 }
-
