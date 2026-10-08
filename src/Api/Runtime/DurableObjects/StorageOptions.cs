@@ -1,18 +1,9 @@
 namespace Workers;
 
-public record DurableObjectStorageReadOptions
+public sealed record DurableObjectStorageListOptions
 {
     public bool? AllowConcurrency { get; init; }
     public bool? NoCache { get; init; }
-}
-
-public record DurableObjectStorageWriteOptions : DurableObjectStorageReadOptions
-{
-    public bool? AllowUnconfirmed { get; init; }
-}
-
-public sealed record DurableObjectStorageListOptions : DurableObjectStorageReadOptions
-{
     public string? Start { get; init; }
     public string? StartAfter { get; init; }
     public string? End { get; init; }

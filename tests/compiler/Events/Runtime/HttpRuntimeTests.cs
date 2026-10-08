@@ -24,7 +24,7 @@ public sealed class HttpRuntimeTests
                         url.Password,
                         url.Fragment,
                         request.Redirect,
-                        hasSignal = request.Signal is not null
+                        hasSignal = request.CancellationToken.CanBeCanceled
                     });
                 }
             }
@@ -111,7 +111,7 @@ public sealed class HttpRuntimeTests
             {
                 [Tail]
                 public static void Tail(TailEvent tail, Env env, Context context) =>
-                    Console.WriteLine(tail.Events.Count.ToString());
+                    Console.WriteLine(tail.Count.ToString());
             }
             """);
 
@@ -132,7 +132,7 @@ public sealed class HttpRuntimeTests
 
                 [Scheduled]
                 public static void Scheduled(ScheduledEvent scheduled) =>
-                    Console.WriteLine($"{scheduled.Type}:{scheduled.Schedule}");
+                    Console.WriteLine(scheduled.ScheduledTime.ToUnixTimeMilliseconds().ToString());
             }
             """);
 

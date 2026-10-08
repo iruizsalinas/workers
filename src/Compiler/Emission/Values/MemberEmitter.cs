@@ -118,6 +118,9 @@ internal sealed partial class JavaScriptEmitter
         if (symbol is IFieldSymbol { ContainingType: { } redirectType } redirect
             && redirectType.ToDisplayString() == "Workers.RedirectMode")
             return JsonSerializer.Serialize(LowerFirst(redirect.Name));
+        if (symbol is IFieldSymbol { ContainingType: { } transportType } transport
+            && transportType.ToDisplayString() == "Workers.TcpSecureTransport")
+            return JsonSerializer.Serialize(transport.Name.ToLowerInvariant());
         if (symbol is IFieldSymbol { ContainingType: { } compressionType } compression
             && compressionType.ToDisplayString() == "Workers.CompressionFormat")
             return JsonSerializer.Serialize(compression.Name switch
@@ -147,17 +150,10 @@ internal sealed partial class JavaScriptEmitter
         if (property?.ContainingType.ToDisplayString() == "Workers.Body" && property.Name == "Empty") return "null";
         if (property?.ContainingType.ToDisplayString() == "Workers.Body" && property.Name == "IsEmpty")
             return $"{Expression(member.Expression)} === null";
-        if (property?.ContainingType.ToDisplayString() == "Workers.TailEvent" && property.Name == "Events")
-            return Expression(member.Expression);
         if (property?.ContainingType.ToDisplayString() == "Workers.TailRequest" && property.Name == "Headers")
             return $"new Headers({Expression(member.Expression)}.headers)";
-        if (property?.ContainingType.ToDisplayString() == "Workers.ScheduledEvent")
-            return property.Name switch
-            {
-                "Type" => "\"scheduled\"",
-                "Schedule" => $"{Expression(member.Expression)}.scheduledTime",
-                _ => $"{Expression(member.Expression)}.{LowerFirst(property.Name)}"
-            };
+        if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "CancellationToken")
+            return $"{Expression(member.Expression)}.signal";
         if (property?.ContainingType.ToDisplayString() == "Workers.FormEntry")
             return FormEntryMember(member, property);
         if (property?.ContainingType.ToDisplayString() == "Workers.FormFile")

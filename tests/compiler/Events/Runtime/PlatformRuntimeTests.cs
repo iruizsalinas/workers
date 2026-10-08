@@ -52,8 +52,8 @@ public sealed class PlatformRuntimeTests
                 [Fetch]
                 public static async Task<Response> Fetch(Request request, Env env, Context ctx)
                 {
-                    var controller = new AbortController();
-                    controller.Abort("done");
+                    using var cancellation = new CancellationTokenSource();
+                    cancellation.Cancel();
                     var random = Crypto.RandomBytes(8);
                     var digest = await Crypto.DigestTextAsync(DigestAlgorithm.Sha256, "value");
                     var stream = request.BodyStream();
@@ -80,6 +80,29 @@ public sealed class PlatformRuntimeTests
         Assert.Contains("$workers$webSocketEvents(pair[1])", module);
         Assert.Contains("$workers$connectSocket({ hostname: \"example.com\", port: 443 }, {  })", module);
         Assert.Contains("$workers$socketWriter(socket).write(new TextEncoder().encode(\"hello\"))", module);
+    }
+
+    [Theory]
+    [InlineData("Off", "off")]
+    [InlineData("On", "on")]
+    [InlineData("StartTls", "starttls")]
+    public void UsesNativeTlsOptionValues(string option, string native)
+    {
+        var module = Compile($$"""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var socket = TcpSocket.Connect("example.com", 443,
+                        new TcpSocketOptions { SecureTransport = TcpSecureTransport.{{option}} });
+                    return Response.Empty();
+                }
+            }
+            """);
+
+        Assert.Contains($"secureTransport: \"{native}\"", module);
     }
 
     [Fact]

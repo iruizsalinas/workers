@@ -44,7 +44,6 @@ DurableObjectIntrinsics
             [Key("Workers.DurableObjectSqlStatement", "OneAsync")] = Direct("one"),
             [Key("Workers.DurableObjectSqlStatement", "RawAsync")] = Direct("raw"),
             [Key("Workers.DurableObjectSqlStatement", "OpenCursorAsync")] = Direct("cursor"),
-            [Key("Workers.DurableObjectSqlStorage", "TransactionSyncRawAsync")] = new("", BindingIntrinsicKind.SqlTransactionRaw),
             [Key("Workers.DurableObjectSqlCursor<T>", "NextAsync")] = new("", BindingIntrinsicKind.SqlCursorNext),
             [Key("Workers.DurableObjectSqlCursor<T>", "ReadAllAsync")] = Direct("toArray"),
             [Key("Workers.DurableObjectSqlCursor<T>", "DisposeAsync")] = new("", BindingIntrinsicKind.Dispose),

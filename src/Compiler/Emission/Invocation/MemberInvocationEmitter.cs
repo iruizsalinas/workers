@@ -68,7 +68,7 @@ internal sealed partial class JavaScriptEmitter
         string[] arguments,
         string? receiverOverride) => name switch
     {
-        "Text" => Response(arguments, "text"),
+        "Text" => Response(arguments),
         "Html" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2, "{ \"content-type\": \"text/html; charset=utf-8\" }")})",
         "Json" => $"Response.json({arguments[0]}{JsonResponseInit(arguments)})",
         "Empty" => $"new Response(null{ResponseInit(arguments, 0, 1)})",

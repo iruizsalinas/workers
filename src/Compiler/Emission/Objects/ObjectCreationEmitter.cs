@@ -33,7 +33,6 @@ internal sealed partial class JavaScriptEmitter
         if (typeName is "Workers.Request" or "Workers.Response")
             return PositionalObjectCreation(value, constructor, arguments,
                 values => $"new {type!.Name}({string.Join(", ", values)})");
-        if (typeName == "Workers.AbortController") return "new AbortController()";
         if (typeName == "Workers.HtmlRewriter") return "new HTMLRewriter()";
         if (typeName == "Workers.Headers") return "new Headers()";
         if (typeName == "Workers.WebSocketAutoResponse")
@@ -43,7 +42,7 @@ internal sealed partial class JavaScriptEmitter
             return UserObject(value, constructor, type!, arguments);
         if (IsException(type))
             return FrameworkException(constructor, type!, arguments);
-        if (typeName is "System.Uri" or "Workers.Url") return CreateUrl(value, constructor, arguments);
+        if (typeName == "Workers.Url") return CreateUrl(value, constructor, arguments);
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" && arguments.Length == 0)
             return $"[{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}]";
         if (type?.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.List<T>" or "System.Collections.Generic.HashSet<T>"

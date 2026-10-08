@@ -25,5 +25,3 @@ public sealed class ImagesOutputOptions
     public required string Format { get; init; }
     public int? Quality { get; init; }
 }
-
-public sealed class ImagesOperation;

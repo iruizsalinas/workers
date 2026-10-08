@@ -35,7 +35,6 @@ internal sealed partial class JavaScriptEmitter
                 CancellationTokenInvocation(invocation, method!, receiver, name, arguments),
             "System.Threading.CancellationTokenSource" =>
                 CancellationTokenSourceInvocation(invocation, method!, receiver, name, arguments),
-            "System.Uri" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             "Workers.Url" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
                    && name == "Add" && arguments.Length == 1 => $"{receiver}.push({arguments[0]})",

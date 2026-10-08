@@ -26,7 +26,6 @@ public sealed class R2PutOptions
 {
     public R2HttpMetadata? HttpMetadata { get; init; }
     public IReadOnlyDictionary<string, string>? CustomMetadata { get; init; }
-    public R2Checksums? Checksums { get; init; }
     public R2Conditional? OnlyIf { get; init; }
 }
 
@@ -49,7 +48,6 @@ public sealed record R2HttpMetadata(
     string? ContentEncoding = null,
     string? CacheControl = null,
     DateTimeOffset? CacheExpiry = null);
-public sealed class R2Checksums;
 public sealed record R2Object(
     string Key,
     string Version,
@@ -59,8 +57,7 @@ public sealed record R2Object(
     DateTimeOffset Uploaded,
     R2HttpMetadata HttpMetadata,
     IReadOnlyDictionary<string, string> CustomMetadata,
-    R2Range? Range,
-    R2Checksums Checksums);
+    R2Range? Range);
 public sealed record R2Objects(IReadOnlyList<R2Object> Objects, bool Truncated, string? Cursor, IReadOnlyList<string> DelimitedPrefixes);
 public sealed record R2ObjectBody(
     string Key,
@@ -72,7 +69,6 @@ public sealed record R2ObjectBody(
     R2HttpMetadata HttpMetadata,
     IReadOnlyDictionary<string, string> CustomMetadata,
     R2Range? Range,
-    R2Checksums Checksums,
     ReadableStream Body)
 {
     public void WriteHttpMetadata(Headers headers) => WorkerApi.NotExecutable();

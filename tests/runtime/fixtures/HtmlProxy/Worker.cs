@@ -48,7 +48,7 @@ public sealed class LinkRewriter : HtmlElementHandler
     {
         var href = element.GetAttribute("href");
         if (href is not null && href.StartsWith('/'))
-            element.SetAttribute("href", new Uri(new Uri(_origin), href).ToString());
+            element.SetAttribute("href", new Url(href, _origin).ToString());
         return ValueTask.CompletedTask;
     }
 }

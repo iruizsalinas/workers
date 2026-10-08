@@ -20,18 +20,11 @@ public sealed class WebSocket
     public void SerializeAttachment<T>(T value) => WorkerApi.NotExecutable();
     public T? DeserializeAttachment<T>() => WorkerApi.NotExecutable<T?>();
     public void Close(ushort? code = null, string? reason = null) => WorkerApi.NotExecutable();
-    public Task<WebSocketEvent?> ReceiveAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<WebSocketEvent?>>();
     public WebSocketEventStream Events() => WorkerApi.NotExecutable<WebSocketEventStream>();
 }
 
 public sealed class WebSocketMessage
 {
-    public string? Text => WorkerApi.NotExecutable<string?>();
-    public ReadOnlyMemory<byte> Bytes => WorkerApi.NotExecutable<ReadOnlyMemory<byte>>();
-    public bool IsText => WorkerApi.NotExecutable<bool>();
-    public bool IsBinary => WorkerApi.NotExecutable<bool>();
-
-    public T? Json<T>() => WorkerApi.NotExecutable<T?>();
     public string AsText() => WorkerApi.NotExecutable<string>();
 }
 

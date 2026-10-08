@@ -30,7 +30,6 @@ internal static partial class HelperSource
             one: async () => run().one(),
             raw: async () => { const cursor = run(); return result(cursor, Array.from(cursor.raw())); },
             cursor: async () => run(),
-            rawSync: () => { const cursor = run(); return result(cursor, Array.from(cursor.raw())); }
           };
         }
         function {{name("sqlCursorNext")}}(cursor) {
@@ -160,9 +159,9 @@ internal static partial class HelperSource
             bytes: typeof event.data === "string" ? null : new Uint8Array(event.data)
           }));
           socket.addEventListener("close", event => push({
-            kind: 1, code: event.code, reason: event.reason, wasClean: event.wasClean
+            kind: 1, closeCode: event.code, closeReason: event.reason, wasClean: event.wasClean
           }));
-          socket.addEventListener("error", () => push({ kind: 2 }));
+          socket.addEventListener("error", event => push({ kind: 2, error: { message: event.message ?? "WebSocket error." } }));
           const api = {
             next: () => queue.length
               ? Promise.resolve(queue.shift())

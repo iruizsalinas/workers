@@ -73,7 +73,7 @@ public static class Worker
                 url.Query,
                 url.Fragment,
                 request.Redirect,
-                hasSignal = request.Signal is not null
+                hasSignal = request.CancellationToken.CanBeCanceled
             });
         }
 
@@ -166,10 +166,30 @@ public static class Worker
             return Response.Text("delayed");
         }
 
+        if (request.Path == "/request-cancellation")
+        {
+            var token = request.CancellationToken;
+            var threw = false;
+            try
+            {
+                token.ThrowIfCancellationRequested();
+            }
+            catch (Exception)
+            {
+                threw = true;
+            }
+            return Response.Json(new
+            {
+                canBeCanceled = token.CanBeCanceled,
+                isCancellationRequested = token.IsCancellationRequested,
+                threw
+            });
+        }
+
         if (request.Path == "/abort")
         {
-            var controller = new AbortController();
-            controller.Abort("test-complete");
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
             return Response.Text("aborted");
         }
 
@@ -179,6 +199,22 @@ public static class Worker
             pair.Server.Accept();
             pair.Server.SendText("hello");
             return Response.Text("websocket-sent");
+        }
+
+        if (request.Path == "/websocket-events")
+        {
+            var pair = WebSocketPair.Create();
+            pair.Server.Accept();
+            context.WaitUntil(EchoAsync(pair.Server));
+            return Response.WebSocket(pair.Client);
+        }
+
+        if (request.Path == "/websocket-close")
+        {
+            var pair = WebSocketPair.Create();
+            pair.Server.Accept();
+            context.WaitUntil(CaptureCloseAsync(pair.Server, environment, request.QueryParameters.Get("key")!));
+            return Response.WebSocket(pair.Client);
         }
 
         if (request.Path == "/html")
@@ -212,6 +248,28 @@ public static class Worker
         }
 
         return Response.Text("Not found", status: 404);
+    }
+
+    private static async Task EchoAsync(WebSocket socket)
+    {
+        var message = await socket.Events().NextAsync();
+        if (message is not null)
+            socket.SendText(message.Text ?? "");
+        socket.Close(1000, "done");
+    }
+
+    private static async Task CaptureCloseAsync(WebSocket socket, Env environment, string key)
+    {
+        var message = await socket.Events().NextAsync();
+        if (message is not null)
+            await environment.Kv("KV").PutJsonAsync(key, new
+            {
+                kind = message.Kind,
+                code = message.CloseCode,
+                reason = message.CloseReason,
+                clean = message.WasClean
+            });
+        socket.Close(1000, "done");
     }
 }
 

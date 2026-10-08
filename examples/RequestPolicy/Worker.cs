@@ -42,10 +42,8 @@ public static class Worker
         headers.Set("content-type", "application/json");
         headers.Set("x-request-id", Guid.NewGuid().ToString());
 
-        var controller = new AbortController();
-        var timeout = Timers.SetTimeout(
-            () => controller.Abort("Upstream timeout"),
-            TimeSpan.FromMilliseconds(3000));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.CancelAfter(3000);
         try
         {
             var response = await Http.FetchAsync(upstream.ToString(), new FetchOptions
@@ -53,9 +51,8 @@ public static class Worker
                 Method = "POST",
                 Headers = headers,
                 Body = Body.Json(input),
-                Redirect = RedirectMode.Manual,
-                Signal = controller.Signal
-            });
+                Redirect = RedirectMode.Manual
+            }, cancellation.Token);
             return response.Clone()
                 .WithHeader("x-policy", "validated")
                 .WithHeader("x-upstream-host", upstream.Hostname);
@@ -64,10 +61,6 @@ public static class Worker
         {
             Console.Error.WriteLine(exception.Message);
             return Error("Upstream unavailable", 502);
-        }
-        finally
-        {
-            Timers.ClearTimeout(timeout);
         }
     }
 

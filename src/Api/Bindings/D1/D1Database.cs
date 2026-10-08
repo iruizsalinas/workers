@@ -84,4 +84,3 @@ public sealed class D1Timings
 {
     public double SqlDurationMs { get; init; }
 }
-public readonly record struct D1Value(object? Value);

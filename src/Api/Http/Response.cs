@@ -28,9 +28,3 @@ public sealed class Response
     public Task<T?> JsonAsync<T>(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<T?>>();
     public Task<FormData> FormDataAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<FormData>>();
 }
-
-public enum ResponseEncodeBody
-{
-    Automatic,
-    Manual
-}

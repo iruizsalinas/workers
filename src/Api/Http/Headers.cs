@@ -14,5 +14,3 @@ public sealed class Headers : IEnumerable<KeyValuePair<string, string>>
     public IEnumerator<KeyValuePair<string, string>> GetEnumerator() => WorkerApi.NotExecutable<IEnumerator<KeyValuePair<string, string>>>();
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }
-
-public sealed record Header(string Name, string Value);

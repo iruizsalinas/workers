@@ -2,7 +2,6 @@ namespace Workers;
 
 public sealed class TailEvent : IReadOnlyList<TailItem>
 {
-    public IReadOnlyList<TailItem> Events => WorkerApi.NotExecutable<IReadOnlyList<TailItem>>();
     public int Count => WorkerApi.NotExecutable<int>();
 
     public TailItem this[int index] => WorkerApi.NotExecutable<TailItem>();

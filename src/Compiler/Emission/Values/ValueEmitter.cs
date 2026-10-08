@@ -102,7 +102,7 @@ internal sealed partial class JavaScriptEmitter
             throw UnsupportedSymbol(symbol, source);
     }
 
-    private static string Response(string[] arguments, string _) => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})";
+    private static string Response(string[] arguments) => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})";
     private string Identifier(IdentifierNameSyntax value) => _model.GetSymbolInfo(value).Symbol switch
     {
         IPropertySymbol property when GeneratedRegex(property, value) is { } generatedRegex => generatedRegex,

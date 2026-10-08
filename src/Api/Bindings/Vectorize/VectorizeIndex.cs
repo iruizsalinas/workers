@@ -50,10 +50,3 @@ public sealed class VectorizeIndexDetails
     public string? Metric { get; init; }
     public long? VectorCount { get; init; }
 }
-
-public enum VectorizeReturnMetadata
-{
-    None,
-    Indexed,
-    All
-}

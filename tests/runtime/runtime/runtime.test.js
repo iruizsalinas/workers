@@ -1,4 +1,4 @@
-import { createExecutionContext } from "cloudflare:test";
+import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
 import { env } from "../support.js";
 
@@ -74,13 +74,57 @@ describe("runtime intrinsics", () => {
     });
   });
 
-  it("uses native timers and AbortController", async () => {
+  it("uses native timers and C# cancellation", async () => {
     expect(await (await invoke("/timer")).text()).toBe("delayed");
     expect(await (await invoke("/abort")).text()).toBe("aborted");
   });
 
+  it("exposes incoming request cancellation through CancellationToken", async () => {
+    expect(await (await invoke("/request-cancellation")).json()).toEqual({
+      canBeCanceled: true,
+      isCancellationRequested: false,
+      threw: false,
+    });
+
+    const controller = new AbortController();
+    controller.abort();
+    expect(await (await invoke("/request-cancellation", { signal: controller.signal })).json()).toEqual({
+      canBeCanceled: true,
+      isCancellationRequested: true,
+      threw: true,
+    });
+  });
+
   it("creates and uses a native WebSocketPair", async () => {
     expect(await (await invoke("/websocket")).text()).toBe("websocket-sent");
+  });
+
+  it("receives WebSocket messages through the event stream", async () => {
+    const response = await invoke("/websocket-events");
+    expect(response.status).toBe(101);
+    const socket = response.webSocket;
+    socket.accept();
+    const message = new Promise((resolve) => socket.addEventListener("message", resolve, { once: true }));
+    socket.send("echo from C#");
+    expect((await message).data).toBe("echo from C#");
+    socket.close(1000, "done");
+  });
+
+  it("preserves close metadata in the WebSocket event stream", async () => {
+    const runtime = await import("../fixtures/RuntimeIntrinsics/dist/worker.js");
+    const context = createExecutionContext();
+    const key = `socket-close-${crypto.randomUUID()}`;
+    const response = await runtime.default.fetch(
+      new Request(`https://worker.test/websocket-close?key=${key}`), env, context,
+    );
+    const socket = response.webSocket;
+    socket.accept();
+    socket.close(1000, "completed");
+    await waitOnExecutionContext(context);
+    expect(await env.KV.get(key, "json")).toEqual({
+      kind: 1, code: 1000, reason: "completed", clean: true,
+    });
+    await env.KV.delete(key);
   });
 
   it("runs a generated C# HTMLRewriter callback", async () => {

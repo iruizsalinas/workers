@@ -17,14 +17,6 @@ public interface IQueueProducer : IBinding
     Task<QueueMetrics> MetricsAsync(CancellationToken cancellationToken = default);
 }
 
-public enum QueueContentType
-{
-    Text,
-    Bytes,
-    Json,
-    V8
-}
-
 public sealed class QueueSendRequest
 {
     public static QueueSendRequest Json<T>(T body, int? delaySeconds = null) => WorkerApi.NotExecutable<QueueSendRequest>();

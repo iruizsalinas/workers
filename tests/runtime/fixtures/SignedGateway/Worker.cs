@@ -83,23 +83,17 @@ public static class Worker
                 return hit.Clone().WithHeader("x-edge-cache", "HIT");
         }
 
-        var controller = new AbortController();
-        var timeout = Timers.SetTimeout(() => controller.Abort("Origin timeout"), TimeSpan.FromMilliseconds(3000));
         Response response;
-        try
+        using (var cancellation = new CancellationTokenSource())
         {
+            cancellation.CancelAfter(3000);
             response = await Http.FetchAsync(upstream.ToString(), new FetchOptions
             {
                 Method = request.Method,
                 Headers = headers,
                 Body = request.Method == "GET" || request.Method == "HEAD" ? null : request.Body,
-                Redirect = RedirectMode.Manual,
-                Signal = controller.Signal
-            });
-        }
-        finally
-        {
-            Timers.ClearTimeout(timeout);
+                Redirect = RedirectMode.Manual
+            }, cancellation.Token);
         }
 
         if (!response.Headers.Contains("etag") && !response.Body.IsEmpty)

@@ -47,17 +47,6 @@ internal sealed partial class JavaScriptEmitter
         _ => throw Unsupported("WRK108", value)
     };
 
-    private string DateTimeRoundTripInterpolation(InterpolationSyntax item)
-    {
-        var type = _model.GetTypeInfo(item.Expression).Type?.ToDisplayString();
-        return type switch
-        {
-            "System.DateTime" => "${" + DateTimeRoundTrip(Expression(item.Expression), includeOffset: false) + "}",
-            "System.DateTimeOffset" => "${" + DateTimeRoundTrip(Expression(item.Expression)) + "}",
-            _ => throw Unsupported("WRK108", item)
-        };
-    }
-
     // Nonzero while emitting FormattableString.Invariant or string.Create(CultureInfo.InvariantCulture, ...),
     // where culture-sensitive format specifiers produce invariant output.
     private int _invariantFormatting;

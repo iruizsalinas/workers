@@ -6,10 +6,6 @@ public sealed class DurableObjectSqlStorage
     public long DatabaseSize => WorkerApi.NotExecutable<long>();
     public DurableObjectSqlCursor<T> Exec<T>(string query, params object?[] values) =>
         WorkerApi.NotExecutable<DurableObjectSqlCursor<T>>();
-
-    public Task<IReadOnlyList<DurableObjectSqlRawResult>> TransactionSyncRawAsync(
-        IEnumerable<DurableObjectSqlStatement> statements, CancellationToken cancellationToken = default) =>
-        WorkerApi.NotExecutable<Task<IReadOnlyList<DurableObjectSqlRawResult>>>();
 }
 
 public sealed class DurableObjectSqlStatement

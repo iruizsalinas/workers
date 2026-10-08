@@ -10,11 +10,6 @@ public sealed class FormEntry
     public string? Text => WorkerApi.NotExecutable<string?>();
     public FormFile? File => WorkerApi.NotExecutable<FormFile?>();
 }
-public sealed class FormField
-{
-    public string Value => WorkerApi.NotExecutable<string>();
-}
-
 public sealed class FormFile
 {
     public string FileName => WorkerApi.NotExecutable<string>();

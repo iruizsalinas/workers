@@ -12,7 +12,7 @@ public sealed class Request
     public Headers Headers => WorkerApi.NotExecutable<Headers>();
     public Body Body => WorkerApi.NotExecutable<Body>();
     public RedirectMode Redirect => WorkerApi.NotExecutable<RedirectMode>();
-    public AbortSignal Signal => WorkerApi.NotExecutable<AbortSignal>();
+    public CancellationToken CancellationToken => WorkerApi.NotExecutable<CancellationToken>();
 
     public ReadableStream? BodyStream() => WorkerApi.NotExecutable<ReadableStream?>();
     public QueryParameters QueryParameters => WorkerApi.NotExecutable<QueryParameters>();

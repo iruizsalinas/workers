@@ -31,12 +31,6 @@ public sealed class WorkflowInstanceStatus
     public JsonElement? Output { get; init; }
 }
 
-public sealed class WorkflowRetentionOptions
-{
-    public string? SuccessRetention { get; init; }
-    public string? ErrorRetention { get; init; }
-}
-
 public sealed class WorkflowInstanceRestartOptions
 {
     public WorkflowRestartFromStep? From { get; init; }
@@ -53,16 +47,4 @@ public sealed class WorkflowInstanceEventOptions
 {
     public required string Type { get; init; }
     public object? Payload { get; init; }
-}
-
-public sealed class WorkflowInstanceError
-{
-    public string Name { get; init; } = "";
-    public string Message { get; init; } = "";
-}
-
-public sealed class WorkflowRollbackStatus
-{
-    public string Outcome { get; init; } = "";
-    public WorkflowInstanceError? Error { get; init; }
 }

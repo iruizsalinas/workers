@@ -82,11 +82,7 @@ internal sealed partial class JavaScriptEmitter
         PositionalObjectCreation(source, constructor, arguments, values => values.Count switch
         {
             1 => $"new URL({values[0]})",
-            2 when constructor?.ContainingType.ToDisplayString() == "System.Uri"
-                   && constructor.Parameters[0].Type.ToDisplayString() == "System.Uri"
-                   && constructor.Parameters[1].Type.SpecialType == SpecialType.System_String =>
-                $"new URL({values[1]}, {values[0]})",
-            2 when constructor?.ContainingType.ToDisplayString() == "Workers.Url" => $"new URL({values[0]}, {values[1]})",
+            2 => $"new URL({values[0]}, {values[1]})",
             _ => throw UnsupportedSymbol(constructor, source)
         });
 

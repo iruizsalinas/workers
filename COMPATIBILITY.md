@@ -32,6 +32,12 @@ This is a quick overview, not a list of every overload. If something is unsuppor
 
 The API follows Cloudflare's runtime closely. A few methods are left out when workerd has no matching behavior or a C# mapping would be misleading.
 
+Cancellation uses `CancellationToken` and `CancellationTokenSource`. Incoming requests expose `Request.CancellationToken`; pass a token to the cancellation overloads of fetch and other operations. Native JavaScript abort controllers and signals are compiler implementation details.
+
+URLs use `Workers.Url`; `System.Uri` is supported only for `EscapeDataString` and `UnescapeDataString`. Native fetch configuration beyond the typed options can be supplied through `FetchOptions.Cf` using an anonymous object, including image transformations.
+
+Scheduled handlers use `ScheduledEvent.Cron` and `ScheduledTime`. Tail events are directly enumerable. WebSocket event streams use `socket.Events().NextAsync()`; Durable Object message callbacks use `WebSocketMessage.AsText()`.
+
 ## C# language
 
 | Feature | Status | Notes |

@@ -65,34 +65,25 @@ public static class Worker
         if (lease is null || !lease.Allowed)
             throw new InvalidOperationException("Outbound API is busy");
 
-        var controller = new AbortController();
-        var timeout = Timers.SetTimeout(
-            () => controller.Abort("Reading timeout"),
-            TimeSpan.FromMilliseconds(5000));
-        try
-        {
-            var options = new FetchOptions { Signal = controller.Signal };
-            var responses = await Task.WhenAll(
-                Http.FetchAsync($"https://sensors.example/v1/readings/{job.SensorId}", options),
-                Http.FetchAsync($"https://weather.example/v1/context/{job.SensorId}", options));
-            if (!responses[0].IsSuccessStatusCode || !responses[1].IsSuccessStatusCode)
-                throw new InvalidOperationException("Reading provider failed");
+        using var cancellation = new CancellationTokenSource();
+        cancellation.CancelAfter(5000);
+        var token = cancellation.Token;
+        var responses = await Task.WhenAll(
+            Http.FetchAsync($"https://sensors.example/v1/readings/{job.SensorId}", token),
+            Http.FetchAsync($"https://weather.example/v1/context/{job.SensorId}", token));
+        if (!responses[0].IsSuccessStatusCode || !responses[1].IsSuccessStatusCode)
+            throw new InvalidOperationException("Reading provider failed");
 
-            var reading = await responses[0].JsonAsync<Reading>();
-            var context = await responses[1].JsonAsync<WeatherContext>();
-            if (reading is null || context is null)
-                throw new InvalidOperationException("Reading provider returned invalid JSON");
+        var reading = await responses[0].JsonAsync<Reading>();
+        var context = await responses[1].JsonAsync<WeatherContext>();
+        if (reading is null || context is null)
+            throw new InvalidOperationException("Reading provider returned invalid JSON");
 
-            await environment.D1("DB").Prepare(
-                    "INSERT OR REPLACE INTO readings (id, sensor_id, value, condition, processed_at) VALUES (?, ?, ?, ?, ?)")
-                .Bind(job.RequestId, job.SensorId, reading.Value, context.Condition, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
-                .RunAsync();
-            await gate.InvokeVoidAsync("complete", [lease.Token]);
-        }
-        finally
-        {
-            Timers.ClearTimeout(timeout);
-        }
+        await environment.D1("DB").Prepare(
+                "INSERT OR REPLACE INTO readings (id, sensor_id, value, condition, processed_at) VALUES (?, ?, ?, ?, ?)")
+            .Bind(job.RequestId, job.SensorId, reading.Value, context.Condition, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+            .RunAsync();
+        await gate.InvokeVoidAsync("complete", [lease.Token]);
     }
 }
 

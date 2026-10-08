@@ -41,7 +41,6 @@ internal sealed partial class JavaScriptEmitter
                 ThenMap(Converter(JsonWebMode, false), "(value.value = ({0})(value.value), value)"),
             ("Workers.IKvNamespace", "GetJsonBulkAsync") =>
                 ThenMap(Converter(JsonWebMode, false), "Object.fromEntries(Object.entries(value).map(([key, item]) => [key, ({0})(item)]))"),
-            ("Workers.WebSocketMessage", "Json") => Call(Converter(JsonWebMode, false)),
             ("Workers.QueryParameters", "As") => typeArgument is INamedTypeSymbol queryType && IsUserInstanceType(queryType)
                 && Converter(JsonQueryMode, false) is { } query
                     ? $"({query})({result})"
@@ -134,7 +133,6 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.Identity => receiver,
             BindingIntrinsicKind.HeadersClone => $"new Headers({receiver})",
             BindingIntrinsicKind.Fluent => $"(value => {{ value.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))}); return value; }})({receiver})",
-            BindingIntrinsicKind.JsonParse => $"JSON.parse({receiver}.{intrinsic.JavascriptName})",
             BindingIntrinsicKind.Dispose => $"{receiver}[Symbol.asyncDispose]?.()",
             BindingIntrinsicKind.RateLimit => $"{receiver}.{intrinsic.JavascriptName}({{ key: {arguments.Single(item => item.Parameter.Name == "key").Value} }})",
             BindingIntrinsicKind.CryptoRandomBytes => $"{receiver}.getRandomValues(new Uint8Array({arguments[0].Value}))",
@@ -172,7 +170,6 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.Utf8Decode => EmitUtf8Decode(arguments),
             BindingIntrinsicKind.SqlPrepare => $"{_helpers.Require(JavaScriptHelper.SqlStatement)}({receiver}, {arguments[0].Value})",
             BindingIntrinsicKind.SqlCursorNext => $"{RequireHelperName(JavaScriptHelper.SqlStatement, "sqlCursorNext")}({receiver})",
-            BindingIntrinsicKind.SqlTransactionRaw => $"Promise.resolve(Array.from({arguments[0].Value}, statement => statement.rawSync()))",
             BindingIntrinsicKind.SyncStorageGet => $"({receiver}.get({arguments[0].Value}) ?? null)",
             // Every name maps to all of its values; scalar members take the first one.
             BindingIntrinsicKind.QueryAs =>
