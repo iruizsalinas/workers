@@ -69,7 +69,7 @@ PostgreSQL, MySQL, and MongoDB clients map directly to the drivers Cloudflare re
 | `MySqlClient` | `mysql2` | `?` |
 | `MongoClient` | `mongodb` | Filter objects |
 
-Install the package next to your project with `npm install pg`, and enable `"compatibility_flags": ["nodejs_compat"]` in your Wrangler configuration. Wrangler bundles the driver when it deploys `dist/worker.js`.
+Building a Worker that uses a client installs its npm package when it is missing or older than the supported version, the way a restore adds NuGet packages. It goes into the nearest `package.json` above `dist/worker.js`, or the project, and the build verifies the Worker resolves it before writing `worker.js`. Set `<WorkersInstallNpmPackages>false</WorkersInstallNpmPackages>` to report a `WRK121` error with the install command instead. Enable `"compatibility_flags": ["nodejs_compat"]` in your Wrangler configuration, and Wrangler bundles the driver when it deploys `dist/worker.js`.
 
 `mysql2` cannot negotiate TLS inside Workers, so connect to MySQL services that require it, such as PlanetScale and TiDB Cloud, through Hyperdrive. PostgreSQL and MongoDB support TLS directly, including `mongodb+srv://` connection strings.
 

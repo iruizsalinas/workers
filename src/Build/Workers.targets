@@ -1,5 +1,7 @@
 <Project>
   <PropertyGroup>
+    <!-- Install npm packages the Worker imports (database drivers) when they are missing, like a restore. -->
+    <WorkersInstallNpmPackages Condition="'$(WorkersInstallNpmPackages)' == ''">true</WorkersInstallNpmPackages>
     <WorkerOutputPath Condition="'$(WorkerOutputPath)' == ''">$(MSBuildProjectDirectory)\dist\worker.js</WorkerOutputPath>
     <_WorkersOutputDirectory>$([System.IO.Path]::GetDirectoryName('$(WorkerOutputPath)'))</_WorkersOutputDirectory>
     <_WorkersApiAssembly Condition="Exists('$(MSBuildThisFileDirectory)..\lib\$(TargetFramework)\Workers.dll')">$(MSBuildThisFileDirectory)..\lib\$(TargetFramework)\Workers.dll</_WorkersApiAssembly>
@@ -19,6 +21,9 @@
           Condition="'$(IsCrossTargetingBuild)' != 'true'">
     <PropertyGroup>
       <_WorkersSourcesFile>$(IntermediateOutputPath)worker-sources.txt</_WorkersSourcesFile>
+      <_WorkersNpmArguments>$(IntermediateOutputPath)worker-npm-install.txt</_WorkersNpmArguments>
+      <_WorkersCompileCommand>&quot;$(_WorkersDotNetHost)&quot; &quot;$(_WorkersCompilerPath)&quot; --project &quot;$(MSBuildProjectDirectory)&quot; --sources &quot;$(_WorkersSourcesFile)&quot; --define &quot;$(DefineConstants)&quot; --reference &quot;$(_WorkersApiAssembly)&quot; --output &quot;$(WorkerOutputPath)&quot;</_WorkersCompileCommand>
+      <_WorkersNpmOption Condition="'$(WorkersInstallNpmPackages)' == 'true'"> --npm-install-arguments &quot;$(_WorkersNpmArguments)&quot;</_WorkersNpmOption>
     </PropertyGroup>
     <Error Condition="'$(_WorkersCompilerPath)' == '' or !Exists('$(_WorkersCompilerPath)')"
            Text="The Workers compiler was not found. Build or restore the Workers package before compiling this project." />
@@ -30,7 +35,25 @@
                       Lines="@(Compile->'%(FullPath)')"
                       Overwrite="true"
                       WriteOnlyWhenDifferent="true" />
-    <Exec Command="&quot;$(_WorkersDotNetHost)&quot; &quot;$(_WorkersCompilerPath)&quot; --project &quot;$(MSBuildProjectDirectory)&quot; --sources &quot;$(_WorkersSourcesFile)&quot; --define &quot;$(DefineConstants)&quot; --reference &quot;$(_WorkersApiAssembly)&quot; --output &quot;$(WorkerOutputPath)&quot;" />
+    <Exec Command="$(_WorkersCompileCommand)$(_WorkersNpmOption)" />
+
+    <!-- When packages the Worker imports are missing, the compiler holds back worker.js and lists
+         the npm install arguments. The second compilation verifies the installed packages resolve. -->
+    <ReadLinesFromFile Condition="'$(WorkersInstallNpmPackages)' == 'true' and Exists('$(_WorkersNpmArguments)')" File="$(_WorkersNpmArguments)">
+      <Output TaskParameter="Lines" ItemName="_WorkersNpmArgument" />
+    </ReadLinesFromFile>
+    <Message Importance="High" Condition="'@(_WorkersNpmArgument)' != ''" Text="Installing npm packages imported by the Worker: npm install @(_WorkersNpmArgument->'&quot;%(Identity)&quot;', ' ')" />
+    <!-- Arguments are quoted so cmd.exe keeps the ^ in version ranges. -->
+    <Exec Condition="'@(_WorkersNpmArgument)' != ''"
+          Command="npm install --no-audit --no-fund @(_WorkersNpmArgument->'&quot;%(Identity)&quot;', ' ')"
+          IgnoreExitCode="true"
+          IgnoreStandardErrorWarningFormat="true">
+      <Output TaskParameter="ExitCode" PropertyName="_WorkersNpmExitCode" />
+    </Exec>
+    <Error Condition="'$(_WorkersNpmExitCode)' != '' and '$(_WorkersNpmExitCode)' != '0'"
+           Code="WRK121"
+           Text="Installing the npm packages imported by the Worker failed. Install Node.js and run 'npm install @(_WorkersNpmArgument->'&quot;%(Identity)&quot;', ' ')', or set WorkersInstallNpmPackages to false to report missing packages without installing them." />
+    <Exec Condition="'@(_WorkersNpmArgument)' != ''" Command="$(_WorkersCompileCommand)" />
     <Message Importance="High" Text="Worker module written to '$(WorkerOutputPath)'." />
   </Target>
 </Project>

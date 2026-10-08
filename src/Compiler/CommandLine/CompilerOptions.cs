@@ -3,7 +3,8 @@ internal sealed record CompilerOptions(
     string Output,
     string? Reference,
     IReadOnlyList<string> SourcePaths,
-    IReadOnlyList<string> Symbols)
+    IReadOnlyList<string> Symbols,
+    string? NpmInstallArguments = null)
 {
     private static readonly HashSet<string> KnownOptions =
     [
@@ -11,7 +12,8 @@ internal sealed record CompilerOptions(
         "--output",
         "--sources",
         "--reference",
-        "--define"
+        "--define",
+        "--npm-install-arguments"
     ];
 
     public static CompilerOptions Parse(string[] args)
@@ -31,7 +33,8 @@ internal sealed record CompilerOptions(
             RequiredPath(values, "--output"),
             OptionalPath(values, "--reference"),
             sources.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-            Value(values, "--define").Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            Value(values, "--define").Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            OptionalPath(values, "--npm-install-arguments"));
     }
 
     private static bool IsSource(string path) =>

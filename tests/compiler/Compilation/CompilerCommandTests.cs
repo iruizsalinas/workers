@@ -112,4 +112,141 @@ public sealed class CompilerCommandTests
                 Directory.Delete(root, recursive: true);
         }
     }
+
+    [Theory]
+    [InlineData(null, "'pg' is not installed")]
+    [InlineData("8.1.0", "'pg' 8.1.0 is older than the supported 8.16.3")]
+    public void ReportsMissingOrOutdatedNpmPackagesWithoutWritingTheWorker(string? installedVersion, string problem)
+    {
+        using var workspace = NpmWorkspace.Create(installedVersion);
+
+        var (exitCode, error) = workspace.Compile();
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains($"error WRK121: The Worker imports npm packages that Wrangler cannot resolve: {problem}. "
+            + $"Run 'npm install pg@^8.16.3' in '{workspace.Project}'.", error);
+        Assert.False(File.Exists(workspace.Output));
+    }
+
+    [Fact]
+    public void ListsInstallArgumentsAndHoldsBackTheWorkerUntilPackagesResolve()
+    {
+        using var workspace = NpmWorkspace.Create(installedVersion: null);
+
+        var (exitCode, _) = workspace.Compile(installArguments: true);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(["--prefix", workspace.Project, "pg@^8.16.3"], File.ReadAllLines(workspace.InstallArguments));
+        Assert.False(File.Exists(workspace.Output), "A Worker whose packages are not installed must not be deployable.");
+    }
+
+    [Fact]
+    public void InstallsIntoTheNearestPackageJsonAboveTheWorker()
+    {
+        using var workspace = NpmWorkspace.Create(installedVersion: null);
+        File.WriteAllText(Path.Combine(workspace.Root, "package.json"), "{}");
+
+        workspace.Compile(installArguments: true);
+
+        Assert.Equal(["--prefix", workspace.Root, "pg@^8.16.3"], File.ReadAllLines(workspace.InstallArguments));
+    }
+
+    [Fact]
+    public void RefusesToInstallWhereTheWorkerCannotResolvePackages()
+    {
+        using var workspace = NpmWorkspace.Create(installedVersion: null, output: Path.Combine("..", "out", "worker.js"));
+
+        var (exitCode, error) = workspace.Compile(installArguments: true);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains($"in '{Path.Combine(workspace.Root, "out")}' or a directory above it.", error);
+        Assert.Empty(File.ReadAllLines(workspace.InstallArguments));
+        Assert.False(File.Exists(workspace.Output));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WritesTheWorkerWhenInstalledPackagesSatisfyItsImports(bool installArguments)
+    {
+        // Installed in an ancestor, as in a workspace that shares node_modules.
+        using var workspace = NpmWorkspace.Create(installedVersion: "8.23.1");
+
+        var (exitCode, _) = workspace.Compile(installArguments);
+
+        Assert.Equal(0, exitCode);
+        Assert.True(File.Exists(workspace.Output));
+        if (installArguments)
+            Assert.Empty(File.ReadAllLines(workspace.InstallArguments));
+    }
+
+    [Fact]
+    public void WorkersWithoutNpmImportsNeedNoPackages()
+    {
+        Assert.Empty(global::NpmDependencies.Unsatisfied(["cloudflare:workers", "cloudflare:sockets"], Path.GetTempPath()));
+    }
+
+    private sealed class NpmWorkspace : IDisposable
+    {
+        private NpmWorkspace(string root, string output)
+        {
+            Root = root;
+            Project = Path.Combine(root, "project");
+            Output = Path.GetFullPath(output, Project);
+            InstallArguments = Path.Combine(Project, "obj", "worker-npm-install.txt");
+        }
+
+        public string Root { get; }
+        public string Project { get; }
+        public string Output { get; }
+        public string InstallArguments { get; }
+
+        public static NpmWorkspace Create(string? installedVersion, string? output = null)
+        {
+            var workspace = new NpmWorkspace(
+                Path.Combine(Path.GetTempPath(), $"workers-npm-{Guid.NewGuid():N}"),
+                output ?? Path.Combine("dist", "worker.js"));
+            Directory.CreateDirectory(workspace.Project);
+            File.WriteAllText(Path.Combine(workspace.Project, "Worker.cs"), """
+                using Workers;
+                using System.Threading.Tasks;
+
+                public static class Worker
+                {
+                    [Fetch]
+                    public static async Task<Response> Fetch(Request request, Env env, Context context)
+                    {
+                        await using var db = await PostgresClient.ConnectAsync(env.Hyperdrive("HYPERDRIVE"));
+                        return Response.Text("ok");
+                    }
+                }
+                """);
+            if (installedVersion is not null)
+            {
+                var package = Path.Combine(workspace.Root, "node_modules", "pg");
+                Directory.CreateDirectory(package);
+                File.WriteAllText(Path.Combine(package, "package.json"), $$"""{ "name": "pg", "version": "{{installedVersion}}" }""");
+            }
+            return workspace;
+        }
+
+        public (int ExitCode, string Error) Compile(bool installArguments = false)
+        {
+            using var error = new StringWriter();
+            var exitCode = global::CompilerCommand.Run(
+            [
+                "--project", Project,
+                "--reference", typeof(global::Workers.Response).Assembly.Location,
+                "--output", Output,
+                .. installArguments ? new[] { "--npm-install-arguments", InstallArguments } : []
+            ], TextWriter.Null, error);
+            return (exitCode, error.ToString());
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Root))
+                Directory.Delete(Root, recursive: true);
+        }
+    }
 }

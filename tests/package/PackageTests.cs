@@ -50,6 +50,31 @@ public sealed class PackageTests
         Assert.False(File.Exists(module), "Cleaning the consumer must remove its generated Worker artifact.");
     }
 
+    [Fact]
+    public void Package_installs_the_npm_driver_a_consumer_imports()
+    {
+        using var workspace = TemporaryDirectory.Create();
+        var repository = FindRepository();
+
+        RunDotNet(repository, "pack", "src/Workers.csproj", "-c", "Release", "-o", workspace.Path);
+
+        var package = Directory.GetFiles(workspace.Path, "Workers.*.nupkg").Single();
+        var consumer = Directory.CreateDirectory(Path.Combine(workspace.Path, "consumer")).FullName;
+        File.WriteAllText(Path.Combine(consumer, "Consumer.csproj"), Project(package, workspace.Path));
+        File.WriteAllText(Path.Combine(consumer, "Worker.cs"), DatabaseSource);
+
+        RunDotNet(consumer, "build", "-c", "Release", "--packages", Path.Combine(workspace.Path, "packages"));
+
+        var module = Path.Combine(consumer, "dist", "worker.js");
+        Assert.Contains("from \"pg\"", File.ReadAllText(module), StringComparison.Ordinal);
+        Assert.Contains("\"pg\"", File.ReadAllText(Path.Combine(consumer, "package.json")), StringComparison.Ordinal);
+        // Resolve the import from the Worker's directory, as the bundler does.
+        var (exitCode, output) = Execute("node", consumer,
+            "-e", "console.log(require.resolve('pg', { paths: [process.argv[1]] }))", Path.GetDirectoryName(module)!);
+        Assert.True(exitCode == 0, $"pg did not resolve from the Worker:{Environment.NewLine}{output}");
+        Assert.StartsWith(Path.Combine(consumer, "node_modules", "pg"), output.Trim(), StringComparison.Ordinal);
+    }
+
     private static string Project(string package, string source) => $$"""
         <Project Sdk="Microsoft.NET.Sdk">
           <PropertyGroup>
@@ -75,6 +100,22 @@ public sealed class PackageTests
         }
         """;
 
+    private const string DatabaseSource = """
+        using Workers;
+
+        public static class Worker
+        {
+            [Fetch]
+            public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
+            {
+                await using var db = await PostgresClient.ConnectAsync(environment.Hyperdrive("HYPERDRIVE"));
+                return Response.Json(await db.QueryAsync<Row>("select 1 as value"));
+            }
+        }
+
+        public sealed record Row(int Value);
+        """;
+
     private static string FindRepository()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
@@ -96,9 +137,12 @@ public sealed class PackageTests
         Assert.True(exitCode != 0, $"dotnet {string.Join(' ', arguments)} unexpectedly succeeded:{Environment.NewLine}{output}");
     }
 
-    private static (int ExitCode, string Output) ExecuteDotNet(string directory, params string[] arguments)
+    private static (int ExitCode, string Output) ExecuteDotNet(string directory, params string[] arguments) =>
+        Execute("dotnet", directory, arguments);
+
+    private static (int ExitCode, string Output) Execute(string fileName, string directory, params string[] arguments)
     {
-        var start = new ProcessStartInfo("dotnet")
+        var start = new ProcessStartInfo(fileName)
         {
             WorkingDirectory = directory,
             RedirectStandardError = true,
@@ -108,7 +152,7 @@ public sealed class PackageTests
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
 
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start dotnet.");
+        using var process = Process.Start(start) ?? throw new InvalidOperationException($"Could not start {fileName}.");
         var output = process.StandardOutput.ReadToEnd();
         var error = process.StandardError.ReadToEnd();
         process.WaitForExit();

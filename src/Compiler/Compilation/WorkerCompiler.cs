@@ -5,7 +5,10 @@ internal static class WorkerCompiler
 {
     public static int Run(string[] args) => CompilerCommand.Run(args);
 
-    internal static string Compile(IEnumerable<SyntaxTree> trees, IEnumerable<string>? additionalReferences = null)
+    internal static string Compile(IEnumerable<SyntaxTree> trees, IEnumerable<string>? additionalReferences = null) =>
+        CompileWorker(trees, additionalReferences).Source;
+
+    internal static EmittedWorker CompileWorker(IEnumerable<SyntaxTree> trees, IEnumerable<string>? additionalReferences = null)
     {
         var inputTrees = trees.ToArray();
         var parseOptions = inputTrees.OfType<CSharpSyntaxTree>().FirstOrDefault()?.Options
@@ -23,7 +26,7 @@ internal static class WorkerCompiler
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         CompilationGuard.ThrowIfInvalid(compilation);
-        return JavaScriptEmitter.Emit(compilation);
+        return JavaScriptEmitter.EmitWorker(compilation);
     }
 
     private const string GlobalUsings = """

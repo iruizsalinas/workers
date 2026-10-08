@@ -32,12 +32,15 @@ internal sealed partial class JavaScriptEmitter
         _imports = new ImportRegistry(_names);
     }
 
-    public static string Emit(CSharpCompilation compilation)
+    public static string Emit(CSharpCompilation compilation) => EmitWorker(compilation).Source;
+
+    public static EmittedWorker EmitWorker(CSharpCompilation compilation)
     {
         var emitter = new JavaScriptEmitter(compilation);
         try
         {
-            return emitter.EmitModule(compilation);
+            var source = emitter.EmitModule(compilation);
+            return new EmittedWorker(source, emitter._imports.Modules);
         }
         catch (NotSupportedException exception)
         {
@@ -71,3 +74,5 @@ internal sealed partial class JavaScriptEmitter
     }
 
 }
+
+internal sealed record EmittedWorker(string Source, IReadOnlyList<string> ImportedModules);
