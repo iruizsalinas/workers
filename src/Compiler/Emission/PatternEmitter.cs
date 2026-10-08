@@ -136,6 +136,10 @@ internal sealed partial class JavaScriptEmitter
         };
         if (symbol.ContainingType is { } owner && IsUserInstanceType(owner))
             return (UserMemberAccess(value, symbol), type);
+        if (RegexCaptureField(symbol) is { } regexField)
+            return ($"{value}.{regexField}", type);
+        if (symbol.Name == "Count" && IsRegexType(symbol.ContainingType))
+            return ($"{value}.length", type);
         if (symbol.Name is "Length" or "Count"
             && (symbol.ContainingType.SpecialType == SpecialType.System_String
                 || symbol.ContainingType.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.List<T>"

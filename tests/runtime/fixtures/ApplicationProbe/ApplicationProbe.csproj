@@ -15,6 +15,7 @@
     <Compile Include="../../../differential/VerificationCollectionScenarios.cs" Link="VerificationCollectionScenarios.cs" />
     <Compile Include="../../../differential/Regressions.cs" Link="Regressions.cs" />
     <Compile Include="../../../differential/RegressionsLanguage.cs" Link="RegressionsLanguage.cs" />
+    <Compile Include="../../../differential/RegexScenarios.cs" Link="RegexScenarios.cs" />
     <ProjectReference Include="../../../../src/Workers.csproj" />
     <ProjectReference Include="../../../../src/Compiler/Compiler.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
   </ItemGroup>

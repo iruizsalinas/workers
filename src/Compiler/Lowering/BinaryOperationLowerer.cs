@@ -139,6 +139,8 @@ internal sealed partial class JavaScriptEmitter
             _ when IsTextEnum(underlying) => EnumText(underlying, item),
             _ when underlying.ToDisplayString() == "System.Text.StringBuilder" =>
                 $"{RequireHelperName(JavaScriptHelper.StringBuilder, "stringBuilderText")}({item})",
+            _ when IsRegexCapture(underlying) => $"{item}.value",
+            _ when IsRegexType(underlying, "Regex") => $"{item}.source",
             _ when underlying is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record) =>
                 RecordText(record, item, source),
             _ => throw Unsupported("WRK108", source)

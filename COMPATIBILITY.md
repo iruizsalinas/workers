@@ -62,6 +62,7 @@ Durable Objects, Worker entrypoints, and HTML handlers have stricter class rules
 | LINQ | 🔵 | Filtering, projection, ordering, grouping, joins, sets, and aggregation |
 | Collections | 🔵 | Arrays, List, Dictionary, HashSet, Queue, and Stack |
 | `System.Text.Json` | 🔵 | Native JSON conversion, `JsonElement`, and common attributes |
+| Regular expressions | 🔵 | `Regex` and `[GeneratedRegex]` with constant patterns: matching, groups, replacement, and splitting |
 | `Guid` | 🔵 | Creation, parsing, comparison, and common formats |
 | Threads, processes, filesystem APIs, and application domains | 🔴 | Not available in Workers |
 
@@ -75,6 +76,7 @@ Supporting a type does not mean every constructor, method, or overload is availa
 - **Dictionary order.** Dictionaries are JavaScript objects, so keys that look like array indexes (`"1"`, `"42"`) are enumerated first, in numeric order, followed by the other keys in insertion order.
 - **Database rows.** Rows from D1, Durable Object SQL, and the database clients map to classes and records by case-insensitive column name. 64-bit and exact numerics returned as strings convert to numeric members when they fit, and binary columns convert to `byte[]`. MongoDB ObjectIds are read as hexadecimal strings: map `_id` with `[JsonPropertyName("_id")]` and filter with `MongoClient.ObjectId(id)`.
 - **Database cancellation.** MongoDB reads (`FindAsync`, `FindOneAsync`, `CountDocumentsAsync`, `AggregateAsync`) are aborted when their token is canceled. PostgreSQL, MySQL, and MongoDB writes check the token before they start, because the drivers cannot abandon a statement in flight.
+- **Regular expressions.** Patterns and options must be compile-time constants. They are translated to JavaScript when the Worker is built and keep .NET semantics for `\w`, `\d`, `\s`, `\b`, `^`, `$`, `.`, group numbering, empty matches, and replacement patterns. Constructs JavaScript cannot reproduce report `WRK120`: `RightToLeft`, `ECMAScript`, and `NonBacktracking` options, match timeouts, `\G`, conditionals, balancing groups, loops whose body can match empty text, and captures inside a loop that do not participate in every iteration. A surrogate pair matches as one character, so `.` matches a whole emoji where .NET matches each UTF-16 code unit.
 - **RPC values.** Class and record instances passed to or returned from RPC methods arrive as plain data. Their properties are kept but their methods are not.
 
 ## Contributing

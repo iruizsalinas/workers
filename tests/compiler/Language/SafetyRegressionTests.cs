@@ -85,7 +85,7 @@ public sealed class SafetyRegressionTests
     }
 
     [Theory]
-    [InlineData("Regex.IsMatch(\"x\", \"x\", RegexOptions.IgnoreCase)")]
+    [InlineData("Regex.IsMatch(\"x\", \"x\", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1))")]
     [InlineData("new Uri(\"relative\", UriKind.Relative)")]
     [InlineData("new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)")]
     [InlineData("Convert.ToBase64String([1, 2, 3], 1, 2)")]

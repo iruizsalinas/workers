@@ -79,6 +79,8 @@ public static class Worker
             return Response.Json(CollectionScenarios.Run());
         if (request.Path == "/regressions")
             return Response.Json(RegressionScenarios.Run());
+        if (request.Path == "/regex")
+            return Response.Json(RegexScenarios.Run());
         return Response.Text("Not found", 404);
     }
 }

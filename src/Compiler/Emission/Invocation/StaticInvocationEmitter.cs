@@ -66,8 +66,8 @@ internal sealed partial class JavaScriptEmitter
                 }),
             ("System.Math" or "System.MathF", _) => MathInvocation(invocation, method!, name!, arguments),
             ("string", _) when method?.IsStatic == true => StringStaticInvocation(invocation, method, name!, arguments),
-            ("System.Text.RegularExpressions.Regex", "IsMatch") when method?.IsStatic == true && arguments.Length == 2 =>
-                RegexIsMatch(invocation, method, arguments),
+            ("System.Text.RegularExpressions.Regex", _) when method?.IsStatic == true =>
+                RegexStaticInvocation(invocation, method, arguments),
             ("Workers.Timers", "SetTimeout") => $"setTimeout({arguments[0]}, {arguments[1]})",
             ("Workers.Timers", "ClearTimeout") => $"clearTimeout({arguments[0]})",
             ("Workers.Body", "Text" or "FromBytes" or "FromStream" or "FromFormData" or "FromQueryParameters") => arguments[0],
@@ -180,27 +180,6 @@ internal sealed partial class JavaScriptEmitter
         };
         return single && type == SpecialType.System_Single ? $"Math.fround({result})" : result;
     }
-
-    private string RegexIsMatch(
-        InvocationExpressionSyntax invocation,
-        IMethodSymbol method,
-        IReadOnlyList<string> arguments)
-    {
-        var patternExpression = invocation.ArgumentList.Arguments
-            .Select((argument, index) => (Argument: argument, Parameter: InvocationParameter(method, argument, index)))
-            .Single(item => item.Parameter.Name == "pattern").Argument.Expression;
-        var constant = _model.GetConstantValue(patternExpression);
-        if (!constant.HasValue || constant.Value is not string pattern || !IsCompatibleRegexPattern(pattern))
-            throw new NotSupportedException(
-                "WRK120: Regex.IsMatch supports only compile-time constant patterns that are compatible with JavaScript regular expressions.");
-        return $"new RegExp({System.Text.Json.JsonSerializer.Serialize(pattern)}).test({arguments[0]})";
-    }
-
-    private static bool IsCompatibleRegexPattern(string pattern) =>
-        pattern.All(character => character <= 0x7f)
-        && !pattern.Contains('\\')
-        && !pattern.Contains("(?", StringComparison.Ordinal)
-        && !pattern.Contains("-[", StringComparison.Ordinal);
 
     private string TaskWhenAll(
         InvocationExpressionSyntax invocation,

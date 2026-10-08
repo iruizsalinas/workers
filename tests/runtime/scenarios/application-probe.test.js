@@ -51,6 +51,16 @@ describe("application correctness probes", () => {
       expect(regressions[name]).toBe(expected);
     });
   });
+
+  describe("regular expression scenarios", () => {
+    let results;
+    beforeAll(async () => {
+      results = await (await invoke("/regex")).json();
+    });
+    it.each(Object.entries(clr.regex))("%s agrees with the CLR", (name, expected) => {
+      expect(results[name]).toBe(expected);
+    });
+  });
 });
 
 describe("shipment submission with nested input, D1 persistence and background KV cache", () => {

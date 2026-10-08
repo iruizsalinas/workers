@@ -24,6 +24,7 @@ internal static class WorkerCompiler
             syntaxTrees,
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        compilation = GeneratedRegexImplementations.Add(compilation);
 
         CompilationGuard.ThrowIfInvalid(compilation);
         return JavaScriptEmitter.EmitWorker(compilation);

@@ -42,7 +42,7 @@ internal sealed partial class JavaScriptEmitter
                     enumerable = $"{_helpers.Require(JavaScriptHelper.LinqValues)}({enumerable})";
                 else if (BindingIntrinsicRegistry.IsQueueMessageBatch(enumerableType))
                     enumerable += ".messages";
-                else if (IsDictionary(enumerableType))
+                else if (IsDictionary(enumerableType) && !IsRegexType(enumerableType, "GroupCollection"))
                     enumerable = $"Object.entries({enumerable})";
                 _output.Append(indent)
                     .Append(loop.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword) ? "for await (const " : "for (const ")

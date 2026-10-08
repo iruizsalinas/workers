@@ -54,6 +54,11 @@ internal sealed partial class JavaScriptEmitter
         string receiver)
     {
         var arguments = element.ArgumentList.Arguments;
+        if (IsRegexType(_model.GetTypeInfo(access.Expression).Type, "GroupCollection"))
+        {
+            var groups = _names.Get($"conditional-groups:{access.SyntaxTree.FilePath}:{access.SpanStart}", "groups");
+            return $"(({groups}) => {groups} == null ? null : {RegexGroup(groups, Expression(arguments.Single().Expression))})({receiver})";
+        }
         if (!IsSequenceType(_model.GetTypeInfo(access.Expression).Type))
         {
             if (!IsDictionary(_model.GetTypeInfo(access.Expression).Type))
@@ -75,6 +80,8 @@ internal sealed partial class JavaScriptEmitter
         if (symbol?.Name == "Length"
             && (receiverType?.SpecialType == SpecialType.System_String || receiverType is IArrayTypeSymbol))
             return $"({receiver}?.length ?? null)";
+        if (RegexCaptureField(symbol) is { } regexField)
+            return $"({receiver}?.{regexField} ?? null)";
         if (symbol?.ContainingType is { } userType && IsUserInstanceType(userType) && RequiresUserClass(userType)
             && symbol is IFieldSymbol or IPropertySymbol)
         {
@@ -104,6 +111,8 @@ internal sealed partial class JavaScriptEmitter
             return $"{receiver}.get({string.Join(", ", value.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))})";
         if (BindingIntrinsicRegistry.IsQueueMessageBatch(_model.GetTypeInfo(value.Expression).Type))
             receiver += ".messages";
+        if (IsRegexType(_model.GetTypeInfo(value.Expression).Type, "GroupCollection"))
+            return RegexGroup(receiver, Expression(value.ArgumentList.Arguments.Single().Expression));
         if (_model.GetTypeInfo(value.Expression).Type?.ToDisplayString() == "System.Text.StringBuilder")
         {
             _helpers.Require(JavaScriptHelper.StringBuilder);

@@ -54,6 +54,7 @@ internal static partial class HelperSource
         JavaScriptHelper.StringToCharArray => StringToCharArray(name),
         JavaScriptHelper.StringSplit => StringSplit(name),
         JavaScriptHelper.StringBuilder => StringBuilder(name),
+        JavaScriptHelper.Regex => Regex(name),
         JavaScriptHelper.NumericParse => NumericParse(name),
         JavaScriptHelper.NumericFormat => NumericFormat(name),
         JavaScriptHelper.MathAbsInt => MathAbsInt(name),

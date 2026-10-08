@@ -15,6 +15,7 @@ internal sealed partial class JavaScriptEmitter
         var typeName = type?.ToDisplayString();
         result = typeName switch
         {
+            _ when IsRegexType(type) => RegexInstanceInvocation(invocation, method!, receiver, arguments),
             _ when CollectionMemberInvocation(invocation, method, receiver, name, arguments) is { } collection => collection,
             "System.Enum" when name == "ToString" && arguments.Length == 0
                 && invocation.Expression is MemberAccessExpressionSyntax enumMember

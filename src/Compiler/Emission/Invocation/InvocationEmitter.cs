@@ -6,6 +6,8 @@ internal sealed partial class JavaScriptEmitter
     private string Invocation(InvocationExpressionSyntax invocation)
     {
         var method = _model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+        if (method is { IsPartialDefinition: true } && GeneratedRegex(method, invocation) is { } generatedRegex)
+            return generatedRegex;
         if (method is not null && method.DeclaringSyntaxReferences.Length == 0
             && TryEmitOutInvocation(invocation, method, out var outInvocation))
             return outInvocation;

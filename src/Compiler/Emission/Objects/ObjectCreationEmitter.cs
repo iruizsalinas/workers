@@ -18,6 +18,8 @@ internal sealed partial class JavaScriptEmitter
             return "new AbortController()";
         if (typeName == "System.Text.StringBuilder")
             return CreateStringBuilder(value, constructor, arguments);
+        if (typeName == "System.Text.RegularExpressions.Regex")
+            return CreateRegex(value, constructor, arguments);
         if (typeName is "Workers.Request" or "Workers.Response")
             return PositionalObjectCreation(value, constructor, arguments,
                 values => $"new {type!.Name}({string.Join(", ", values)})");

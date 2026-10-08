@@ -12,6 +12,10 @@ internal sealed partial class JavaScriptEmitter
         if (symbol is IPropertySymbol { IsStatic: true, Name: "Ordinal" or "OrdinalIgnoreCase", ContainingType: { } comparerType }
             && comparerType.ToDisplayString() == "System.StringComparer")
             return $"\"{symbol.Name}\"";
+        if (GeneratedRegex(symbol, member) is { } generatedRegex)
+            return generatedRegex;
+        if (symbol is IPropertySymbol or IFieldSymbol { HasConstantValue: false } && IsRegexType(symbol.ContainingType))
+            return RegexMember(member, symbol);
         if (IsUserStaticState(symbol))
             return StaticMemberAccess(symbol!, member.Name);
         if (symbol is IMethodSymbol method && IsMethodGroup(member))

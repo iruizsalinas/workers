@@ -3,60 +3,6 @@ namespace Workers.Compiler.Tests;
 public sealed class StringApiTests
 {
     [Fact]
-    public void AcceptsConstantRegexPatternsFromTheCompatibleSubset()
-    {
-        var module = Compile("""
-            using System.Text.RegularExpressions;
-            using Workers;
-            public static class Worker
-            {
-                private const string Character = "[0-9]";
-
-                [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
-                {
-                    const string Digits = "^" + Character + "+$";
-                    return Response.Json(new
-                    {
-                        slug = Regex.IsMatch(request.Path, "^[a-zA-Z0-9_-]+$"),
-                        length = Regex.IsMatch(request.Path, "^[1-9][0-9]{0,3}$"),
-                        digits = Regex.IsMatch(pattern: Digits, input: request.Path),
-                        fixedDigits = Regex.IsMatch(request.Path, "^" + Character + "{1,9}$")
-                    });
-                }
-            }
-            """);
-        Assert.Contains("new RegExp(\"^[0-9]\\u002B$\")", module);
-        Assert.Contains("new RegExp(\"^[0-9]{1,9}$\")", module);
-
-    }
-
-    [Theory]
-    [InlineData("var pattern = request.Path; return Response.Json(Regex.IsMatch(request.Path, pattern));")]
-    [InlineData("return Response.Json(Regex.IsMatch(request.Path, GetPattern()));")]
-    [InlineData("return Response.Json(Regex.IsMatch(request.Path, $\"^{request.Method}$\"));")]
-    [InlineData("const string pattern = @\"\\d+\"; return Response.Json(Regex.IsMatch(request.Path, pattern));")]
-    public void RejectsRuntimeOrIncompatibleRegexPatterns(string source)
-    {
-        var error = Assert.Throws<NotSupportedException>(() => Compile($$"""
-            using System.Text.RegularExpressions;
-            using Workers;
-            public static class Worker
-            {
-                [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
-                {
-                    {{source}}
-                }
-
-                private static string GetPattern() => "^[0-9]+$";
-            }
-            """));
-
-        Assert.StartsWith("WRK120:", error.Message);
-    }
-
-    [Fact]
     public void EmitsInvariantStringQueriesAndTransformations()
     {
         var module = Compile("""

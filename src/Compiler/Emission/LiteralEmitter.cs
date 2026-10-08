@@ -128,6 +128,8 @@ internal sealed partial class JavaScriptEmitter
             _helpers.Require(JavaScriptHelper.StringBuilder);
             return $"(($workers$value) => $workers$value == null ? \"\" : {_helpers.Name("stringBuilderText")}($workers$value))({expression})";
         }
+        if (IsRegexCapture(underlying) || IsRegexType(underlying, "Regex"))
+            return $"(($workers$value) => $workers$value == null ? \"\" : $workers$value.{(IsRegexCapture(underlying) ? "value" : "source")})({expression})";
         if (IsTextEnum(underlying))
             return mayBeNull
                 ? $"(($workers$value) => $workers$value == null ? \"\" : {EnumText(underlying!, "$workers$value")})({expression})"
