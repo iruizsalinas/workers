@@ -55,6 +55,29 @@ public static async Task<Response> Handle(
 }
 ```
 
+## Routing
+
+`Router` maps methods and path patterns to handlers that take the native `Request` and return a native `Response`. Code before or after `HandleAsync` runs for every request, such as authentication or shared headers.
+
+```csharp
+private static readonly Router Routes = new Router()
+    .Get("/users/{id:int}", GetUserAsync)
+    .Delete("/users/{id:int}", DeleteUserAsync)
+    .Get("/files/{*path}", (request, route) => Response.Text(route.Parameter("path")));
+
+[Fetch]
+public static Task<Response> Handle(Request request, Env env, Context context) =>
+    Routes.HandleAsync(request, env, context);
+
+private static async Task<Response> GetUserAsync(Request request, RouteContext route)
+{
+    var user = await route.Env.Kv("USERS").GetJsonAsync<User>(route.Parameter("id"));
+    return user is null ? Response.Text("Not found", status: 404) : Response.Json(user);
+}
+```
+
+Patterns are checked when the Worker is built. A parameter fills a whole segment and can be constrained to values `int.Parse` or `Guid.Parse` accept, as in `{id:int}` or `{id:guid}`. A final `{*path}` matches the rest of the path. The most specific route wins, `GET` routes also answer `HEAD`, a path that matches with another method gets `405` with an `Allow` header, and other requests go to `Fallback` or receive `404`.
+
 Familiar C# APIs such as `Task`, `Console`, `Guid`, and `DateTimeOffset` are supported where they map cleanly to the Workers runtime. Unsupported language or .NET features produce a compiler diagnostic instead of shipping a compatibility runtime.
 
 See [Compatibility](./COMPATIBILITY.md) for an overview of the supported C# language, .NET API, and Cloudflare Workers profiles.

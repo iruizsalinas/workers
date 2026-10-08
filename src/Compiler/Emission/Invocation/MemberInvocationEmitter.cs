@@ -31,6 +31,8 @@ internal sealed partial class JavaScriptEmitter
             return HttpFetch(invocation, method!, arguments);
         if (type == "Workers.WebSocketPair" && name == "Create") return "new WebSocketPair()";
         if (type == "Workers.TcpSocket" && name == "Connect") return SocketConnect(method, arguments);
+        if (type == "Workers.Router" && method is not null) return RouterInvocation(invocation, method, receiver, arguments);
+        if (type == "Workers.RouteContext" && name == "Parameter") return RouteParameterInvocation(receiver, arguments);
         if (type == "Workers.Crypto") receiver = "globalThis.crypto";
         if (method is not null && BindingIntrinsicRegistry.TryGet(method, out var intrinsic)) return EmitBindingIntrinsic(receiver, invocation, method, intrinsic);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))

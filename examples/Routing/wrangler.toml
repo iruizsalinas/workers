@@ -1,0 +1,10 @@
+name = "workers-example-routing"
+main = "dist/worker.js"
+compatibility_date = "2026-06-30"
+
+[build]
+command = "dotnet publish -c Release -p:NuGetAudit=false"
+
+[[kv_namespaces]]
+binding = "NOTES"
+id = "replace-with-kv-namespace-id"

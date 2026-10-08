@@ -66,6 +66,7 @@ internal sealed partial class JavaScriptEmitter
 
         emitter._output.Append(emitter._helpers.Emit());
         emitter._output.Append(emitter._regexDeclarations);
+        emitter._output.Append(emitter._routeDeclarations);
 
         if (program.Events.Count != 0)
             emitter._output.Append("export default { ")

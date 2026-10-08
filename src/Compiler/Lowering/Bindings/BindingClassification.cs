@@ -43,7 +43,11 @@ internal static class BindingClassification
         Key("Workers.Response", "FromBody"), Key("Workers.Response", "WithHeader"), Key("Workers.Response", "AppendHeader"),
         Key("Workers.Response", "FromStream"),
         Key("Workers.Response", "WebSocket"),
-        Key("Workers.Response", "WithoutHeader")
+        Key("Workers.Response", "WithoutHeader"),
+        Key("Workers.Router", "Get"), Key("Workers.Router", "Post"), Key("Workers.Router", "Put"),
+        Key("Workers.Router", "Patch"), Key("Workers.Router", "Delete"), Key("Workers.Router", "Options"),
+        Key("Workers.Router", "Any"), Key("Workers.Router", "Fallback"), Key("Workers.Router", "HandleAsync"),
+        Key("Workers.RouteContext", "Parameter")
     ];
 
     private static readonly HashSet<(string Type, string Method)> UnsupportedMethods =

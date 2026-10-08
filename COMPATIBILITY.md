@@ -15,6 +15,7 @@ This is a quick overview, not a list of every overload. If something is unsuppor
 | Area | APIs | Status |
 | --- | --- | :---: |
 | HTTP | Requests, responses, headers, URLs, forms, bodies, fetch, and streams | 🟢 |
+| Routing | Method and path routing with parameters, `int` and `guid` constraints, catch-alls, and fallbacks | 🟢 |
 | Events | Fetch, scheduled, queue, email, and tail handlers | 🟢 |
 | Storage | KV, R2, and Cache | 🟢 |
 | Data | D1 and Hyperdrive | 🟢 |
@@ -85,6 +86,7 @@ Supporting a type does not mean every constructor, method, or overload is availa
 - **Database rows.** Rows from D1, Durable Object SQL, and the database clients map to classes and records by case-insensitive column name. 64-bit and exact numerics returned as strings convert to numeric members when they fit, and binary columns convert to `byte[]`. MongoDB ObjectIds are read as hexadecimal strings: map `_id` with `[JsonPropertyName("_id")]` and filter with `MongoClient.ObjectId(id)`.
 - **Database cancellation.** MongoDB reads (`FindAsync`, `FindOneAsync`, `CountDocumentsAsync`, `AggregateAsync`) are aborted when their token is canceled. PostgreSQL, MySQL, and MongoDB writes check the token before they start, because the drivers cannot abandon a statement in flight.
 - **Regular expressions.** Patterns and options must be compile-time constants. They are translated to JavaScript when the Worker is built and keep .NET semantics for `\w`, `\d`, `\s`, `\b`, `^`, `$`, `.`, group numbering, empty matches, and replacement patterns. Constructs JavaScript cannot reproduce report `WRK120`: `RightToLeft`, `ECMAScript`, and `NonBacktracking` options, match timeouts, `\G`, conditionals, balancing groups, loops whose body can match empty text, and captures inside a loop that do not participate in every iteration. A surrogate pair matches as one character, so `.` matches a whole emoji where .NET matches each UTF-16 code unit.
+- **Routing.** Route patterns must be compile-time constants. Literal segments match the decoded path case-sensitively, and trailing slashes are significant, so `/users/` does not match `/users`. Parameters must be non-empty, and their values are decoded; a segment that is not valid percent-encoding is passed through unchanged. Per segment, literals win over constrained parameters, which win over parameters and then catch-alls. Routes for a specific method win over `Any` routes of the same shape. Two routes for the same method that match exactly the same paths throw when they are registered. A handler that reads a parameter its route does not define reports `WRK122` when the handler is a lambda or method group that uses its `RouteContext` directly, and throws otherwise.
 - **RPC values.** Class and record instances passed to or returned from RPC methods arrive as plain data. Their properties are kept but their methods are not.
 
 ## Contributing

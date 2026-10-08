@@ -34,6 +34,7 @@ internal sealed partial class JavaScriptEmitter
             return PositionalObjectCreation(value, constructor, arguments,
                 values => $"new {type!.Name}({string.Join(", ", values)})");
         if (typeName == "Workers.HtmlRewriter") return "new HTMLRewriter()";
+        if (typeName == "Workers.Router") return CreateRouter();
         if (typeName == "Workers.Headers") return "new Headers()";
         if (typeName == "Workers.WebSocketAutoResponse")
             return PositionalObjectCreation(value, constructor, arguments,
