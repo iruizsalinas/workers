@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis;
 internal enum BindingIntrinsicKind
 {
     Direct,
+    RequestJson,
+    RequestBodyRead,
     KvBytesGet,
     KvJsonGet,
     KvJsonPut,

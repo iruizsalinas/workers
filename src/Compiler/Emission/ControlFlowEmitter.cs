@@ -62,6 +62,8 @@ internal sealed partial class JavaScriptEmitter
     {
         var type = clause.ExceptionType;
         if (type is null || type.SpecialType == SpecialType.System_Object || type.ToDisplayString() == "System.Exception") return null;
+        if (type.ToDisplayString() == "Workers.HttpError")
+            return $"{caught} instanceof {_helpers.Require(JavaScriptHelper.HttpError)}";
         if (type is INamedTypeSymbol named && IsException(named) && IsUserInstanceType(named))
             return $"{caught} instanceof {QueueUserType(named, clause.Syntax)}";
         throw WorkerDiagnostics.WithLocation(new NotSupportedException(

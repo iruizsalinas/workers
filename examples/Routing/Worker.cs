@@ -5,6 +5,7 @@ namespace Routing;
 public static class Worker
 {
     private static readonly Router Routes = new Router()
+        .Use(async (request, route, next) => (await next()).WithHeader("x-router", "csharp"))
         .Get("/", (request, route) => Response.Text("Notes API"))
         .Get("/notes/{id:uuid}", GetNoteAsync)
         .Put("/notes/{id:uuid}", SaveNoteAsync)
@@ -13,25 +14,21 @@ public static class Worker
         .Fallback((request, route) => Response.Json(new { error = "Not found" }, status: 404));
 
     [Fetch]
-    public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
-    {
-        var response = await Routes.HandleAsync(request, environment, context);
-        return response.WithHeader("x-router", "csharp");
-    }
+    public static Task<Response> FetchAsync(Request request, Env environment, Context context) =>
+        Routes.HandleAsync(request, environment, context);
 
     private static async Task<Response> GetNoteAsync(Request request, RouteContext route)
     {
         var note = await route.Env.Kv("NOTES").GetJsonAsync<Note>(NoteKey(route));
-        return note is null
-            ? Response.Json(new { error = "Note not found" }, status: 404)
-            : Response.Json(note);
+        if (note is null) throw new HttpError(404, "Note not found");
+        return Response.Json(note);
     }
 
     private static async Task<Response> SaveNoteAsync(Request request, RouteContext route)
     {
         var input = await request.JsonAsync<NoteInput>();
         if (input is null || string.IsNullOrWhiteSpace(input.Text))
-            return Response.Json(new { error = "Text is required" }, status: 400);
+            throw new HttpError(400, "Text is required");
 
         var note = new Note(route.Parameter("id").ToLowerInvariant(), input.Text.Trim());
         await route.Env.Kv("NOTES").PutJsonAsync(NoteKey(route), note);

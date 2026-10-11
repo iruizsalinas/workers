@@ -23,6 +23,9 @@ internal sealed partial class JavaScriptEmitter
                 values => $"new {type!.Name}({string.Join(", ", values)})");
         if (typeName == "Workers.HtmlRewriter") return "new HTMLRewriter()";
         if (typeName == "Workers.Router") return CreateRouter();
+        if (typeName == "Workers.HttpError")
+            return PositionalObjectCreation(value, constructor, arguments,
+                values => $"new {_helpers.Require(JavaScriptHelper.HttpError)}({string.Join(", ", values)})");
         if (typeName == "Workers.Headers") return "new Headers()";
         if (typeName == "Workers.WebSocketAutoResponse")
             return PositionalObjectCreation(value, constructor, arguments,

@@ -3,6 +3,60 @@ namespace Workers.Compiler.Tests;
 public sealed class RouterTests
 {
     [Fact]
+    public void EmitsMiddlewareErrorsAndCorsWithNamedArguments()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Task<Response> Fetch(Request request, Env env, Context context) =>
+                    new Router()
+                        .Use(Cors.Allow(credentials: true, origins: ["https://app.example"], headers: ["content-type"]))
+                        .Use(async (request, route, next) => (await next()).WithHeader("x-router", "csharp"))
+                        .OnError((error, request, route) => Response.Json(new { error = error.Message }, error.Status))
+                        .Post("/json", async (request, route) => Response.Json(await request.JsonAsync<object>()))
+                        .HandleAsync(request, env, context);
+            }
+            """);
+
+        Assert.Contains("$workers$corsAllow(", module);
+        Assert.Contains("$workers$routerUse(", module);
+        Assert.Contains("$workers$routerOnError(", module);
+        Assert.Contains("$workers$requestJson(request)", module);
+        Assert.Contains("error.message", module);
+        Assert.Contains("status: error.status", module);
+        Assert.Contains("[\"https://app.example\"]", module);
+    }
+
+    [Fact]
+    public void DistinguishesHttpErrorsInCatchesAndPatterns()
+    {
+        var module = Compile("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    try { throw new HttpError(message: "missing", status: 404); }
+                    catch (HttpError error)
+                    {
+                        Exception exception = error;
+                        if (exception is HttpError http) return Response.Text(http.Message, http.Status);
+                        return Response.Empty(500);
+                    }
+                }
+            }
+            """);
+
+        Assert.Contains("new $workers$HttpError(", module);
+        Assert.Contains("instanceof $workers$HttpError", module);
+        Assert.Contains("http.status", module);
+        Assert.Contains("http.message", module);
+    }
+
+    [Fact]
     public void EmitsRouteDescriptorsOnceAndRegistersNativeHandlers()
     {
         var module = Compile("""

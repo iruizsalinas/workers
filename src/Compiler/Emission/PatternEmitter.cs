@@ -54,6 +54,8 @@ internal sealed partial class JavaScriptEmitter
             return $"{value} != null";
         if (type.SpecialType == SpecialType.System_String) return $"typeof {value} === \"string\"";
         if (type.SpecialType == SpecialType.System_Boolean) return $"typeof {value} === \"boolean\"";
+        if (type.ToDisplayString() == "Workers.HttpError")
+            return $"{value} instanceof {_helpers.Require(JavaScriptHelper.HttpError)}";
         if (type is INamedTypeSymbol named && IsUserInstanceType(named) && (IsException(named) || RequiresUserClass(named)))
             return $"{value} instanceof {QueueUserType(named, source)}";
         throw new NotSupportedException(

@@ -4,6 +4,12 @@ public sealed class Router
 {
     public Router() { }
 
+    /// <summary>Runs in registration order, with responses unwinding in reverse order. Call next at most once.</summary>
+    public Router Use(Func<Request, RouteContext, Func<Task<Response>>, Task<Response>> middleware) => WorkerApi.NotExecutable<Router>();
+    /// <summary>Overrides empty default error responses, including middleware failures. Unexpected failures have a safe 500 message.</summary>
+    public Router OnError(Func<RouterError, Request, RouteContext, Response> handler) => WorkerApi.NotExecutable<Router>();
+    public Router OnError(Func<RouterError, Request, RouteContext, Task<Response>> handler) => WorkerApi.NotExecutable<Router>();
+
     public Router Get(string pattern, Func<Request, RouteContext, Response> handler) => WorkerApi.NotExecutable<Router>();
     public Router Get(string pattern, Func<Request, RouteContext, Task<Response>> handler) => WorkerApi.NotExecutable<Router>();
     public Router Post(string pattern, Func<Request, RouteContext, Response> handler) => WorkerApi.NotExecutable<Router>();

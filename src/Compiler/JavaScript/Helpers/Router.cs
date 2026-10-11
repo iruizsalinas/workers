@@ -7,7 +7,35 @@ internal static partial class HelperSource
     // differs, before trying the fallback and finally 404.
     private static string Router(Func<string, string> name) => $$"""
         function {{name("routerCreate")}}() {
-          return { routes: [], fallback: null };
+          return { routes: [], fallback: null, middleware: [], onError: null };
+        }
+        function {{name("routerUse")}}(router, middleware) {
+          router.middleware.push(middleware);
+          return router;
+        }
+        function {{name("routerOnError")}}(router, handler) {
+          if (router.onError !== null) throw new Error("The router already has an error handler.");
+          router.onError = handler;
+          return router;
+        }
+        async function {{name("routerError")}}(router, exception, request, route) {
+          const intentional = exception instanceof {{name("HttpError")}};
+          const error = {
+            status: intentional ? exception.status : 500,
+            message: intentional ? exception.message : "Internal Server Error",
+            exception
+          };
+          if (router.onError !== null) {
+            try {
+              const response = await router.onError(error, request, route);
+              if (!(response instanceof Response)) throw new TypeError("An error handler must return a Response.");
+              return response;
+            } catch {
+              // Never recurse into a failing error handler or expose its failure.
+              return new Response(null, { status: 500 });
+            }
+          }
+          return new Response(null, { status: error.status });
         }
         function {{name("routerAdd")}}(router, method, route, handler) {
           const existing = router.routes.find(entry => entry.method === method && entry.route.key === route.key);
@@ -58,26 +86,49 @@ internal static partial class HelperSource
         }
         async function {{name("routerHandle")}}(router, request, env, context) {
           const segments = {{name("routerSegments")}}(new URL(request.url).pathname), method = request.method;
-          let allowed = null;
+          let allowed = null, handler = null;
+          const route = { env, context, parameters: Object.create(null) };
           for (const entry of router.routes) {
             const parameters = {{name("routerMatch")}}(entry.route, segments);
             if (parameters === null) continue;
             const head = method === "HEAD" && entry.method === "GET";
             if (entry.method === null || entry.method === method || head) {
-              const response = await entry.handler(request, { env, context, parameters });
-              if (!head) return response;
-              await response.body?.cancel();
-              return new Response(null, response);
+              route.parameters = parameters;
+              handler = () => entry.handler(request, route);
+              break;
             }
             allowed ??= new Set();
             allowed.add(entry.method);
             if (entry.method === "GET") allowed.add("HEAD");
           }
-          if (allowed !== null)
-            return new Response("Method Not Allowed", { status: 405, headers: { allow: [...allowed].join(", ") } });
-          if (router.fallback !== null)
-            return await router.fallback(request, { env, context, parameters: Object.create(null) });
-          return new Response("Not Found", { status: 404 });
+          handler ??= allowed !== null
+            ? () => new Response(null, { status: 405, headers: { allow: [...allowed].join(", ") } })
+            : router.fallback !== null
+              ? () => router.fallback(request, route)
+              : () => new Response(null, { status: 404 });
+          // Convert failures at each boundary so outer middleware can decorate error responses.
+          const dispatch = async index => {
+            try {
+              let response;
+              if (index === router.middleware.length) response = await handler();
+              else {
+                let called = false;
+                response = await router.middleware[index](request, route, () => {
+                  if (called) throw new Error("Middleware next may only be called once.");
+                  called = true;
+                  return dispatch(index + 1);
+                });
+              }
+              if (!(response instanceof Response)) throw new TypeError("A router handler must return a Response.");
+              return response;
+            } catch (error) {
+              return {{name("routerError")}}(router, error, request, route);
+            }
+          };
+          const response = await dispatch(0);
+          if (method !== "HEAD") return response;
+          await response.body?.cancel();
+          return new Response(null, response);
         }
         function {{name("routerParameter")}}(route, name) {
           const value = route.parameters[name];

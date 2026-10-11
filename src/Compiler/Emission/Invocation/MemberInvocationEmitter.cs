@@ -28,6 +28,7 @@ internal sealed partial class JavaScriptEmitter
         if (type == "Workers.TcpSocket" && name == "Connect") return SocketConnect(method, arguments);
         if (type == "Workers.Router" && method is not null) return RouterInvocation(invocation, method, receiver, arguments);
         if (type == "Workers.RouteContext" && name == "Parameter") return RouteParameterInvocation(receiver, arguments);
+        if (type == "Workers.Cors" && name == "Allow") return HelperInvocation(JavaScriptHelper.Cors, arguments);
         if (type == "Workers.Cookies" && name is "Get" or "GetAll" or "Contains")
             return $"{receiver}.{(name == "Contains" ? "has" : LowerFirst(name))}({arguments[0]})";
         if (type == "Workers.Crypto") receiver = "globalThis.crypto";

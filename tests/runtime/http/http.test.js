@@ -38,18 +38,21 @@ describe("HTTP workers", () => {
 
   it("emits CORS headers for preflight and normal responses", async () => {
     const preflight = await corsHeaders.fetch(
-      new Request("https://worker.test/", { method: "OPTIONS" }),
+      new Request("https://worker.test/", { method: "OPTIONS", headers: {
+        origin: "https://app.example", "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type",
+      } }),
       env,
       createExecutionContext(),
     );
     const response = await corsHeaders.fetch(
-      new Request("https://worker.test/"),
+      new Request("https://worker.test/", { headers: { origin: "https://app.example" } }),
       env,
       createExecutionContext(),
     );
 
     expect(preflight.status).toBe(204);
-    expect(preflight.headers.get("access-control-allow-methods")).toBe("GET, POST, OPTIONS");
+    expect(preflight.headers.get("access-control-allow-methods")).toBe("GET, POST");
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
     expect(response.headers.get("x-example")).toBe("cors");
   });

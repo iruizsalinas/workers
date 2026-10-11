@@ -34,6 +34,8 @@ internal sealed partial class JavaScriptEmitter
         var sourceArguments = invocation.ArgumentList.Arguments;
         if (method.Name == "HandleAsync")
             return $"{_helpers.Name("routerHandle")}({receiver}, {string.Join(", ", arguments)})";
+        if (method.Name is "Use" or "OnError")
+            return $"{_helpers.Name(method.Name == "Use" ? "routerUse" : "routerOnError")}({receiver}, {arguments[0]})";
         if (method.Name == "Fallback")
         {
             ValidateRouteHandler(NamedArgument(method, sourceArguments, "handler")!, null);

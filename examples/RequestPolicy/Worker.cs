@@ -5,39 +5,33 @@ namespace RequestPolicy;
 public static class Worker
 {
     private const int MaxBodyBytes = 4096;
+    private static readonly Router Routes = new Router()
+        .Post("/v1/readings", ForwardAsync)
+        .Fallback((request, route) => Error("Not found", 404))
+        .OnError((error, request, route) => Error(error.Message, error.Status));
 
     [Fetch]
-    public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
+    public static Task<Response> FetchAsync(Request request, Env environment, Context context) =>
+        Routes.HandleAsync(request, environment, context);
+
+    private static async Task<Response> ForwardAsync(Request request, RouteContext route)
     {
-        if (request.Path != "/v1/readings")
-            return Error("Not found", 404);
+        var contentType = request.Headers.Get("content-type");
+        if (contentType is null || !contentType.Split(';')[0].Trim().Equals("application/json", StringComparison.OrdinalIgnoreCase))
+            throw new HttpError(415, "Content-Type must be application/json");
 
-        var methods = new HashSet<string> { "POST" };
-        if (!methods.Contains(request.Method))
-            return Error("Method not allowed", 405).WithHeader("allow", "POST");
-
-        if (!HasJsonBody(request))
-            return Error("A bounded JSON body is required", 400);
-
-        ReadingInput? input;
-        try
-        {
-            input = await request.JsonAsync<ReadingInput>();
-        }
-        catch (Exception)
-        {
-            return Error("Malformed JSON", 400);
-        }
+        var input = await request.JsonAsync<ReadingInput>(maxBytes: MaxBodyBytes);
 
         if (!IsValid(input))
-            return Error("Invalid reading", 400);
+            throw new HttpError(400, "Invalid reading");
 
-        var upstream = new Url(environment.Variable("ORIGIN"));
+        var upstream = new Url(route.Env.Variable("ORIGIN"));
         upstream.Path = "/v1/readings";
 
         var headers = request.Headers.Clone();
         headers.Delete("authorization");
         headers.Delete("cookie");
+        headers.Delete("content-length");
         headers.Set("content-type", "application/json");
         headers.Set("x-request-id", Crypto.RandomUuid());
 
@@ -60,17 +54,6 @@ public static class Worker
             Log.Error(exception.Message);
             return Error("Upstream unavailable", 502);
         }
-    }
-
-    private static bool HasJsonBody(Request request)
-    {
-        var contentType = request.Headers.Get("content-type");
-        var contentLength = request.Headers.Get("content-length");
-        if (contentType is null || !contentType.StartsWith("application/json") || contentLength is null)
-            return false;
-        if (!new RegExp("^[1-9][0-9]{0,3}$").Test(contentLength))
-            return false;
-        return int.Parse(contentLength) <= MaxBodyBytes && request.Body is not null && !request.BodyUsed;
     }
 
     private static bool IsValid(ReadingInput? input)

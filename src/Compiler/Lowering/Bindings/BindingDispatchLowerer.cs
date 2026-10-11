@@ -97,6 +97,10 @@ internal sealed partial class JavaScriptEmitter
     {
         return intrinsic.Kind switch
         {
+            BindingIntrinsicKind.RequestJson => $"{RequireHelperName(arguments.Count == 0 ? JavaScriptHelper.HttpError : JavaScriptHelper.BoundedBody, "requestJson")}({string.Join(", ", new[] { receiver }.Concat(arguments.Select(item => item.Value)))})",
+            BindingIntrinsicKind.RequestBodyRead => arguments.Count == 0
+                ? $"{receiver}.{intrinsic.JavascriptName}()"
+                : $"{RequireHelperName(JavaScriptHelper.BoundedBody, intrinsic.JavascriptName == "text" ? "requestText" : "requestBytes")}({receiver}, {arguments[0].Value})",
             BindingIntrinsicKind.Direct => $"{receiver}.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))})",
             BindingIntrinsicKind.KvBytesGet => EmitKvGet(receiver, intrinsic.JavascriptName, arguments, "arrayBuffer"),
             BindingIntrinsicKind.KvJsonGet => EmitKvGet(receiver, intrinsic.JavascriptName, arguments, "json"),

@@ -55,6 +55,7 @@ internal static class BindingClassification
         Key("Workers.Router", "Patch"), Key("Workers.Router", "Delete"), Key("Workers.Router", "Options"),
         Key("Workers.Router", "Any"), Key("Workers.Router", "Fallback"), Key("Workers.Router", "HandleAsync"),
         Key("Workers.RouteContext", "Parameter"),
+        Key("Workers.Router", "Use"), Key("Workers.Router", "OnError"), Key("Workers.Cors", "Allow"),
         Key("Workers.Numbers", "From"),
         Key("Workers.Numbers", "ParseInt"),
         Key("Workers.Numbers", "ParseFloat"),
