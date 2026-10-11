@@ -23,6 +23,22 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.WritableStream"] = "WritableStream",
         ["Workers.WritableStreamWriter"] = "WritableStreamDefaultWriter",
         ["Workers.DigestStream"] = "DigestStream",
+        ["Workers.Crypto"] = "Crypto",
+        ["Workers.SubtleCrypto"] = "SubtleCrypto",
+        ["Workers.CryptoKey"] = "CryptoKey",
+        ["Workers.CryptoKeyPair"] = "CryptoKeyPair",
+        ["Workers.CryptoKeyAlgorithm"] = "CryptoKeyKeyAlgorithm|CryptoKeyAesKeyAlgorithm|CryptoKeyHmacKeyAlgorithm|CryptoKeyRsaKeyAlgorithm|CryptoKeyEllipticKeyAlgorithm|CryptoKeyArbitraryKeyAlgorithm",
+        ["Workers.JsonWebKey"] = "JsonWebKey",
+        ["Workers.EncapsulatedBits"] = "SubtleCryptoEncapsulatedBits",
+        ["Workers.EncapsulatedKey"] = "SubtleCryptoEncapsulatedKey",
+        ["Workers.CryptoAlgorithm"] = "SubtleCryptoHashAlgorithm",
+        ["Workers.CryptoEncryptAlgorithm"] = "SubtleCryptoEncryptAlgorithm",
+        ["Workers.CryptoSignAlgorithm"] = "SubtleCryptoSignAlgorithm",
+        ["Workers.CryptoSecretKeyAlgorithm"] = "SubtleCryptoGenerateKeyAlgorithm",
+        ["Workers.CryptoKeyPairAlgorithm"] = "SubtleCryptoGenerateKeyAlgorithm",
+        ["Workers.CryptoImportAlgorithm"] = "SubtleCryptoImportKeyAlgorithm",
+        ["Workers.CryptoDeriveAlgorithm"] = "SubtleCryptoDeriveKeyAlgorithm",
+        ["Workers.DigestStreamOptions"] = "DigestStreamOptions",
         ["Workers.TcpSocket"] = "Socket",
         ["Workers.WebSocket"] = "WebSocket",
         ["Workers.ScheduledEvent"] = "ScheduledController",
@@ -82,7 +98,8 @@ public sealed partial class RuntimeApiConformanceTests
         BindingIntrinsicKind.KvBytesGet, BindingIntrinsicKind.KvJsonGet, BindingIntrinsicKind.KvJsonPut,
         BindingIntrinsicKind.DurableObjectGet, BindingIntrinsicKind.CacheMatch, BindingIntrinsicKind.DictionaryObject,
         BindingIntrinsicKind.RateLimit, BindingIntrinsicKind.DateResult, BindingIntrinsicKind.IteratorArray,
-        BindingIntrinsicKind.QueryNames
+        BindingIntrinsicKind.QueryNames, BindingIntrinsicKind.CryptoBytesResult,
+        BindingIntrinsicKind.CryptoImportKey, BindingIntrinsicKind.CryptoExportJwk, BindingIntrinsicKind.CryptoGenerateKey
     ];
 
     // Receivers whose members are not a fixed runtime interface.
@@ -91,7 +108,10 @@ public sealed partial class RuntimeApiConformanceTests
     // Properties whose runtime name is not the camel-case form of the C# name.
     private static readonly Dictionary<string, string> RenamedProperties = new()
     {
-        ["Workers.HtmlElement.NamespaceUri"] = "namespaceURI"
+        ["Workers.HtmlElement.NamespaceUri"] = "namespaceURI",
+        ["Workers.JsonWebKey.KeyOps"] = "key_ops",
+        // Runtime declarations retain the C++ identifier, but the JS dictionary field is public.
+        ["Workers.CryptoDeriveAlgorithm.Public"] = "$public"
     };
 
     // Properties the compiler computes instead of reading a runtime member of the same name.
@@ -163,7 +183,7 @@ public sealed partial class RuntimeApiConformanceTests
         if (!RuntimeTypeNames.TryGetValue(apiType, out var runtimeType)) return false;
         var pattern = new Regex(@"^\s*(?:(?:get|set|readonly|static|public|abstract)\s+)*" + Regex.Escape(member) + @"\s*[\?\(<:]",
             RegexOptions.Multiline);
-        return Declarations(runtimeType, []).Any(block => pattern.IsMatch(block));
+        return runtimeType.Split('|').SelectMany(type => Declarations(type, [])).Any(block => pattern.IsMatch(block));
     }
 
     // The bodies of every declaration of a runtime type, including the types it extends.
@@ -223,7 +243,7 @@ public sealed partial class RuntimeApiConformanceTests
         try
         {
             File.WriteAllText(Path.Combine(directory.FullName, "wrangler.jsonc"),
-                """{ "name": "runtime-types", "main": "worker.js", "compatibility_date": "2026-08-18" }""");
+                """{ "name": "runtime-types", "main": "worker.js", "compatibility_date": "2026-10-11", "compatibility_flags": ["webcrypto_modern_algorithms"] }""");
             File.WriteAllText(Path.Combine(directory.FullName, "worker.js"), "export default {};");
             var start = new ProcessStartInfo("node")
             {

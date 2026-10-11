@@ -1,0 +1,7 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "workers-csharp-crypto-tests",
+  "main": "fixtures/Crypto/dist/worker.js",
+  "compatibility_date": "2026-10-11",
+  "compatibility_flags": ["webcrypto_modern_algorithms"]
+}

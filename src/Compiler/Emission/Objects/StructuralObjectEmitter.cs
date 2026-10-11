@@ -75,9 +75,13 @@ internal sealed partial class JavaScriptEmitter
     private string StructuralInitializerProperty(ExpressionSyntax expression) => expression switch
     {
         AssignmentExpressionSyntax assignment when assignment.Left is IdentifierNameSyntax name =>
-            $"{JavaScriptObjectKey(LowerFirst(name.Identifier.ValueText))}: {StructuralValue(assignment)}",
+            $"{JavaScriptObjectKey(StructuralPropertyName(assignment.Left, name.Identifier.ValueText))}: {StructuralValue(assignment)}",
         _ => throw Unsupported("WRK106", expression)
     };
+
+    private string StructuralPropertyName(ExpressionSyntax source, string name) =>
+        _model.GetSymbolInfo(source).Symbol?.ContainingType.ToDisplayString() == "Workers.JsonWebKey" && name == "KeyOps"
+            ? "key_ops" : LowerFirst(name);
 
     private string StructuralValue(AssignmentExpressionSyntax assignment)
     {
@@ -87,9 +91,11 @@ internal sealed partial class JavaScriptEmitter
         var type = _model.GetTypeInfo(assignment.Right);
         return type.Nullability.FlowState == NullableFlowState.MaybeNull
                || type.Type?.NullableAnnotation == NullableAnnotation.Annotated
+               || assignment.Right is ConditionalExpressionSyntax or SwitchExpressionSyntax
+                  && _model.GetSymbolInfo(assignment.Left).Symbol is IPropertySymbol { NullableAnnotation: NullableAnnotation.Annotated }
                || symbol is ILocalSymbol { NullableAnnotation: NullableAnnotation.Annotated }
                || symbol is IParameterSymbol { NullableAnnotation: NullableAnnotation.Annotated }
-            ? $"({value} ?? undefined)"
+            ? $"(({value}) ?? undefined)"
             : value;
     }
 
@@ -100,7 +106,7 @@ internal sealed partial class JavaScriptEmitter
         var type = _model.GetTypeInfo(expression);
         return type.Nullability.FlowState == NullableFlowState.MaybeNull
                || type.Type?.NullableAnnotation == NullableAnnotation.Annotated
-            ? $"({value} ?? undefined)"
+            ? $"(({value}) ?? undefined)"
             : value;
     }
 

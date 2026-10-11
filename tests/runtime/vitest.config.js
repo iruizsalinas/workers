@@ -1,4 +1,4 @@
-import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
+import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
@@ -16,6 +16,7 @@ export default defineConfig({
       "tests/runtime/scenarios/accumulator.test.js",
       "tests/runtime/scenarios/services.test.js",
       "tests/runtime/scenarios/databases.test.js",
+      "tests/runtime/runtime/crypto.test.js",
     ],
   },
 });

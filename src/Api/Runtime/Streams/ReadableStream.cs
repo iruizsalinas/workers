@@ -42,13 +42,16 @@ public class WritableStream
     public bool Locked => WorkerApi.NotExecutable<bool>();
     public WritableStreamWriter GetWriter() => WorkerApi.NotExecutable<WritableStreamWriter>();
     public Task CloseAsync() => WorkerApi.NotExecutable<Task>();
+    public Task AbortAsync(object? reason = null) => WorkerApi.NotExecutable<Task>();
 }
 
 /// <summary>A JavaScript <c>WritableStreamDefaultWriter</c>. It locks the stream until released.</summary>
 public sealed class WritableStreamWriter
 {
     public Task WriteAsync(ReadOnlyMemory<byte> chunk) => WorkerApi.NotExecutable<Task>();
+    public Task WriteAsync(string chunk) => WorkerApi.NotExecutable<Task>();
     public Task CloseAsync() => WorkerApi.NotExecutable<Task>();
+    public Task AbortAsync(object? reason = null) => WorkerApi.NotExecutable<Task>();
     public void ReleaseLock() => WorkerApi.NotExecutable();
     public Task Ready => WorkerApi.NotExecutable<Task>();
     public Task Closed => WorkerApi.NotExecutable<Task>();

@@ -16,7 +16,10 @@ internal static class BindingClassification
         "Workers.ImagesOutputOptions", "Workers.MediaOutputOptions", "Workers.VectorizeVector",
         "Workers.VectorizeQueryOptions",
         "Workers.DurableObjectStorageListOptions", "Workers.DurableObjectKvListOptions", "Workers.ContainerStartOptions",
-        "Workers.ContainerExecOptions", "Workers.TcpSocketAddress", "Workers.TcpSocketOptions"
+        "Workers.ContainerExecOptions", "Workers.TcpSocketAddress", "Workers.TcpSocketOptions",
+        "Workers.CryptoAlgorithm", "Workers.CryptoEncryptAlgorithm", "Workers.CryptoSignAlgorithm",
+        "Workers.CryptoSecretKeyAlgorithm", "Workers.CryptoKeyPairAlgorithm", "Workers.CryptoImportAlgorithm",
+        "Workers.CryptoDeriveAlgorithm", "Workers.JsonWebKey", "Workers.RsaOtherPrimesInfo", "Workers.DigestStreamOptions"
     ];
 
     private static readonly HashSet<(string Type, string Method)> SpecialMethods =

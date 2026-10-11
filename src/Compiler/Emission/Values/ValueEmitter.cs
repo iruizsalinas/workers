@@ -49,6 +49,8 @@ internal sealed partial class JavaScriptEmitter
     private string Identifier(IdentifierNameSyntax value) => _model.GetSymbolInfo(value).Symbol switch
     {
         IMethodSymbol method when IsMethodGroup(value) => MethodGroup(value, method, null),
+        IPropertySymbol { IsStatic: true, Name: "Subtle", ContainingType: { } type }
+            when type.ToDisplayString() == "Workers.Crypto" => "globalThis.crypto.subtle",
         IPropertySymbol { ContainingType: { } type, Name: var name }
             when type.ToDisplayString() == "Workers.WorkerEntrypoint" => name == "Environment" ? "this.env" : "this.ctx",
         IPropertySymbol { IsStatic: false } property when IsUserInstanceType(property.ContainingType) =>
@@ -56,6 +58,7 @@ internal sealed partial class JavaScriptEmitter
         IFieldSymbol { IsStatic: false } field when IsUserInstanceType(field.ContainingType) =>
             UserMemberAccess("this", field),
         IFieldSymbol { IsStatic: false } field => $"this.{UserIdentifier(field, field.Name)}",
+        IFieldSymbol { IsStatic: true } field when CryptoEnumValue(field.ContainingType.ToDisplayString(), field.Name) is { } cryptoEnum => cryptoEnum,
         IFieldSymbol { IsStatic: true, HasConstantValue: true } field => LiteralConstant(field.ConstantValue, value),
         ISymbol staticState when IsUserStaticState(staticState) => StaticMemberAccess(staticState, value),
         IFieldSymbol { IsStatic: true } => throw Unsupported("WRK110", value),
@@ -94,8 +97,8 @@ internal sealed partial class JavaScriptEmitter
     private string LiteralConstant(object? value, SyntaxNode source) => value switch
     {
         null => "null",
-        string text => JsonSerializer.Serialize(text),
-        char character => JsonSerializer.Serialize(character.ToString()),
+        string text => JavaScriptStringLiteral(text),
+        char character => JavaScriptStringLiteral(character.ToString()),
         bool boolean => boolean ? "true" : "false",
         // A float constant is the nearest single-precision value; JavaScript numbers are doubles.
         float single => ((double)single).ToString("R", CultureInfo.InvariantCulture),

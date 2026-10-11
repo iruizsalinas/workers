@@ -25,6 +25,10 @@ internal enum BindingIntrinsicKind
     WebSocketJson,
     WebSocketMessageText,
     CryptoVerifyHmac,
+    CryptoBytesResult,
+    CryptoImportKey,
+    CryptoExportJwk,
+    CryptoGenerateKey,
     BlobSliceBytes,
     QueryNames,
     CompressStream,
@@ -63,7 +67,8 @@ internal static class BindingIntrinsicRegistry
         NetworkIntrinsics.Methods,
         DurableObjectIntrinsics.Methods,
         PlatformIntrinsics.Methods,
-        RuntimeIntrinsics.Methods
+        RuntimeIntrinsics.Methods,
+        CryptoIntrinsics.Methods
     ];
 
     public static bool TryGet(IMethodSymbol method, out BindingIntrinsic intrinsic)

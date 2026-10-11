@@ -38,15 +38,8 @@ internal sealed partial class JavaScriptEmitter
                 _ => "-Infinity"
             };
         if (symbol is IFieldSymbol { ContainingType: { } enumType } field
-            && enumType.ToDisplayString() == "Workers.DigestAlgorithm")
-            return field.Name switch
-            {
-                "Sha1" => "\"SHA-1\"",
-                "Sha256" => "\"SHA-256\"",
-                "Sha384" => "\"SHA-384\"",
-                "Sha512" => "\"SHA-512\"",
-                _ => throw Unsupported("WRK108", member)
-            };
+            && CryptoEnumValue(enumType.ToDisplayString(), field.Name) is { } cryptoEnum)
+            return cryptoEnum;
         if (symbol is IFieldSymbol { ContainingType: { } d1SessionType } sessionMode
             && d1SessionType.ToDisplayString() == "Workers.D1SessionMode")
             return sessionMode.Name switch

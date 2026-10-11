@@ -8,6 +8,13 @@ internal sealed partial class JavaScriptEmitter
         MemberAccessExpressionSyntax? member, string? receiverOverride, out string result)
     {
         var owner = method.ContainingType.ToDisplayString();
+        if (method.IsStatic && owner is "Workers.Crypto" or "Workers.SubtleCrypto"
+            && BindingIntrinsicRegistry.TryGet(method, out var cryptoIntrinsic))
+        {
+            result = EmitBindingIntrinsic(owner == "Workers.Crypto" ? "globalThis.crypto" : "globalThis.SubtleCrypto",
+                source, method, cryptoIntrinsic);
+            return true;
+        }
         var receiver = receiverOverride ?? (member is null || method.IsStatic ? "" : Expression(member.Expression));
         var values = string.Join(", ", arguments);
         result = owner switch
@@ -77,6 +84,13 @@ internal sealed partial class JavaScriptEmitter
         var receiver = property.IsStatic ? "" : Expression(source.Expression);
         return property.ContainingType.ToDisplayString() switch
         {
+            "Workers.Crypto" when property.Name == "Subtle" => "globalThis.crypto.subtle",
+            "Workers.DigestStream" when property.Name == "Digest" => $"{receiver}.digest.then(value => new Uint8Array(value))",
+            "Workers.DigestStream" when property.Name == "BytesWritten" => $"Number({receiver}.bytesWritten)",
+            "Workers.JsonWebKey" when property.Name == "KeyOps" => $"{receiver}.key_ops",
+            "Workers.CryptoKeyAlgorithm" when property.Name == "PublicExponent" => $"(value => value == null ? null : new Uint8Array(value))({receiver}.publicExponent)",
+            "Workers.EncapsulatedBits" => $"new Uint8Array({receiver}.{LowerFirst(property.Name)})",
+            "Workers.EncapsulatedKey" when property.Name == "Ciphertext" => $"new Uint8Array({receiver}.ciphertext)",
             "Workers.JsonValue" => property.Name switch
             {
                 "IsNull" => $"({receiver} === null)",

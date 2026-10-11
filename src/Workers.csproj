@@ -25,8 +25,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="" />
-    <None Include="..\PROFILE.md" Pack="true" PackagePath="" />
-    <None Include="..\MIGRATION.md" Pack="true" PackagePath="" />
+    <None Include="..\PROFILE.md" Pack="true" PackagePath="" Condition="Exists('..\PROFILE.md')" />
+    <None Include="..\MIGRATION.md" Pack="true" PackagePath="" Condition="Exists('..\MIGRATION.md')" />
+    <None Include="..\CRYPTO.md" Pack="true" PackagePath="" />
     <None Include="Build\Workers.targets" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
   <Target Name="IncludeCompilerHost">

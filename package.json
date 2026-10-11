@@ -7,8 +7,8 @@
     "test:runtime": "npm run build:examples && node eng/run-runtime-tests.mjs"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "0.21.3",
+    "@cloudflare/vitest-plugin": "1.4.0",
     "vitest": "4.1.10",
-    "wrangler": "4.123.0"
+    "wrangler": "4.149.0"
   }
 }

@@ -19,6 +19,7 @@ public sealed class PackageTests
         {
             var entries = archive.Entries.Select(entry => entry.FullName).ToHashSet(StringComparer.Ordinal);
             Assert.Contains("buildTransitive/Workers.targets", entries);
+            Assert.Contains("CRYPTO.md", entries);
             Assert.Contains("lib/net10.0/Workers.dll", entries);
             Assert.Contains("tools/net10.0/Workers.Compiler.dll", entries);
             Assert.Contains("tools/net10.0/Workers.Compiler.deps.json", entries);
@@ -38,6 +39,7 @@ public sealed class PackageTests
         var module = Path.Combine(consumer, "dist", "worker.js");
         Assert.True(File.Exists(module));
         Assert.Contains("Hello from package", File.ReadAllText(module), StringComparison.Ordinal);
+        Assert.Contains("globalThis.crypto.subtle.generateKey", File.ReadAllText(module), StringComparison.Ordinal);
 
         File.WriteAllText(Path.Combine(consumer, "Worker.cs"), Source.Replace("Response.Text", "Response.DoesNotExist", StringComparison.Ordinal));
         RunDotNetFailure(consumer, "build", "-c", "Release", "--packages", packages);
@@ -70,8 +72,13 @@ public sealed class PackageTests
         public static class Worker
         {
             [Fetch]
-            public static Task<Response> FetchAsync(Request request, Env environment, Context context) =>
-                Task.FromResult(Response.Text("Hello from package"));
+            public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
+            {
+                var key = await Crypto.Subtle.GenerateKeyAsync(
+                    new CryptoSecretKeyAlgorithm { Name = "AES-GCM", Length = 256 },
+                    false, [CryptoKeyUsage.Encrypt, CryptoKeyUsage.Decrypt]);
+                return Response.Text("Hello from package").WithHeader("x-key-type", key.Type);
+            }
         }
         """;
 

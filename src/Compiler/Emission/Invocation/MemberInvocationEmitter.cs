@@ -29,6 +29,7 @@ internal sealed partial class JavaScriptEmitter
         if (type == "Workers.Router" && method is not null) return RouterInvocation(invocation, method, receiver, arguments);
         if (type == "Workers.RouteContext" && name == "Parameter") return RouteParameterInvocation(receiver, arguments);
         if (type == "Workers.Crypto") receiver = "globalThis.crypto";
+        if (type == "Workers.SubtleCrypto" && method?.IsStatic == true) receiver = "globalThis.SubtleCrypto";
         if (method is not null && BindingIntrinsicRegistry.TryGet(method, out var intrinsic)) return EmitBindingIntrinsic(receiver, invocation, method, intrinsic);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
             return $"{receiver}.{GeneratedInstanceMethodName(method)}({string.Join(", ", arguments)})";

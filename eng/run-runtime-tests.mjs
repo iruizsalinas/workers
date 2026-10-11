@@ -8,6 +8,7 @@ for (const config of [
   "tests/runtime/vitest.chat.config.js",
   "tests/runtime/vitest.accumulator.config.js",
   "tests/runtime/vitest.services.config.js",
+  "tests/runtime/vitest.crypto.config.js",
 ]) {
   const result = spawnSync(process.execPath, [vitest, "run", "--reporter", "minimal", "--config", config], {
     cwd: repositoryRoot,

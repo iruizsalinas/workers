@@ -13,7 +13,7 @@ internal sealed partial class JavaScriptEmitter
         if (literal.IsKind(SyntaxKind.TrueLiteralExpression)) return "true";
         if (literal.IsKind(SyntaxKind.FalseLiteralExpression)) return "false";
         var type = _model.GetTypeInfo(literal).Type?.SpecialType ?? SpecialType.None;
-        if (type is SpecialType.System_String or SpecialType.System_Char) return JsonSerializer.Serialize(literal.Token.ValueText);
+        if (type is SpecialType.System_String or SpecialType.System_Char) return JavaScriptStringLiteral(literal.Token.ValueText);
         // 64-bit integers are JavaScript numbers, so only literals in the safe integer range are exact.
         if (type is SpecialType.System_Int64 or SpecialType.System_UInt64
             && literal.Token.Value is long or ulong
@@ -38,6 +38,23 @@ internal sealed partial class JavaScriptEmitter
                 var text => text
             };
         throw Unsupported("WRK101", literal);
+    }
+
+    // System.Text.Json replaces unpaired UTF-16 surrogates. JavaScript strings can retain them,
+    // which matters when native encoders and DigestStream decide how to encode each chunk.
+    private static string JavaScriptStringLiteral(string text)
+    {
+        for (var index = 0; index < text.Length; index++)
+        {
+            if (char.IsHighSurrogate(text[index]) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]))
+            {
+                index++;
+                continue;
+            }
+            if (char.IsSurrogate(text[index]))
+                return "\"" + string.Concat(text.Select(character => "\\u" + ((int)character).ToString("X4", CultureInfo.InvariantCulture))) + "\"";
+        }
+        return JsonSerializer.Serialize(text);
     }
 
     private string InterpolatedPart(InterpolatedStringContentSyntax value) => value switch
