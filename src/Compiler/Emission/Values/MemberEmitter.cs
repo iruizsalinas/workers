@@ -43,29 +43,9 @@ internal sealed partial class JavaScriptEmitter
         if (symbol is IFieldSymbol { ContainingType: { } enumType } field
             && CryptoEnumValue(enumType.ToDisplayString(), field.Name) is { } cryptoEnum)
             return cryptoEnum;
-        if (symbol is IFieldSymbol { ContainingType: { } d1SessionType } sessionMode
-            && d1SessionType.ToDisplayString() == "Workers.D1SessionMode")
-            return sessionMode.Name switch
-            {
-                "FirstPrimary" => "\"first-primary\"",
-                "FirstUnconstrained" => "\"first-unconstrained\"",
-                _ => throw Unsupported("WRK108", member)
-            };
-        if (symbol is IFieldSymbol { ContainingType: { } redirectType } redirect
-            && redirectType.ToDisplayString() is "Workers.RedirectMode" or "Workers.ResponseBodyEncoding")
-            return JsonSerializer.Serialize(LowerFirst(redirect.Name));
-        if (symbol is IFieldSymbol { ContainingType: { } transportType } transport
-            && transportType.ToDisplayString() == "Workers.TcpSecureTransport")
-            return JsonSerializer.Serialize(transport.Name.ToLowerInvariant());
-        if (symbol is IFieldSymbol { ContainingType: { } compressionType } compression
-            && compressionType.ToDisplayString() == "Workers.CompressionFormat")
-            return JsonSerializer.Serialize(compression.Name switch
-            {
-                "Gzip" => "gzip",
-                "Deflate" => "deflate",
-                "DeflateRaw" => "deflate-raw",
-                _ => throw Unsupported("WRK108", member)
-            });
+        if (symbol is IFieldSymbol { ContainingType.TypeKind: TypeKind.Enum } nativeField
+            && NativeEnumValue(nativeField.ContainingType.ToDisplayString(), nativeField.Name) is { } nativeEnum)
+            return JsonSerializer.Serialize(nativeEnum);
         if (symbol is IFieldSymbol { ContainingType: { } splitOptionsType } splitOptions
             && splitOptionsType.ToDisplayString() == "System.StringSplitOptions")
             return splitOptions.Name switch
@@ -83,38 +63,24 @@ internal sealed partial class JavaScriptEmitter
             && taskType.ToDisplayString() is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask")
             return "Promise.resolve()";
         if (property?.ContainingType.ToDisplayString() == "Workers.WebSocketPair") return $"{Receiver()}[{(property.Name == "Client" ? 0 : 1)}]";
-        if (property?.ContainingType.ToDisplayString() == "Workers.TailRequest" && property.Name == "Headers")
+        if (property?.ContainingType.ToDisplayString() == "Workers.TraceItemFetchEventInfoRequest" && property.Name == "Headers")
             return $"new Headers({Receiver()}.headers)";
-        if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Signal")
-            return $"{Receiver()}.signal";
-        if (property?.ContainingType.ToDisplayString() == "Workers.FormEntry")
+        // Only fetch invocations carry a request; other event types are exposed as null.
+        if (property?.ContainingType.ToDisplayString() == "Workers.TraceItem" && property.Name == "Event")
+            return $"(value => value != null && \"request\" in value ? value : null)({Receiver()}.event)";
+        if (property?.ContainingType.ToDisplayString() == "Workers.FormDataEntryValue")
             return FormEntryMember(member, property, Receiver());
-        if (property?.ContainingType.ToDisplayString() == "Workers.FormFile")
-            return $"{Receiver()}.{property.Name switch { "FileName" => "name", "ContentType" => "type", "Body" => "", _ => LowerFirst(property.Name) }}".TrimEnd('.');
-        if (property?.ContainingType.ToDisplayString() == "Workers.HtmlContentOptions") return property.Name == "Html" ? "{ html: true }" : "{ html: false }";
-        if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Path") return $"new URL({Receiver()}.url).pathname";
-        if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "PathAndQuery")
-            return $"(value => value.pathname + value.search)(new URL({Receiver()}.url))";
-        if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "QueryParameters") return $"new URL({Receiver()}.url).searchParams";
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Cookies")
             return HelperInvocation(JavaScriptHelper.RequestCookies, [Receiver()]);
         if (property?.ContainingType.ToDisplayString() == "Workers.Response" && property.Name == "Cookies")
             return $"{Receiver()}.headers";
-        if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Url")
-            return $"new URL({Receiver()}.url)";
-        if (property?.ContainingType.ToDisplayString() == "Workers.Url")
-            return $"{Receiver()}.{property.Name switch
-            {
-                "Hostname" => "hostname",
-                "Username" => "username",
-                "Path" => "pathname",
-                "Query" => "search",
-                "Fragment" => "hash",
-                "QueryParameters" => "searchParams",
-                _ => LowerFirst(property.Name)
-            }}";
-        if (property?.ContainingType.ToDisplayString() == "Workers.Headers" && property.Name == "Count")
-            return $"Array.from({Receiver()}).length";
+        if (property?.ContainingType.ToDisplayString() is "Workers.WorkerEntrypoint" or "Workers.DurableObject")
+            return $"{Receiver()}.{LowerFirst(property.Name)}";
+        if (property is { Name: "Body", ContainingType: { } messageType }
+            && messageType.OriginalDefinition.ToDisplayString() == "Workers.Message<T>")
+            return JsonBoundaryConverter(messageType.TypeArguments[0], member, JsonWebMode) is { } convertBody
+                ? $"({convertBody})({Receiver()}.body)"
+                : $"{Receiver()}.body";
         if (property is { Name: "Length" }
             && (instance?.Type?.SpecialType == SpecialType.System_String
                 || instance?.Type is IArrayTypeSymbol
@@ -123,10 +89,6 @@ internal sealed partial class JavaScriptEmitter
             return $"{Receiver()}.length";
         if (property?.ContainingType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
             return $"{Receiver()}[{(property.Name == "Key" ? 0 : 1)}]";
-        // QueryParameter values only come from iterating URLSearchParams, which yields [name, value] pairs.
-        if (property is { Name: "Name" or "Value", ContainingType: { } parameterType }
-            && parameterType.ToDisplayString() == "Workers.QueryParameter")
-            return $"{Receiver()}[{(property.Name == "Name" ? 0 : 1)}]";
         if (property is { Name: "Key" }
             && property.ContainingType.OriginalDefinition.ToDisplayString() == "System.Linq.IGrouping<TKey, TElement>")
             return $"{Receiver()}.key";
@@ -139,21 +101,15 @@ internal sealed partial class JavaScriptEmitter
             return $"(typeof {Receiver()} === \"string\")";
         // The runtime reports these instants as millisecond numbers; the API exposes them as dates.
         if (property is { Name: "ScheduledTime" or "EventTimestamp" or "Timestamp" }
-            && property.ContainingType.ToDisplayString() is "Workers.ScheduledEvent" or "Workers.TailItem" or "Workers.TailLog" or "Workers.TailException")
+            && property.ContainingType.ToDisplayString() is "Workers.ScheduledController" or "Workers.AlarmInvocationInfo"
+                or "Workers.TraceItem" or "Workers.TraceLog" or "Workers.TraceException")
             return $"(value => value == null ? null : new Date(value))({Receiver()}.{LowerFirst(property.Name)})";
-        if (property?.ContainingType.ToDisplayString() == "Workers.WorkerEntrypoint")
-            return $"{Receiver()}.{(property.Name == "Environment" ? "env" : "ctx")}";
-        if (property?.ContainingType.ToDisplayString() == "Workers.KvListResult" && property.Name == "ListComplete")
+        if (property?.ContainingType.ToDisplayString() == "Workers.KVNamespaceListResult" && property.Name == "ListComplete")
             return $"{Receiver()}.list_complete";
-        if (property?.ContainingType.ToDisplayString() is "Workers.D1ResultMetadata" or "Workers.D1Timings")
+        if (property?.ContainingType.ToDisplayString() is "Workers.D1Meta" or "Workers.D1Timings")
             return $"{Receiver()}.{SnakeCase(property.Name)}";
-        if (property?.ContainingType.ToDisplayString() == "Workers.DurableObjectStorage" && property.Name == "Kv")
-            return $"{Receiver()}.kv";
         if (property?.ContainingType.ToDisplayString() == "System.Exception" && property.Name == "Message")
             return $"{Receiver()}.message";
-        if (property is { Name: "Count", ContainingType: { } queueBatch }
-            && BindingIntrinsicRegistry.IsQueueMessageBatch(queueBatch))
-            return $"{Receiver()}.messages.length";
         if (property is { Name: "Keys" or "Values" } && IsDictionary(instance?.Type))
             return $"Object.{(property.Name == "Keys" ? "keys" : "values")}({Receiver()})";
         if (property is { Name: "Count" } && IsDictionary(instance?.Type))

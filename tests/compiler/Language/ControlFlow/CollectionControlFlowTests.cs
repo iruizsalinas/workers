@@ -10,7 +10,7 @@ public sealed class CollectionControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var values = new List<int>();
                     foreach (var character in "😀")
@@ -31,7 +31,7 @@ public sealed class CollectionControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var methods = new HashSet<string> { "GET", "HEAD" };
                     methods.Add("OPTIONS");
@@ -58,7 +58,7 @@ public sealed class CollectionControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var values = new HashSet<Item> { new Item(1) };
                     return Response.Json(values.Contains(new Item(1)));
@@ -78,9 +78,9 @@ public sealed class CollectionControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    await Timers.WaitAsync(-1);
+                    await Scheduler.WaitAsync(-1);
                     return new Response("unreachable");
                 }
             }
@@ -98,7 +98,7 @@ public sealed class CollectionControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var responses = await Task.WhenAll(
                         Http.FetchAsync("https://one.example"),
@@ -121,13 +121,9 @@ public sealed class CollectionControlFlowTests
     {
         var module = Compile("""
             using Workers;
-            [DurableObject("Gate")]
-            public sealed class Gate
+            public sealed class Gate : DurableObject
             {
-                private readonly DurableObjectState _state;
-                public Gate(DurableObjectState state, Env env) => _state = state;
-
-                public Task ReserveAsync(string owner) => _state.Storage.TransactionAsync(async storage =>
+                public Task ReserveAsync(string owner) => Ctx.Storage.TransactionAsync(async storage =>
                 {
                     var current = await storage.GetAsync<string>("owner");
                     if (current is not null)
@@ -150,7 +146,7 @@ public sealed class CollectionControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var values = new Dictionary<string, int> { ["one"] = 1, ["two"] = 2 };
                     var total = 0;

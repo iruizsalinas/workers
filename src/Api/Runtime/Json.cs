@@ -12,6 +12,9 @@ public static class Json
 public sealed class JsonValue
 {
     private JsonValue() { }
+
+    /// <summary>Treats a JSON-serializable value, such as an anonymous object, as a JSON value.</summary>
+    public static JsonValue From<T>(T value) => WorkerApi.NotExecutable<JsonValue>();
     public JsonValue this[string name] => WorkerApi.NotExecutable<JsonValue>();
     public JsonValue this[int index] => WorkerApi.NotExecutable<JsonValue>();
     public bool IsNull => WorkerApi.NotExecutable<bool>();

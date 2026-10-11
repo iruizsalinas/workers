@@ -1,34 +1,49 @@
 namespace Workers;
 
-public sealed record TcpSocketAddress(string Hostname, int Port);
-public sealed class TcpSocketOptions
+/// <summary>An outbound TCP socket from <c>connect()</c> in <c>cloudflare:sockets</c>.</summary>
+public sealed class Socket
 {
-    public TcpSecureTransport? SecureTransport { get; init; }
+    private Socket() { }
+
+    /// <summary>Opens a connection to an address such as <c>example.com:443</c>.</summary>
+    public static Socket Connect(string address, SocketOptions? options = null) => WorkerApi.NotExecutable<Socket>();
+    public static Socket Connect(SocketAddress address, SocketOptions? options = null) => WorkerApi.NotExecutable<Socket>();
+
+    public ReadableStream Readable => WorkerApi.NotExecutable<ReadableStream>();
+    public WritableStream Writable => WorkerApi.NotExecutable<WritableStream>();
+    public Task Closed => WorkerApi.NotExecutable<Task>();
+    public Task<SocketInfo> Opened => WorkerApi.NotExecutable<Task<SocketInfo>>();
+    public bool Upgraded => WorkerApi.NotExecutable<bool>();
+    public SecureTransport SecureTransport => WorkerApi.NotExecutable<SecureTransport>();
+
+    public Task CloseAsync() => WorkerApi.NotExecutable<Task>();
+    /// <summary>Upgrades a socket opened with <see cref="SecureTransport.StartTls"/> to TLS.</summary>
+    public Socket StartTls() => WorkerApi.NotExecutable<Socket>();
+}
+
+public sealed class SocketAddress
+{
+    public required string Hostname { get; init; }
+    public required int Port { get; init; }
+}
+
+public sealed class SocketOptions
+{
+    public SecureTransport? SecureTransport { get; init; }
     public bool? AllowHalfOpen { get; init; }
 }
 
-public enum TcpSecureTransport
+public enum SecureTransport
 {
     Off,
     On,
     StartTls
 }
 
-public sealed record TcpSocketInfo(string? RemoteAddress, string? LocalAddress);
-public sealed class TcpSocket
+public sealed class SocketInfo
 {
-    public static TcpSocket Connect(string address, TcpSocketOptions? options = null) =>
-        WorkerApi.NotExecutable<TcpSocket>();
-    public static TcpSocket Connect(string hostname, int port, TcpSocketOptions? options = null) =>
-        WorkerApi.NotExecutable<TcpSocket>();
-    public static TcpSocket Connect(TcpSocketAddress address, TcpSocketOptions? options = null) =>
-        WorkerApi.NotExecutable<TcpSocket>();
+    private SocketInfo() { }
 
-    public Task<TcpSocketInfo> Opened => WorkerApi.NotExecutable<Task<TcpSocketInfo>>();
-    public Task Closed => WorkerApi.NotExecutable<Task>();
-    public ReadableStream Readable => WorkerApi.NotExecutable<ReadableStream>();
-    public WritableStream Writable => WorkerApi.NotExecutable<WritableStream>();
-    public bool Upgraded => WorkerApi.NotExecutable<bool>();
-    public Task CloseAsync() => WorkerApi.NotExecutable<Task>();
-    public TcpSocket StartTls() => WorkerApi.NotExecutable<TcpSocket>();
+    public string? RemoteAddress => WorkerApi.NotExecutable<string?>();
+    public string? LocalAddress => WorkerApi.NotExecutable<string?>();
 }

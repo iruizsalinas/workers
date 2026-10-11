@@ -15,14 +15,8 @@ public static class Crypto
 {
     public static SubtleCrypto Subtle => WorkerApi.NotExecutable<SubtleCrypto>();
     public static string RandomUuid() => WorkerApi.NotExecutable<string>();
-    /// <summary>Allocates and fills up to 65,536 bytes using native getRandomValues.</summary>
-    public static byte[] RandomBytes(int count) => WorkerApi.NotExecutable<byte[]>();
-    /// <summary>Fills and returns the supplied byte array. The native 65,536-byte quota applies.</summary>
-    public static byte[] GetRandomValues(byte[] buffer) => WorkerApi.NotExecutable<byte[]>();
-    public static bool TimingSafeEqual(ReadOnlyMemory<byte> left, ReadOnlyMemory<byte> right) =>
-        WorkerApi.NotExecutable<bool>();
-    public static DigestStream CreateDigestStream(DigestStreamAlgorithm algorithm, DigestStreamOptions? options = null) =>
-        WorkerApi.NotExecutable<DigestStream>();
+    /// <summary>Fills and returns the array with cryptographically random bytes, at most 65,536 per call.</summary>
+    public static byte[] GetRandomValues(byte[] array) => WorkerApi.NotExecutable<byte[]>();
     public static Task<byte[]> DigestAsync(DigestAlgorithm algorithm, ReadOnlyMemory<byte> value) => WorkerApi.NotExecutable<Task<byte[]>>();
     /// <summary>Hashes the UTF-8 encoding of the text.</summary>
     public static Task<byte[]> DigestAsync(DigestAlgorithm algorithm, string value) => WorkerApi.NotExecutable<Task<byte[]>>();
@@ -45,12 +39,14 @@ public static class Crypto
         WorkerApi.NotExecutable<Task<bool>>();
 }
 
-/// <summary>A JavaScript <c>crypto.DigestStream</c>: write bytes through <see cref="WritableStream.GetWriter"/> or a pipe, then read the digest.</summary>
+/// <summary>Hashes the bytes written to it, as <c>crypto.DigestStream</c>. Write through <see cref="WritableStream.GetWriter"/>
+/// or a pipe, then await <see cref="Digest"/>.</summary>
 public sealed class DigestStream : WritableStream, IDisposable
 {
-    private DigestStream() { }
+    public DigestStream(DigestStreamAlgorithm algorithm, DigestStreamOptions? options = null) => WorkerApi.NotExecutable();
+
+    /// <summary>Resolves with the digest when the stream closes, or rejects if it is aborted or disposed.</summary>
+    public Task<byte[]> Digest => WorkerApi.NotExecutable<Task<byte[]>>();
     public long BytesWritten => WorkerApi.NotExecutable<long>();
-    /// <summary>Resolves when the stream closes, or rejects if it is aborted or disposed.</summary>
-    public Task<byte[]> DigestAsync() => WorkerApi.NotExecutable<Task<byte[]>>();
     public void Dispose() => WorkerApi.NotExecutable();
 }

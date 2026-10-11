@@ -10,7 +10,7 @@ public sealed class SafetyRegressionTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var total = int.MaxValue;
                     bool? missing = null;
@@ -40,7 +40,7 @@ public sealed class SafetyRegressionTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var total = 0;
                     foreach (var value in Values()) total += value;
@@ -73,7 +73,7 @@ public sealed class SafetyRegressionTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     using IDisposable lease = new Lease();
                     return new Response("ok");
@@ -94,7 +94,7 @@ public sealed class SafetyRegressionTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var value = {{expression}};
                     return new Response("ok");

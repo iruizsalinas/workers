@@ -10,7 +10,7 @@ public sealed class LoopControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     for (int index; request.Method.Length > 0;)
                     {
@@ -33,7 +33,7 @@ public sealed class LoopControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     byte[] left = [1, 2];
                     byte[] right = [3];
@@ -62,7 +62,7 @@ public sealed class LoopControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var body = request.Method;
                     return Response.Json(new { present = !(body is null) });

@@ -21,7 +21,7 @@ public sealed class RuntimeBehaviorTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var order = Json.Parse<Order>("""{"id":"a1","createdAt":"2026-01-02T03:04:05.000Z","line_items":[{"name":"pen"}],"tags":["x","x","y"],"secret":"sent"}""")!;
                     var empty = Json.Parse<Order>("""{"id":"a2"}""")!;
@@ -61,9 +61,9 @@ public sealed class RuntimeBehaviorTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    var search = request.QueryParameters.As<Search>();
+                    var search = new Url(request.Url).SearchParams.As<Search>();
                     return Response.Json(new { search.Term, search.Page, search.Exact, tags = search.Tag.Count });
                 }
             }
@@ -83,7 +83,7 @@ public sealed class RuntimeBehaviorTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var value = Json.Parse("""{"name":"Ada","age":36,"tags":["a","b"],"none":null}""");
                     var error = "";
@@ -115,7 +115,7 @@ public sealed class RuntimeBehaviorTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var parsedInt = int.TryParse(" 42 ", out var number);
                     var prefixed = int.TryParse("12abc", out _);
@@ -149,7 +149,7 @@ public sealed class RuntimeBehaviorTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var completed = new List<string>();
                     var values = await Task.WhenAll(Delay(5, "a", completed), Delay(1, "b", completed));
@@ -167,14 +167,14 @@ public sealed class RuntimeBehaviorTests
 
                 private static async Task<string> Delay(int milliseconds, string value, List<string> completed)
                 {
-                    await Timers.WaitAsync(milliseconds);
+                    await Scheduler.WaitAsync(milliseconds);
                     completed.Add(value);
                     return value;
                 }
 
                 private static async Task<string> Fail(int milliseconds, string value, List<string> completed)
                 {
-                    await Timers.WaitAsync(milliseconds);
+                    await Scheduler.WaitAsync(milliseconds);
                     completed.Add(value);
                     throw new InvalidOperationException(value);
                 }

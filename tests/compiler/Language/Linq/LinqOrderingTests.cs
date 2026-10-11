@@ -10,7 +10,7 @@ public sealed class LinqOrderingTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<int> values = [1, 2, 1];
                     List<string> words = ["a", "b", "cc"];
@@ -38,7 +38,7 @@ public sealed class LinqOrderingTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<int?> values = [1, null, 1];
                     return Response.Json(new {
@@ -63,7 +63,7 @@ public sealed class LinqOrderingTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<Item> values = [new Item(2, 1, 'B'), new Item(1, 2, 'A')];
                     var ordered = values.OrderBy(value => value.Group)
@@ -94,7 +94,7 @@ public sealed class LinqOrderingTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<string> words = ["b", "a"];
                     List<Item> items = [new Item(1)];

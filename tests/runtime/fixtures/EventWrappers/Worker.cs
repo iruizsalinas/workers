@@ -8,17 +8,17 @@ public static class Worker
     public static async Task EmailAsync(
         ForwardableEmailMessage message,
         Env environment,
-        Context context)
+        ExecutionContext context)
     {
         await message.ForwardAsync("archive@example.test");
     }
 
     [Tail]
     public static async Task TailAsync(
-        TailEvent events,
+        IReadOnlyList<TraceItem> events,
         Env environment,
-        Context context)
+        ExecutionContext context)
     {
-        await environment.Service("TAIL_SINK").InvokeVoidAsync("record", [events]);
+        await environment.Service("TAIL_SINK").InvokeAsync("record", events);
     }
 }

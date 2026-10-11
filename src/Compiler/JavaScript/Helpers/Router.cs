@@ -87,7 +87,7 @@ internal static partial class HelperSource
         async function {{name("routerHandle")}}(router, request, env, context) {
           const segments = {{name("routerSegments")}}(new URL(request.url).pathname), method = request.method;
           let allowed = null, handler = null;
-          const route = { env, context, parameters: Object.create(null) };
+          const route = { env, ctx: context, parameters: Object.create(null) };
           for (const entry of router.routes) {
             const parameters = {{name("routerMatch")}}(entry.route, segments);
             if (parameters === null) continue;

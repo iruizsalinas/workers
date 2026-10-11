@@ -12,7 +12,7 @@ public sealed class StringApiTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<string> values = ["one", "two"];
                     var text = "  Alpha-Beta  ";
@@ -71,7 +71,7 @@ public sealed class StringApiTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     string? missing = null;
                     return Response.Json(new
@@ -102,7 +102,7 @@ public sealed class StringApiTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var value = "alpha";
                     return Response.Json({{operation}});

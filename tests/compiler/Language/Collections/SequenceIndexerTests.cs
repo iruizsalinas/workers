@@ -11,7 +11,7 @@ public sealed class SequenceIndexerTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     int[] values = [1, 2];
                     values[0] = values[1];
@@ -35,7 +35,7 @@ public sealed class SequenceIndexerTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => new Response("ok");
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => new Response("ok");
             }
             """);
 
@@ -52,7 +52,7 @@ public sealed class SequenceIndexerTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var values = new Dictionary<string, int> { ["__proto__"] = 1 };
                     values["answer"] = 42;

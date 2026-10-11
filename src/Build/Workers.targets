@@ -11,6 +11,14 @@
     <_WorkersDotNetHost Condition="'$(_WorkersDotNetHost)' == ''">dotnet</_WorkersDotNetHost>
   </PropertyGroup>
 
+  <!-- Worker code runs on the Workers runtime, where these namespaces are unavailable; their type names
+       (File, ExecutionContext, HttpMethod) would also collide with the Workers APIs. -->
+  <Target Name="RemoveUnsupportedWorkerUsings" BeforeTargets="GenerateGlobalUsings">
+    <ItemGroup>
+      <Using Remove="System.IO;System.Net.Http;System.Threading" />
+    </ItemGroup>
+  </Target>
+
   <Target Name="RemoveStaleWorkerArtifact" BeforeTargets="CoreCompile;Clean" Condition="'$(IsCrossTargetingBuild)' != 'true'">
     <PropertyGroup>
       <_WorkersCompilerArgumentsFile>$(IntermediateOutputPath)worker-compiler-arguments.rsp</_WorkersCompilerArgumentsFile>

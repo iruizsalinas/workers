@@ -5,9 +5,9 @@ namespace RouterSemantics;
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
+    public static async Task<Response> FetchAsync(Request request, Env environment, ExecutionContext context)
     {
-        if (request.Path == "/conflict")
+        if (new Url(request.Url).Pathname == "/conflict")
         {
             try
             {
@@ -29,7 +29,7 @@ public static class Worker
             .Get("/users/{id}", (request, route) => new Response($"{prefix}:name:{route.Parameter("id")}"))
             .Delete("/users/{id}", async (request, route) =>
             {
-                await Timers.WaitAsync(1);
+                await Scheduler.WaitAsync(1);
                 return new Response($"deleted:{route.Parameter("id")}");
             })
             .Get("/items/{id:uuid}", (request, route) => new Response(route.Parameter("id").ToLowerInvariant()))
@@ -37,7 +37,7 @@ public static class Worker
             .Get("/proxy/status", (request, route) => new Response("status"))
             .Post("/echo", async (request, route) => new Response(await request.TextAsync()) { Status = 201 })
             .Get("/", (request, route) => new Response("root"))
-            .Fallback((request, route) => new Response($"fallback:{request.Path}") { Status = 404 })
+            .Fallback((request, route) => new Response($"fallback:{new Url(request.Url).Pathname}") { Status = 404 })
             .HandleAsync(request, environment, context);
     }
 }

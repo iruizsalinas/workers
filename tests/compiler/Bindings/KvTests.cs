@@ -11,10 +11,10 @@ public sealed class KvTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context ctx)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext ctx)
                 {
-                    var text = await env.Kv("DATA").GetTextAsync("key", new KvGetOptions { CacheTtl = 60 });
-                    await env.Kv("DATA").PutJsonAsync("result", new { text }, new KvPutOptions { ExpirationTtl = 300 });
+                    var text = await env.KV("DATA").GetAsync("key", new KVNamespaceGetOptions { CacheTtl = 60 });
+                    await env.KV("DATA").PutJsonAsync("result", new { text }, new KVNamespacePutOptions { ExpirationTtl = 300 });
                     return new Response(text ?? "missing");
                 }
             }
@@ -33,10 +33,10 @@ public sealed class KvTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context ctx)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext ctx)
                 {
-                    var json = await env.Kv("DATA").GetJsonAsync<object>("json");
-                    var bytes = await env.Kv("DATA").GetBytesAsync("bytes");
+                    var json = await env.KV("DATA").GetJsonAsync<object>("json");
+                    var bytes = await env.KV("DATA").GetBytesAsync("bytes");
                     return Response.Json(new { json, bytes });
                 }
             }
@@ -54,9 +54,9 @@ public sealed class KvTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    await env.Kv("DATA").PutTextAsync(value: "content", @key: "entry");
+                    await env.KV("DATA").PutAsync(value: "content", @key: "entry");
                     return new Response();
                 }
             }

@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 internal sealed partial class JavaScriptEmitter
 {
+    // KV reads choose the value type with the native "type" option. Binary values arrive as ArrayBuffers
+    // and are exposed as byte arrays; reads of several keys return a Map, exposed as a dictionary.
     private static string EmitKvGet(
         string receiver,
         string method,
@@ -11,11 +13,28 @@ internal sealed partial class JavaScriptEmitter
     {
         var key = arguments.Single(item => item.Parameter.Name is "key" or "keys").Value;
         var options = arguments.FirstOrDefault(item => item.Parameter.Name == "options").Value;
-        var nativeOptions = options is null ? $"{{ type: \"{type}\" }}" : $"{{ ...{options}, type: \"{type}\" }}";
-        var invocation = $"{receiver}.{method}({key}, {nativeOptions})";
-        return arguments.Any(item => item.Parameter.Name == "keys")
-            ? $"{invocation}.then(value => Object.fromEntries(value))"
-            : invocation;
+        var invocation = $"{receiver}.{method}({key}{KvGetOptions(options, type)})";
+        if (arguments.Any(item => item.Parameter.Name == "keys"))
+            return $"{invocation}.then(value => Object.fromEntries(value))";
+        if (type != "arrayBuffer")
+            return invocation;
+        return method == "get"
+            ? $"{invocation}.then(value => value == null ? null : new Uint8Array(value))"
+            : $"{invocation}.then(result => (result.value = result.value == null ? null : new Uint8Array(result.value), result))";
+    }
+
+    // Text is the runtime's default read type, so its options pass through; other types add the type option,
+    // merged into a literal dictionary when the options were written inline.
+    private static string KvGetOptions(string? options, string type)
+    {
+        var literal = options is not null && options.StartsWith('{') && options.EndsWith('}');
+        if (type == "text")
+            return options is null ? "" : literal ? $", {options}" : $", {options} ?? undefined";
+        if (options is null || options == "{}")
+            return $", {{ type: \"{type}\" }}";
+        return literal
+            ? $", {options[..^1].TrimEnd()}, type: \"{type}\" }}"
+            : $", {{ ...{options}, type: \"{type}\" }}";
     }
 
     private static string EmitDurableObjectGet(
@@ -52,56 +71,17 @@ internal sealed partial class JavaScriptEmitter
         return $"{receiver}.{method}({key}, JSON.stringify({value}){(options is null ? "" : ", " + options)})";
     }
 
-    private string EmitServiceRpc(
+    // RPC arguments are a params array; compiled C# class and record instances cross as plain objects.
+    private string EmitRpc(
         string receiver,
+        IMethodSymbol method,
         IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
     {
-        var method = arguments.Single(item => item.Parameter.Name == "methodName").Value;
-        var values = arguments.FirstOrDefault(item => item.Parameter.Name == "arguments").Value;
-        return values is null
-            ? $"{receiver}[{method}]()"
-            : $"{receiver}[{method}](...{_helpers.Require(JavaScriptHelper.RpcArguments)}({values}))";
-    }
-
-    private static string EmitQueueSend(
-        string receiver,
-        string contentType,
-        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
-    {
-        var message = arguments.Single(item => item.Parameter.Name == "message").Value;
-        var options = arguments.FirstOrDefault(item => item.Parameter.Name == "options").Value;
-        var nativeOptions = options is null
-            ? $"{{ contentType: \"{contentType}\" }}"
-            : $"{{ ...({options} ?? {{}}), contentType: \"{contentType}\" }}";
-        return $"{receiver}.send({message}, {nativeOptions})";
-    }
-
-    private static string EmitQueueSendBatch(
-        string receiver,
-        string contentType,
-        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
-    {
-        var messages = arguments.Single(item => item.Parameter.Name == "messages").Value;
-        var options = arguments.FirstOrDefault(item => item.Parameter.Name == "options").Value;
-        var requests = $"Array.from({messages}, body => ({{ body, contentType: \"{contentType}\" }}))";
-        return $"{receiver}.sendBatch({requests}{(options is null ? "" : ", " + options)})";
-    }
-
-    private static string EmitQueueRequest(
-        string contentType,
-        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
-    {
-        var body = arguments.Single(item => item.Parameter.Name == "body").Value;
-        var delay = arguments.FirstOrDefault(item => item.Parameter.Name == "delaySeconds").Value;
-        return $"{{ body: {body}, contentType: \"{contentType}\"{(delay is null ? "" : $", delaySeconds: {delay} ?? undefined")} }}";
-    }
-
-    private static string EmitUtf8Decode(
-        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
-    {
-        var bytes = arguments.Single(item => item.Parameter.Name == "bytes").Value;
-        var fatal = arguments.FirstOrDefault(item => item.Parameter.Name == "fatal").Value ?? "false";
-        var ignoreBom = arguments.FirstOrDefault(item => item.Parameter.Name == "ignoreBom").Value ?? "false";
-        return $"new TextDecoder(\"utf-8\", {{ fatal: {fatal}, ignoreBOM: {ignoreBom} }}).decode({bytes})";
+        var name = arguments.Single(item => item.Parameter.Name == "methodName").Value;
+        var values = arguments.Where(item => item.Parameter.IsParams).Select(item => item.Value).ToArray();
+        var rpcArguments = _helpers.Require(JavaScriptHelper.RpcArguments);
+        return values.Length == 0
+            ? $"{receiver}[{name}]()"
+            : $"{receiver}[{name}](...{rpcArguments}([{string.Join(", ", values)}]))";
     }
 }

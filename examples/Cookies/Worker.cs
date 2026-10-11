@@ -9,19 +9,20 @@ public static class Worker
     [Fetch]
     public static Task<Response> FetchAsync(
         Request request,
-        Env environment,
-        Context context)
+        Env env,
+        ExecutionContext ctx)
     {
-        if (request.Path == "/logout")
+        var url = new Url(request.Url);
+        if (url.Pathname == "/logout")
         {
             var response = Response.Redirect("/");
             response.Cookies.Delete("__Host-session");
             return Task.FromResult(response);
         }
 
-        var theme = request.QueryParameters.Get("theme") ?? request.Cookies.Get("theme") ?? "light";
-        var result = Response.Json(new { theme, signedIn = request.Cookies.Contains("__Host-session") });
-        result.Cookies.Set("theme", theme, new CookieOptions { MaxAgeSeconds = OneYear, SameSite = SameSite.Strict });
+        var theme = url.SearchParams.Get("theme") ?? request.Cookies.Get("theme") ?? "light";
+        var result = Response.Json(new { theme, signedIn = request.Cookies.Has("__Host-session") });
+        result.Cookies.Set("theme", theme, new CookieOptions { MaxAge = OneYear, SameSite = SameSite.Strict });
         return Task.FromResult(result);
     }
 }

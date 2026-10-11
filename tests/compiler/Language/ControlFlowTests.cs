@@ -10,7 +10,7 @@ public sealed class ControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     try { throw new Exception("failure"); }
                     catch { throw; }
@@ -31,7 +31,7 @@ public sealed class ControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     try { throw new InvalidOperationException(); }
                     catch (InvalidOperationException) { return new Response("specific"); }
@@ -44,7 +44,7 @@ public sealed class ControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     try { throw new InvalidOperationException(); }
                     catch (InvalidOperationException) { return new Response("specific"); }
@@ -64,7 +64,7 @@ public sealed class ControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var count = 0;
                     try

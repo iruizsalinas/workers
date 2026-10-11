@@ -12,7 +12,7 @@ public sealed class DatabaseTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var rows = await env.D1("DB").Prepare("select total, active, created_at from rows").AllAsync<Row>();
                     return Response.Json(rows.Results);
@@ -37,12 +37,12 @@ public sealed class DatabaseTests
             using System.Threading.Tasks;
             public sealed class Lease : IAsyncDisposable
             {
-                public async ValueTask DisposeAsync() => await Timers.WaitAsync(0);
+                public async ValueTask DisposeAsync() => await Scheduler.WaitAsync(0);
             }
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     await using (var first = new Lease())
                     await using (var second = new Lease())
@@ -84,7 +84,7 @@ public sealed class DatabaseTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     using var lease = new Lease();
                     Log.Info("working");
@@ -110,7 +110,7 @@ public sealed class DatabaseTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     Response.Json(new { max = 9007199254740991L, small = 7UL });
             }
             """);
@@ -121,7 +121,7 @@ public sealed class DatabaseTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     Response.Json(9007199254740992L);
             }
             """));
@@ -138,7 +138,7 @@ public sealed class DatabaseTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var db = env.D1("DB");
                     var inserted = await db.Prepare("insert into rows default values").RunAsync();
@@ -163,7 +163,7 @@ public sealed class DatabaseTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var hyperdrive = env.Hyperdrive("HYPERDRIVE");
                     var socket = hyperdrive.Connect();

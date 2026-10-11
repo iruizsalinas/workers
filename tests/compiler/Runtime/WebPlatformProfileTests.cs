@@ -10,21 +10,21 @@ public sealed class WebPlatformProfileTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    var url = new Url(request.Url.ToString());
-                    url.QueryParameters.Set("lang", "en");
-                    url.QueryParameters.Sort();
+                    var url = new Url(request.Url);
+                    url.SearchParams.Set("lang", "en");
+                    url.SearchParams.Sort();
                     byte[] signature = [1];
                     byte[] payload = [2];
                     var valid = await Crypto.VerifyHmacAsync(DigestAlgorithm.Sha256, "secret", signature, payload);
-                    var stream = request.Body!.Compress(CompressionFormat.Gzip);
+                    var stream = request.Body!.PipeThrough(new CompressionStream(CompressionFormat.Gzip));
                     return new Response(stream) { Headers = { ["x-valid"] = valid.ToString() } };
                 }
             }
             """);
 
-        Assert.Contains("new URL(new URL(request.url).toString())", module);
+        Assert.Contains("new URL(request.url)", module);
         Assert.Contains("searchParams.set(\"lang\", \"en\")", module);
         Assert.Contains("subtle.importKey", module);
         Assert.Contains("pipeThrough(new CompressionStream(\"gzip\"))", module);
@@ -38,12 +38,12 @@ public sealed class WebPlatformProfileTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     foreach (var entry in await request.FormDataAsync())
                     {
                         var file = entry.Value.File;
-                        if (file is not null) return Response.Json(await file.SliceBytesAsync(0, 8));
+                        if (file is not null) return Response.Json(await file.Slice(0, 8).BytesAsync());
                     }
                     return new Response { Status = 204 };
                 }
@@ -52,7 +52,7 @@ public sealed class WebPlatformProfileTests
 
         Assert.Contains("instanceof File ?", module);
         Assert.Contains(")(entry[1])", module);
-        Assert.Contains("file.slice(0, 8).arrayBuffer()", module);
+        Assert.Contains("file.slice(0, 8).bytes()", module);
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public sealed class WebPlatformProfileTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     foreach (var entry in await request.FormDataAsync())
                     {
@@ -74,7 +74,7 @@ public sealed class WebPlatformProfileTests
                     return new Response { Status = 204 };
                 }
 
-                private static FormEntry Pass(FormEntry entry) => entry;
+                private static FormDataEntryValue Pass(FormDataEntryValue entry) => entry;
             }
             """);
 

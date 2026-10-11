@@ -5,20 +5,21 @@ namespace EdgeMiddleware;
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
+    public static async Task<Response> FetchAsync(Request request, Env environment, ExecutionContext context)
     {
         var started = Performance.Now();
-        var metadata = environment.Version("VERSION");
-        var allowed = await environment.RateLimiter("RATE").LimitAsync(RateLimitKey(request));
+        var metadata = environment.VersionMetadata("VERSION");
+        var allowed = await environment.RateLimit("RATE").LimitAsync(new RateLimitOptions { Key = RateLimitKey(request) });
 
         if (!allowed.Success)
             return Record(environment, request, metadata, Response.Json(new { error = "Rate limit exceeded" }, status: 429, headers: new Headers { ["retry-after"] = "60" }), "rate_limited", started);
 
-        if (request.Path == "/api/version")
+        var path = new Url(request.Url).Pathname;
+        if (path == "/api/version")
             return Record(environment, request, metadata,
                 Response.Json(new { id = metadata.Id, tag = metadata.Tag, createdAt = metadata.Timestamp }), "version", started);
 
-        if (request.Path == "/api/echo" && request.Method == "POST")
+        if (path == "/api/echo" && request.Method == "POST")
             return Record(environment, request, metadata,
                 Response.Json(new { body = await request.JsonAsync<object>(), version = metadata.Id, requestId = Crypto.RandomUuid() }),
                 "api_echo", started);
@@ -27,7 +28,7 @@ public static class Worker
             return Record(environment, request, metadata, new Response("Method not allowed") { Status = 405, Headers = new Headers { ["allow"] = "GET, HEAD" } }, "method_rejected", started);
 
         var asset = await environment.Assets("ASSETS").FetchAsync(request);
-        var response = new Response(asset)
+        var response = new Response(asset.Body, asset)
         {
             Headers =
             {
@@ -38,7 +39,7 @@ public static class Worker
                 ["x-worker-version"] = metadata.Id
             }
         };
-        if (metadata.Tag is not null)
+        if (metadata.Tag.Length != 0)
             response.Headers["x-worker-version-tag"] = metadata.Tag;
         if (asset.Status >= 200 && asset.Status < 300)
             response.Headers.Append("cache-control", "public, max-age=300");
@@ -50,14 +51,19 @@ public static class Worker
     private static string RateLimitKey(Request request)
     {
         var user = request.Headers.Get("x-user-id");
-        return user is not null && user.Length != 0 ? $"user:{user}:{request.Path}" : $"anonymous:{request.Path}";
+        var path = new Url(request.Url).Pathname;
+        return user is not null && user.Length != 0 ? $"user:{user}:{path}" : $"anonymous:{path}";
     }
 
     private static Response Record(
-        Env environment, Request request, IVersionMetadataBinding metadata, Response response, string eventName, double started)
+        Env environment, Request request, WorkerVersionMetadata metadata, Response response, string eventName, double started)
     {
-        environment.Analytics("METRICS").WriteDataPoint(new AnalyticsEngineDataPoint(
-            [metadata.Id], [response.Status, Performance.Now() - started], [eventName, metadata.Tag ?? "", request.Method, request.Path]));
+        environment.AnalyticsEngine("METRICS").WriteDataPoint(new AnalyticsEngineDataPoint
+        {
+            Indexes = [metadata.Id],
+            Doubles = [response.Status, Performance.Now() - started],
+            Blobs = [eventName, metadata.Tag, request.Method, new Url(request.Url).Pathname]
+        });
         return response;
     }
 }

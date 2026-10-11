@@ -10,10 +10,10 @@ public sealed class CryptoEmissionTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    var first = new MlDsaParams { Name = MlDsaAlgorithm.MlDsa44, Context = request.Path == "/" ? null : new byte[] { 1 } };
-                    var second = new MlDsaParams { Name = MlDsaAlgorithm.MlDsa44, Context = request.Path != "/" ? new byte[] { 1 } : null };
+                    var first = new MlDsaParams { Name = MlDsaAlgorithm.MlDsa44, Context = new Url(request.Url).Pathname == "/" ? null : new byte[] { 1 } };
+                    var second = new MlDsaParams { Name = MlDsaAlgorithm.MlDsa44, Context = new Url(request.Url).Pathname != "/" ? new byte[] { 1 } : null };
                     return Response.Json(new { first = Json.Stringify(first), second = Json.Stringify(second) });
                 }
             }
@@ -31,7 +31,7 @@ public sealed class CryptoEmissionTests
             {
                 private const string Value = "\ud800";
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => Response.Json(new
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => Response.Json(new
                 {
                     literal = Json.Stringify("\ud800"), constant = Json.Stringify(Value), character = Json.Stringify('\ud800')
                 });
@@ -50,19 +50,19 @@ public sealed class CryptoEmissionTests
             {
                 private static string trace = "";
                 private static ISignatureAlgorithm Algorithm() { trace += "a"; return new HmacParams(); }
-                private static byte[] Bytes(string name) { trace += name; return TextCodec.EncodeUtf8("payload"); }
+                private static byte[] Bytes(string name) { trace += name; return new TextEncoder().Encode("payload"); }
                 private static CryptoKey Key(CryptoKey key) { trace += "k"; return key; }
                 private static SubtleCrypto Subtle() { trace += "r"; return Crypto.Subtle; }
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    var key = await Crypto.Subtle.ImportKeyAsync(CryptoBinaryKeyFormat.Raw, TextCodec.EncodeUtf8("secret"),
+                    var key = await Crypto.Subtle.ImportKeyAsync(CryptoBinaryKeyFormat.Raw, new TextEncoder().Encode("secret"),
                         new HmacKeyParams { Hash = DigestAlgorithm.Sha256 }, true,
                         [CryptoKeyUsage.Sign, CryptoKeyUsage.Verify]);
                     var signature = await Subtle().SignAsync(data: Bytes("d"), key: Key(key), algorithm: Algorithm());
                     var order = trace;
                     var valid = await Crypto.Subtle.VerifyAsync(data: Bytes("v"), signature: signature, key: key, algorithm: new HmacParams());
-                    return Response.Json(new { order, valid, hex = TextCodec.EncodeHex(signature) });
+                    return Response.Json(new { order, valid, hex = Hex.Encode(signature) });
                 }
             }
             """);
@@ -82,7 +82,7 @@ public sealed class CryptoEmissionTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var jwk = new JsonWebKey { Kty = "oct", K = "c2VjcmV0", Alg = "HS256", Ext = true, KeyOps = [Sign, Verify] };
                     var key = await Subtle.ImportKeyAsync(keyUsages: [Sign, Verify], extractable: true,
@@ -112,11 +112,11 @@ public sealed class CryptoEmissionTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var bytes = await Crypto.DigestAsync(DigestAlgorithm.Sha256, "hello");
                     var second = await Crypto.Subtle.DigestAsync(DigestAlgorithm.Sha256, bytes);
-                    return Response.Json(new { count = bytes.Length, first = bytes[0], hex = TextCodec.EncodeHex(second) });
+                    return Response.Json(new { count = bytes.Length, first = bytes[0], hex = Hex.Encode(second) });
                 }
             }
             """);
@@ -134,7 +134,7 @@ public sealed class CryptoEmissionTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => Response.Json(new
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => Response.Json(new
                 {
                     hmac = Json.Stringify(new HmacParams()),
                     legacy = Json.Stringify(new NodeEd25519Params()),
@@ -190,15 +190,15 @@ public sealed class CryptoEmissionTests
             public static class Worker
             {
                 private static string trace = "";
-                private static byte[] Bytes(string name, string text) { trace += name; return TextCodec.EncodeUtf8(text); }
+                private static byte[] Bytes(string name, string text) { trace += name; return new TextEncoder().Encode(text); }
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var signature = await Crypto.SignHmacAsync(DigestAlgorithm.Sha256, "secret", Bytes("p", "payload"));
                     var bytes = await Crypto.SignHmacAsync(DigestAlgorithm.Sha1, Bytes("k", "secret"), Bytes("p", "payload"));
                     var valid = await Crypto.VerifyHmacAsync(DigestAlgorithm.Sha256, Bytes("k", "secret"), Bytes("s", "x").Length == 1 ? signature : [], Bytes("p", "payload"));
                     var invalid = await Crypto.VerifyHmacAsync(DigestAlgorithm.Sha256, "secret", signature, Bytes("p", "tampered"));
-                    return Response.Json(new { hex = TextCodec.EncodeHex(signature), sha1 = TextCodec.EncodeHex(bytes), valid, invalid, trace });
+                    return Response.Json(new { hex = Hex.Encode(signature), sha1 = Hex.Encode(bytes), valid, invalid, trace });
                 }
             }
             """);

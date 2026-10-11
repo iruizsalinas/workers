@@ -21,7 +21,7 @@ internal sealed partial class JavaScriptEmitter
                 && IsTextEnum(_model.GetTypeInfo(enumMember.Expression).Type) =>
                 EnumText(_model.GetTypeInfo(enumMember.Expression).Type!, receiver),
             "string" => StringInvocation(invocation, method, receiver, name, arguments),
-            "Workers.Url" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
+            "Workers.Url" or "Workers.UrlSearchParams" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
                    && name == "Add" && arguments.Length == 1 => $"{receiver}.push({arguments[0]})",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"

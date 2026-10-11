@@ -1,27 +1,48 @@
 namespace Workers;
 
-public sealed record QueueSendOptions
+/// <summary>A queue producer binding.</summary>
+public sealed class Queue
+{
+    private Queue() { }
+
+    public Task SendAsync<T>(T body, QueueSendOptions? options = null) => WorkerApi.NotExecutable<Task>();
+    public Task SendBatchAsync<T>(IEnumerable<MessageSendRequest<T>> messages, QueueSendBatchOptions? options = null) =>
+        WorkerApi.NotExecutable<Task>();
+    public Task<QueueMetrics> MetricsAsync() => WorkerApi.NotExecutable<Task<QueueMetrics>>();
+}
+
+/// <summary>How a message body is encoded. The runtime default is <see cref="V8"/>, a structured clone.</summary>
+public enum QueueContentType
+{
+    Text,
+    Bytes,
+    Json,
+    V8
+}
+
+public sealed class QueueSendOptions
+{
+    public QueueContentType? ContentType { get; init; }
+    public int? DelaySeconds { get; init; }
+}
+
+public sealed class QueueSendBatchOptions
 {
     public int? DelaySeconds { get; init; }
 }
 
-public interface IQueueProducer : IBinding
+public sealed class MessageSendRequest<T>
 {
-    Task SendJsonAsync<T>(T message, QueueSendOptions? options = null);
-    Task SendTextAsync(string message, QueueSendOptions? options = null);
-    Task SendBytesAsync(ReadOnlyMemory<byte> message, QueueSendOptions? options = null);
-    Task SendJsonBatchAsync<T>(IEnumerable<T> messages, QueueSendOptions? options = null);
-    Task SendTextBatchAsync(IEnumerable<string> messages, QueueSendOptions? options = null);
-    Task SendBytesBatchAsync(IEnumerable<ReadOnlyMemory<byte>> messages, QueueSendOptions? options = null);
-    Task SendBatchAsync(IEnumerable<QueueSendRequest> messages, QueueSendOptions? options = null);
-    Task<QueueMetrics> MetricsAsync();
+    public required T Body { get; init; }
+    public QueueContentType? ContentType { get; init; }
+    public int? DelaySeconds { get; init; }
 }
 
-public sealed class QueueSendRequest
+public sealed class QueueMetrics
 {
-    public static QueueSendRequest Json<T>(T body, int? delaySeconds = null) => WorkerApi.NotExecutable<QueueSendRequest>();
-    public static QueueSendRequest Text(string body, int? delaySeconds = null) => WorkerApi.NotExecutable<QueueSendRequest>();
-    public static QueueSendRequest Bytes(ReadOnlyMemory<byte> body, int? delaySeconds = null) => WorkerApi.NotExecutable<QueueSendRequest>();
-}
+    private QueueMetrics() { }
 
-public sealed record QueueMetrics(int BacklogCount, int BacklogBytes, Date? OldestMessageTimestamp);
+    public long BacklogCount => WorkerApi.NotExecutable<long>();
+    public long BacklogBytes => WorkerApi.NotExecutable<long>();
+    public Date? OldestMessageTimestamp => WorkerApi.NotExecutable<Date?>();
+}

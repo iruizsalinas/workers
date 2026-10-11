@@ -4,14 +4,14 @@ namespace UserApi;
 
 public static class Worker
 {
-    private const ulong CacheTtlSeconds = 60;
+    private const int CacheTtlSeconds = 60;
 
     [Fetch]
-    public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
+    public static async Task<Response> FetchAsync(Request request, Env environment, ExecutionContext context)
     {
         try
         {
-            var parts = request.Path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var parts = new Url(request.Url).Pathname.Split('/', StringSplitOptions.RemoveEmptyEntries);
 
             if (request.Method == "POST" && parts.Length == 1 && parts[0] == "users")
                 return await CreateUserAsync(request, environment, context);
@@ -42,10 +42,10 @@ public static class Worker
         }
     }
 
-    private static async Task<UserView?> GetUserAsync(string id, Env environment, Context context)
+    private static async Task<UserView?> GetUserAsync(string id, Env environment, ExecutionContext context)
     {
         var key = CacheKey(id);
-        var users = environment.Kv("USERS");
+        var users = environment.KV("USERS");
         var cached = await users.GetJsonAsync<User>(key);
         if (cached is not null)
             return new UserView(cached.Id, cached.Name, cached.Email, cached.CreatedAt, "kv");
@@ -57,11 +57,11 @@ public static class Worker
         if (user is null)
             return null;
 
-        context.WaitUntil(users.PutJsonAsync(key, user, new KvPutOptions { ExpirationTtl = CacheTtlSeconds }));
+        context.WaitUntil(users.PutJsonAsync(key, user, new KVNamespacePutOptions { ExpirationTtl = CacheTtlSeconds }));
         return new UserView(user.Id, user.Name, user.Email, user.CreatedAt, "d1");
     }
 
-    private static async Task<Response> CreateUserAsync(Request request, Env environment, Context context)
+    private static async Task<Response> CreateUserAsync(Request request, Env environment, ExecutionContext context)
     {
         var input = await request.JsonAsync<CreateUserInput>();
         if (input is null || input.Name.Trim().Length < 2 || !input.Email.Contains('@'))
@@ -78,8 +78,8 @@ public static class Worker
             .Bind(user.Id, user.Name, user.Email, user.CreatedAt)
             .RunAsync();
 
-        context.WaitUntil(environment.Kv("USERS").PutJsonAsync(
-            CacheKey(user.Id), user, new KvPutOptions { ExpirationTtl = CacheTtlSeconds }));
+        context.WaitUntil(environment.KV("USERS").PutJsonAsync(
+            CacheKey(user.Id), user, new KVNamespacePutOptions { ExpirationTtl = CacheTtlSeconds }));
 
         return Response.Json(user, status: 201, headers: new Headers { ["location"] = $"/users/{user.Id}" });
     }
@@ -92,7 +92,7 @@ public static class Worker
             return Error("User not found", 404);
 
         await database.Prepare("DELETE FROM users WHERE id = ?").Bind(id).RunAsync();
-        await environment.Kv("USERS").DeleteAsync(CacheKey(id));
+        await environment.KV("USERS").DeleteAsync(CacheKey(id));
         return new Response { Status = 204 };
     }
 

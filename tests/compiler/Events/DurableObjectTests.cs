@@ -7,8 +7,7 @@ public sealed class DurableObjectTests
     {
         var module = Compile("""
             using Workers;
-            [DurableObject("Constants")]
-            public sealed class Constants
+            public sealed class Constants : DurableObject
             {
                 private const string Name = "worker";
                 private const int Limit = 4;
@@ -43,12 +42,9 @@ public sealed class DurableObjectTests
         var module = Compile("""
             using Workers;
 
-            [DurableObject("Counter")]
-            public sealed class CounterObject
+            public sealed class Counter : DurableObject
             {
-                public CounterObject(DurableObjectState state, Env env) { }
-
-                public Task<Response> FetchAsync(Request request) =>
+                public override Task<Response> FetchAsync(Request request) =>
                     Task.FromResult(new Response("durable"));
 
                 public ValueTask<int> AddAsync(int left, int right) =>
@@ -56,8 +52,9 @@ public sealed class DurableObjectTests
             }
             """);
 
-        Assert.Contains("export class Counter", module);
-        Assert.Contains("constructor(state, env)", module);
+        Assert.Contains("import { DurableObject as $workers$DurableObject } from \"cloudflare:workers\";", module);
+        Assert.Contains("export class Counter extends $workers$DurableObject {", module);
+        Assert.DoesNotContain("constructor(", module);
         Assert.Contains("fetch(request)", module);
         Assert.Contains("add(left, right)", module);
         Assert.DoesNotContain("registry", module, StringComparison.OrdinalIgnoreCase);
@@ -68,8 +65,7 @@ public sealed class DurableObjectTests
     {
         var module = Compile("""
             using Workers;
-            [DurableObject("Counter")]
-            public sealed class Counter
+            public sealed class Counter : DurableObject
             {
                 private int _count;
                 private string? _label;
@@ -77,6 +73,8 @@ public sealed class DurableObjectTests
             }
             """);
 
+        Assert.Contains("constructor(ctx, env) {", module);
+        Assert.Contains("super(ctx, env);", module);
         Assert.Contains("this._count = 0;", module);
         Assert.Contains("this._label = null;", module);
     }
@@ -86,8 +84,7 @@ public sealed class DurableObjectTests
     {
         var module = Compile("""
             using Workers;
-            [DurableObject("Counter")]
-            public sealed class Counter
+            public sealed class Counter : DurableObject
             {
                 public int Add(int amount = 1) => amount;
                 public int Test() => Add();
@@ -103,8 +100,7 @@ public sealed class DurableObjectTests
     {
         var module = Compile("""
             using Workers;
-            [DurableObject("Counter")]
-            public sealed class Counter
+            public sealed class Counter : DurableObject
             {
                 private IEnumerable<int> Values()
                 {

@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 // Router patterns are compile-time constants parsed when the Worker is built and emitted once as
 // module-level route descriptors. The router itself is a small runtime table: registration keeps routes
-// ordered by specificity, and dispatch passes the native Request with a RouteContext of env, context and
+// ordered by specificity, and dispatch passes the native Request with a RouteContext of env, ctx and
 // the decoded path parameters.
 internal sealed partial class JavaScriptEmitter
 {

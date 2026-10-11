@@ -3,49 +3,35 @@ using Microsoft.CodeAnalysis;
 internal enum BindingIntrinsicKind
 {
     Direct,
-    RequestJson,
-    RequestBodyRead,
-    KvBytesGet,
-    KvJsonGet,
-    KvJsonPut,
-    DurableObjectGet,
-    CacheMatch,
-    ServiceRpc,
     Property,
+    PropertyByName,
     Fluent,
     Dispose,
-    RateLimit,
-    CryptoRandomBytes,
-    CryptoTimingSafeEqual,
-    CryptoDigestBody,
-    CryptoDigestStream,
-    DigestResult,
+    RequestJson,
+    RequestBodyRead,
+    KvGet,
+    KvGetWithMetadata,
+    KvJsonPut,
+    R2Get,
+    DurableObjectGet,
+    DictionaryObject,
+    SyncStorageGet,
+    SqlCursorNext,
+    CacheMatch,
+    Rpc,
+    DateResult,
+    IteratorArray,
+    QueryAs,
     ReadableFromEnumerable,
-    WebSocketJson,
     WebSocketMessageText,
+    WebSocketMessageBytes,
+    EventListener,
+    CryptoDigestBody,
     CryptoSignHmac,
     CryptoVerifyHmac,
     CryptoBytesResult,
     CryptoImportKey,
-    CryptoExportJwk,
-    BlobSliceBytes,
-    QueryNames,
-    CompressStream,
-    DecompressStream,
-    DictionaryObject,
-    QueueSend,
-    QueueSendBatch,
-    QueueRequest,
-    RequestWithUrl,
-    Utf8Decode,
-    SqlCursorNext,
-    SyncStorageGet,
-    QueryAs,
-    DateResult,
-    IteratorArray,
-    ResponseRead,
-    WebSocketMessageBytes,
-    EventListener
+    CryptoExportJwk
 }
 
 internal sealed record BindingIntrinsic(string JavascriptName, BindingIntrinsicKind Kind = BindingIntrinsicKind.Direct);
@@ -85,9 +71,6 @@ internal static class BindingIntrinsicRegistry
         MethodSets.SelectMany(methods => methods);
 
     public static bool IsStructuralType(INamedTypeSymbol type) => BindingClassification.IsStructural(TypeName(type.OriginalDefinition));
-
-    public static bool IsQueueMessageBatch(ITypeSymbol? type) =>
-        type is INamedTypeSymbol named && TypeName(named.OriginalDefinition) == "Workers.QueueMessageBatch<T>";
 
     public static bool IsClassified(IMethodSymbol method)
     {

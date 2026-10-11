@@ -6,12 +6,12 @@ public static class Worker
 {
     [Queue]
     public static async Task QueueAsync(
-        QueueMessageBatch<Job> batch,
-        Env environment,
-        Context context)
+        MessageBatch<Job> batch,
+        Env env,
+        ExecutionContext ctx)
     {
-        Log.Info($"Batch {batch.Count}: {batch[0].Id}");
-        foreach (var message in batch)
+        Log.Info($"Batch from {batch.Queue}: {batch.Messages.Count} messages");
+        foreach (var message in batch.Messages)
         {
             Log.Info($"Processing {message.Body.Path}");
             message.Ack();

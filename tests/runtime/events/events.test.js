@@ -22,7 +22,7 @@ describe("event workers", () => {
 
     expect(result.explicitAcks).toEqual(["message-1"]);
     expect(result.retryMessages).toEqual([]);
-    expect(log).toHaveBeenCalledWith("Batch 1: message-1");
+    expect(log).toHaveBeenCalledWith("Batch from jobs: 1 messages");
     expect(log).toHaveBeenCalledWith("Processing /jobs/1");
   });
 

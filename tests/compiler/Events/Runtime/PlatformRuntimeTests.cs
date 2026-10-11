@@ -11,7 +11,7 @@ public sealed class PlatformRuntimeTests
             public static class Worker
             {
                 [Scheduled]
-                public static Task Run(ScheduledEvent scheduled, Env env, Context context) => Task.CompletedTask;
+                public static Task Run(ScheduledController scheduled, Env env, ExecutionContext context) => Task.CompletedTask;
             }
             """);
 
@@ -28,17 +28,17 @@ public sealed class PlatformRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Handle(Request request, Env env, Context context)
+                public static async Task<Response> Handle(Request request, Env env, ExecutionContext context)
                 {
                     var response = await Http.FetchAsync("https://example.com");
-                    var socket = TcpSocket.Connect("example.com", 443);
+                    var socket = Socket.Connect("example.com:443");
                     return response;
                 }
             }
             """);
 
         Assert.Contains("await fetch(\"https://example.com\")", module);
-        Assert.Contains("$workers$connectSocket({ hostname: \"example.com\", port: 443 })", module);
+        Assert.Contains("$workers$connectSocket(\"example.com:443\")", module);
     }
 
     [Fact]
@@ -50,26 +50,26 @@ public sealed class PlatformRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context ctx)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext ctx)
                 {
-                    var random = Crypto.RandomBytes(8);
+                    var random = Crypto.GetRandomValues(new byte[8]);
                     var stream = request.Body!;
                     var reader = stream.GetReader();
                     var chunk = await reader.ReadAsync();
                     reader.ReleaseLock();
                     var size = chunk.Done ? 0 : chunk.Value!.Length;
-                    var all = await stream.BytesAsync();
-                    var pair = WebSocketPair.Create();
+                    var all = await new Response(stream).BytesAsync();
+                    var pair = new WebSocketPair();
                     pair.Server.Accept();
-                    pair.Server.OnMessage(message => pair.Server.SendText(message.IsText ? message.AsText() : "binary"));
+                    pair.Server.OnMessage(message => pair.Server.Send(message.IsText ? message.AsText() : "binary"));
                     pair.Server.OnClose(close => Log.Info(close.Code));
-                    var socket = TcpSocket.Connect(new TcpSocketAddress("example.com", 443), new TcpSocketOptions());
+                    var socket = Socket.Connect(new SocketAddress { Hostname = "example.com", Port = 443 }, new SocketOptions());
                     var writer = socket.Writable.GetWriter();
-                    await writer.WriteAsync(TextCodec.EncodeUtf8("hello"));
+                    await writer.WriteAsync(new TextEncoder().Encode("hello"));
                     var info = await socket.Opened;
-                    var digest = Crypto.CreateDigestStream(DigestStreamAlgorithm.Sha256);
+                    var digest = new DigestStream(DigestStreamAlgorithm.Sha256);
                     await stream.PipeToAsync(digest);
-                    var hash = TextCodec.EncodeHex(await digest.DigestAsync());
+                    var hash = Hex.Encode(await digest.Digest);
                     return new Response(hash);
                 }
             }
@@ -106,10 +106,10 @@ public sealed class PlatformRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    var socket = TcpSocket.Connect("example.com", 443,
-                        new TcpSocketOptions { SecureTransport = TcpSecureTransport.{{option}} });
+                    var socket = Socket.Connect("example.com:443",
+                        new SocketOptions { SecureTransport = SecureTransport.{{option}} });
                     return new Response();
                 }
             }
@@ -131,16 +131,16 @@ public sealed class PlatformRuntimeTests
                 public Handler(string prefix = "data") => _prefix = prefix;
                 private string Attribute(string suffix = "worker") => $"{_prefix}-{suffix}";
 
-                public override ValueTask ElementAsync(HtmlElement element)
+                public override Task ElementAsync(HtmlElement element)
                 {
                     element.SetAttribute(Attribute(), Source);
-                    return ValueTask.CompletedTask;
+                    return Task.CompletedTask;
                 }
             }
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context ctx)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext ctx)
                 {
                     return new HtmlRewriter().On("p", new Handler()).Transform(new Response("<p>x</p>") { Headers = new Headers { ["content-type"] = "text/html; charset=utf-8" } });
                 }
@@ -170,12 +170,12 @@ public sealed class PlatformRuntimeTests
                     yield return 1;
                 }
 
-                public override ValueTask ElementAsync(HtmlElement element) => ValueTask.CompletedTask;
+                public override Task ElementAsync(HtmlElement element) => Task.CompletedTask;
             }
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx) =>
                     new HtmlRewriter().On("p", new Handler()).Transform(new Response("<p>x</p>") { Headers = new Headers { ["content-type"] = "text/html; charset=utf-8" } });
             }
             """);

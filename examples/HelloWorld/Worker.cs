@@ -7,10 +7,10 @@ public static class Worker
     [Fetch]
     public static Task<Response> FetchAsync(
         Request request,
-        Env environment,
-        Context context)
+        Env env,
+        ExecutionContext ctx)
     {
-        if (request.Path == "/")
+        if (new Url(request.Url).Pathname == "/")
             return Task.FromResult(new Response("Hello from C# on Cloudflare Workers."));
 
         return Task.FromResult(new Response("Not found") { Status = 404 });

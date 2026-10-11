@@ -9,34 +9,35 @@ public sealed class DurableObjectBindingTests
             using Workers;
             using System.Threading.Tasks;
 
-            [DurableObject("Counter")]
-            public sealed class Counter
+            public sealed class Counter : DurableObject
             {
-                public async Task Tick(DurableObjectState state, Env env)
+                public async Task Tick()
                 {
-                    var stub = env.DurableObject("COUNTERS").GetByName("primary");
+                    var stub = Env.DurableObject("COUNTERS").GetByName("primary");
                     var response = await stub.FetchAsync("https://counter");
-                    var value = await stub.InvokeAsync<int>("read", ["count"]);
-                    await stub.InvokeVoidAsync("reset");
-                    await state.Storage.PutAsync("count", 1);
-                    var count = await state.Storage.GetAsync<int>("count");
-                    var rows = state.Storage.Sql.Exec<object>("SELECT ? AS value", 1).ToArray();
-                    if (!state.Container.Running) state.Container.Start();
-                    state.Container.Signal(15);
+                    var value = await stub.InvokeAsync<int>("read", "count");
+                    await stub.InvokeAsync("reset");
+                    await Ctx.Storage.PutAsync("count", 1);
+                    var count = await Ctx.Storage.GetAsync<int>("count");
+                    var rows = Ctx.Storage.Sql.Exec<object>("SELECT ? AS value", 1).ToArray();
+                    var container = Ctx.Container!;
+                    if (!container.Running) container.Start();
+                    container.Signal(15);
                 }
             }
             """);
 
-        Assert.Contains("env[\"COUNTERS\"].getByName(\"primary\")", module);
+        Assert.Contains("this.env[\"COUNTERS\"].getByName(\"primary\")", module);
         Assert.Contains("stub.fetch(\"https://counter\")", module);
-        Assert.Contains("stub[\"read\"]", module);
+        Assert.Contains("stub[\"read\"](...$workers$rpcArguments([\"count\"]))", module);
         Assert.Contains("stub[\"reset\"]()", module);
-        Assert.Contains("state.storage.put(\"count\", 1)", module);
-        Assert.Contains("state.storage.get(\"count\")", module);
-        Assert.Contains("let rows = state.storage.sql.exec(\"SELECT ? AS value\", 1).toArray();", module);
-        Assert.Contains("if (!(state.container.running)) {", module);
-        Assert.Contains("state.container.start();", module);
-        Assert.Contains("state.container.signal(15);", module);
+        Assert.Contains("this.ctx.storage.put(\"count\", 1)", module);
+        Assert.Contains("this.ctx.storage.get(\"count\")", module);
+        Assert.Contains("let rows = this.ctx.storage.sql.exec(\"SELECT ? AS value\", 1).toArray();", module);
+        Assert.Contains("let container = this.ctx.container;", module);
+        Assert.Contains("if (!(container.running)) {", module);
+        Assert.Contains("container.start();", module);
+        Assert.Contains("container.signal(15);", module);
     }
 
     [Fact]
@@ -45,30 +46,28 @@ public sealed class DurableObjectBindingTests
         var module = Compile("""
             using Workers;
             using System.Threading.Tasks;
-            [DurableObject("Stateful")]
-            public sealed class Stateful
+            public sealed class Stateful : DurableObject
             {
-                private readonly DurableObjectState _state;
-                public Stateful(DurableObjectState objectState, Env environment)
-                {
-                    _state = objectState;
-                }
+                private int _increments;
+
+                public Stateful() => _increments = 1;
 
                 public async Task<int> Increment()
                 {
-                    var count = await _state.Storage.GetAsync<int>("count");
-                    await _state.Storage.PutAsync("count", count + 1);
-                    return count + 1;
+                    var count = await Ctx.Storage.GetAsync<int>("count");
+                    await Ctx.Storage.PutAsync("count", count + _increments);
+                    return count + _increments;
                 }
             }
             """);
 
         Assert.StartsWith("import { DurableObject as $workers$DurableObject } from \"cloudflare:workers\";", module);
         Assert.Contains("export class Stateful extends $workers$DurableObject", module);
-        Assert.Contains("constructor(objectState, environment) { super(objectState, environment);", module);
-        Assert.Contains("this._state = objectState", module);
-        Assert.Contains("this._state.storage.get(\"count\")", module);
-        Assert.Contains("this._state.storage.put(\"count\", ((count + 1) | 0))", module);
+        Assert.Contains("constructor(ctx, env) {", module);
+        Assert.Contains("super(ctx, env);", module);
+        Assert.Contains("this._increments = 1", module);
+        Assert.Contains("this.ctx.storage.get(\"count\")", module);
+        Assert.Contains("this.ctx.storage.put(\"count\", ((count + this._increments) | 0))", module);
     }
 
     [Fact]
@@ -79,7 +78,7 @@ public sealed class DurableObjectBindingTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var ns = env.DurableObject("OBJECTS").Jurisdiction("eu");
                     var first = ns.IdFromName("one");

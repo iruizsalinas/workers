@@ -11,11 +11,11 @@ public sealed class BoundedBodyTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    var limit = int.Parse(request.QueryParameters.Get("limit") ?? "4096");
-                    if (request.Path == "/text") return new Response(await request.TextAsync(maxBytes: limit));
-                    if (request.Path == "/bytes") return new Response(await request.BytesAsync(limit));
+                    var limit = int.Parse(new Url(request.Url).SearchParams.Get("limit") ?? "4096");
+                    if (new Url(request.Url).Pathname == "/text") return new Response(await request.TextAsync(maxBytes: limit));
+                    if (new Url(request.Url).Pathname == "/bytes") return new Response(await request.BytesAsync(limit));
                     return Response.Json(await request.JsonAsync<Input>(maxBytes: limit));
                 }
             }
@@ -37,10 +37,10 @@ public sealed class BoundedBodyTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    if (request.Path == "/text") return new Response(await request.TextAsync());
-                    if (request.Path == "/bytes") return new Response(await request.BytesAsync());
+                    if (new Url(request.Url).Pathname == "/text") return new Response(await request.TextAsync());
+                    if (new Url(request.Url).Pathname == "/bytes") return new Response(await request.BytesAsync());
                     return Response.Json(await request.JsonAsync<object>());
                 }
             }

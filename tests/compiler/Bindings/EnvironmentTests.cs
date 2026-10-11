@@ -3,28 +3,29 @@ namespace Workers.Compiler.Tests;
 public sealed class EnvironmentTests
 {
     [Theory]
+    [InlineData("Get<KVNamespace>")]
     [InlineData("Variable")]
     [InlineData("Secret")]
     [InlineData("Raw")]
-    [InlineData("Kv")]
+    [InlineData("KV")]
     [InlineData("R2")]
     [InlineData("Queue")]
     [InlineData("D1")]
     [InlineData("Service")]
     [InlineData("Assets")]
-    [InlineData("Mtls")]
-    [InlineData("Dispatcher")]
+    [InlineData("MtlsCertificate")]
+    [InlineData("DispatchNamespace")]
     [InlineData("DurableObject")]
-    [InlineData("RateLimiter")]
-    [InlineData("Analytics")]
-    [InlineData("Email")]
-    [InlineData("Version")]
+    [InlineData("RateLimit")]
+    [InlineData("AnalyticsEngine")]
+    [InlineData("SendEmail")]
+    [InlineData("VersionMetadata")]
     [InlineData("Ai")]
     [InlineData("Workflow")]
     [InlineData("Images")]
     [InlineData("Media")]
     [InlineData("Vectorize")]
-    [InlineData("SecretStore")]
+    [InlineData("SecretsStoreSecret")]
     [InlineData("Hyperdrive")]
     public void ErasesBindingAccessorsToNativeEnvironmentLookup(string accessor)
     {
@@ -33,7 +34,7 @@ public sealed class EnvironmentTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx)
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx)
                 {
                     var binding = env.{{accessor}}("BINDING");
                     return new Response("ok");

@@ -10,7 +10,7 @@ public sealed class LinqStreamingTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var values = new List<int> { 1, 2, 3 };
                     var query = values.Where((value, index) => value > index)
@@ -42,7 +42,7 @@ public sealed class LinqStreamingTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<int> values = [1, 2, 3];
                     List<int> empty = [];
@@ -80,7 +80,7 @@ public sealed class LinqStreamingTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<int> values = [1];
                     return Response.Json(values.Any());
@@ -107,7 +107,7 @@ public sealed class LinqStreamingTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     Response.Json(new { count = "😀".Count(), values = "😀".ToArray() });
             }
             """);
@@ -129,7 +129,7 @@ public sealed class LinqStreamingTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<List<int>> groups = [new List<int> { 1, 2 }, new List<int> { 3 }];
                     var values = groups.SelectMany((group, index) => group.Select(value => value + index))

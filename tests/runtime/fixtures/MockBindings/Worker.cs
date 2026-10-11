@@ -8,53 +8,56 @@ public static class Worker
     public static async Task<Response> FetchAsync(
         Request request,
         Env environment,
-        Context context)
+        ExecutionContext context)
     {
-        if (request.Path == "/service")
+        var path = new Url(request.Url).Pathname;
+        if (path == "/service")
             return await environment.Service("SERVICE").FetchAsync("https://service.test/request");
 
-        if (request.Path == "/assets")
+        if (path == "/assets")
             return await environment.Assets("ASSETS").FetchAsync("https://assets.test/logo.svg");
 
-        if (request.Path == "/mtls")
-            return await environment.Mtls("MTLS").FetchAsync("https://mtls.test/private");
+        if (path == "/mtls")
+            return await environment.MtlsCertificate("MTLS").FetchAsync("https://mtls.test/private");
 
-        if (request.Path == "/dynamic")
-            return await environment.Dispatcher("DISPATCH").Get("tenant-a").FetchAsync("https://tenant.test/request");
+        if (path == "/dynamic")
+            return await environment.DispatchNamespace("DISPATCH").Get("tenant-a").FetchAsync("https://tenant.test/request");
 
-        if (request.Path == "/rate")
+        if (path == "/rate")
         {
-            var outcome = await environment.RateLimiter("RATE").LimitAsync("user-42");
+            var outcome = await environment.RateLimit("RATE").LimitAsync(new RateLimitOptions { Key = "user-42" });
             return Response.Json(new { success = outcome.Success });
         }
 
-        if (request.Path == "/analytics")
+        if (path == "/analytics")
         {
-            environment.Analytics("ANALYTICS").WriteDataPoint(
-                new AnalyticsEngineDataPoint(["tenant-a"], [1.5], ["request"]));
+            environment.AnalyticsEngine("ANALYTICS").WriteDataPoint(
+                new AnalyticsEngineDataPoint { Indexes = ["tenant-a"], Doubles = [1.5], Blobs = ["request"] });
             return new Response("written");
         }
 
-        if (request.Path == "/email")
+        if (path == "/email")
         {
-            var result = await environment.Email("EMAIL").SendAsync(
-                new SendEmailMessage("from@example.test", ["to@example.test"], "Subject", "Body"));
+            var result = await environment.SendEmail("EMAIL").SendAsync(new EmailMessageBuilder
+            {
+                From = "from@example.test", To = ["to@example.test"], Subject = "Subject", Text = "Body"
+            });
             return new Response(result.MessageId);
         }
 
-        if (request.Path == "/metadata")
+        if (path == "/metadata")
         {
-            var metadata = environment.Version("VERSION");
+            var metadata = environment.VersionMetadata("VERSION");
             return Response.Json(new { id = metadata.Id, tag = metadata.Tag });
         }
 
-        if (request.Path == "/ai")
+        if (path == "/ai")
         {
             var result = await environment.Ai("AI").RunAsync<object, string>("model-a", new { prompt = "hello" });
             return new Response(result ?? "missing");
         }
 
-        if (request.Path == "/workflow")
+        if (path == "/workflow")
         {
             var instance = await environment.Workflow("WORKFLOW").CreateAsync(
                 new WorkflowInstanceCreateOptions { Id = "workflow-1", Params = new { value = 42 } });
@@ -62,22 +65,22 @@ public static class Worker
             return Response.Json(new { id = instance.Id, status = status.Status });
         }
 
-        if (request.Path == "/images")
+        if (path == "/images")
         {
             var info = await environment.Images("IMAGES").InfoAsync(request.Body!);
             return Response.Json(new { format = info.Format, width = info.Width, height = info.Height });
         }
 
-        if (request.Path == "/media")
+        if (path == "/media")
         {
             var output = environment.Media("MEDIA")
                 .Input(request.Body!)
                 .Transform(new { width = 320 })
-                .Output(new MediaOutputOptions { Mode = "video", Format = "mp4" });
+                .Output(new MediaTransformationOutputOptions { Mode = "video", Format = "mp4" });
             return new Response(await output.ContentTypeAsync());
         }
 
-        if (request.Path == "/vectorize")
+        if (path == "/vectorize")
         {
             var result = await environment.Vectorize("VECTORIZE").QueryAsync(
                 [0.25, 0.75],
@@ -85,19 +88,19 @@ public static class Worker
             return Response.Json(new { matches = result.Matches });
         }
 
-        if (request.Path == "/secret")
+        if (path == "/secret")
         {
-            var secret = await environment.SecretStore("SECRET").GetAsync();
+            var secret = await environment.SecretsStoreSecret("SECRET").GetAsync();
             return new Response(secret ?? "missing");
         }
 
-        if (request.Path == "/hyperdrive")
+        if (path == "/hyperdrive")
         {
             var connection = environment.Hyperdrive("HYPERDRIVE");
             return Response.Json(new { host = connection.Host, port = connection.Port, database = connection.Database });
         }
 
-        var greeting = await environment.Service("SERVICE").InvokeAsync<string>("greet", ["Ada"]);
+        var greeting = await environment.Service("SERVICE").InvokeAsync<string>("greet", "Ada");
         return new Response(greeting ?? "missing");
     }
 }

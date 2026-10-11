@@ -26,10 +26,10 @@ Wrangler also runs the publish command through each example's build configuratio
 | [Redirects](./Redirects/Worker.cs) | Redirect responses |
 | [ProxyFetch](./ProxyFetch/Worker.cs) | Outbound fetch and copying a response to change its headers |
 | [RequestPolicy](./RequestPolicy/README.md) | Bounded JSON reads, validation, and upstream timeouts |
-| [CacheApi](./CacheApi/Worker.cs) | Cache lookup and background writes with `Context.WaitUntil` |
+| [CacheApi](./CacheApi/Worker.cs) | Cache lookup and background writes with `ctx.WaitUntil` |
 | [KvBinding](./KvBinding/Worker.cs) | Reading text from KV |
 | [R2Binding](./R2Binding/Worker.cs) | Streaming objects with HTTP metadata |
-| [QueueProducer](./QueueProducer/Worker.cs) | Sending JSON messages to a queue |
+| [QueueProducer](./QueueProducer/Worker.cs) | Sending messages to a queue |
 | [QueueConsumer](./QueueConsumer/Worker.cs) | Processing and acknowledging queue messages |
 | [ScheduledTask](./ScheduledTask/Worker.cs) | Cron events and logging |
 | [TelemetryPipeline](./TelemetryPipeline/Worker.cs) | D1 queries, queues, scheduled work, and Durable Objects |

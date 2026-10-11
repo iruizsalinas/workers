@@ -10,7 +10,7 @@ public sealed class QueueStackTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var queue = new Queue<int>(new List<int> { 1, 2 });
                     queue.Enqueue(3);
@@ -44,7 +44,7 @@ public sealed class QueueStackTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var queue = new Queue<int>(capacity: 4);
                     var stack = new Stack<int>();
@@ -76,7 +76,7 @@ public sealed class QueueStackTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var queue = new Queue<int>();
                     var value = 0;

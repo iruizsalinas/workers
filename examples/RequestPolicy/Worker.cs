@@ -11,8 +11,8 @@ public static class Worker
         .OnError((error, request, route) => Error(error.Message, error.Status));
 
     [Fetch]
-    public static Task<Response> FetchAsync(Request request, Env environment, Context context) =>
-        Routes.HandleAsync(request, environment, context);
+    public static Task<Response> FetchAsync(Request request, Env env, ExecutionContext ctx) =>
+        Routes.HandleAsync(request, env, ctx);
 
     private static async Task<Response> ForwardAsync(Request request, RouteContext route)
     {
@@ -26,7 +26,7 @@ public static class Worker
             throw new HttpError(400, "Invalid reading");
 
         var upstream = new Url(route.Env.Variable("ORIGIN"));
-        upstream.Path = "/v1/readings";
+        upstream.Pathname = "/v1/readings";
 
         var headers = new Headers(request.Headers);
         headers.Delete("authorization");
@@ -37,7 +37,7 @@ public static class Worker
 
         try
         {
-            var response = await Http.FetchAsync(upstream.ToString(), new FetchOptions
+            var response = await Http.FetchAsync(upstream.ToString(), new RequestInit
             {
                 Method = "POST",
                 Headers = headers,
@@ -45,7 +45,7 @@ public static class Worker
                 Redirect = RedirectMode.Manual,
                 Signal = AbortSignal.Timeout(3000)
             });
-            return new Response(response)
+            return new Response(response.Body, response)
             {
                 Headers = { ["x-policy"] = "validated", ["x-upstream-host"] = upstream.Hostname }
             };

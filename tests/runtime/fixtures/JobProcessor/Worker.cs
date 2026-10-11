@@ -5,14 +5,15 @@ namespace JobProcessor;
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
+    public static async Task<Response> FetchAsync(Request request, Env environment, ExecutionContext context)
     {
-        if (request.Path == "/jobs" && request.Method == "POST")
+        var path = new Url(request.Url).Pathname;
+        if (path == "/jobs" && request.Method == "POST")
             return await CreateJobAsync(request, environment);
 
-        if (request.Path.StartsWith("/jobs/") && request.Method == "GET")
+        if (path.StartsWith("/jobs/") && request.Method == "GET")
         {
-            var id = request.Path.Substring("/jobs/".Length);
+            var id = path.Substring("/jobs/".Length);
             var job = await environment.D1("DB")
                 .Prepare("SELECT id, status, callback_url AS callbackUrl, attempts FROM jobs WHERE id = ?")
                 .Bind(id)
@@ -24,9 +25,9 @@ public static class Worker
     }
 
     [Queue]
-    public static async Task ConsumeAsync(QueueMessageBatch<Job> batch, Env environment, Context context)
+    public static async Task ConsumeAsync(MessageBatch<Job> batch, Env environment, ExecutionContext context)
     {
-        foreach (var message in batch)
+        foreach (var message in batch.Messages)
         {
             try
             {
@@ -49,9 +50,9 @@ public static class Worker
     }
 
     [Scheduled]
-    public static void Cleanup(ScheduledEvent scheduled, Env environment, Context context)
+    public static void Cleanup(ScheduledController scheduled, Env environment, ExecutionContext context)
     {
-        Log.Info($"Scheduled cleanup {new Date(scheduled.ScheduledTime).ToIsoString()}");
+        Log.Info($"Scheduled cleanup {scheduled.ScheduledTime.ToIsoString()}");
         context.WaitUntil(CleanupAsync(environment));
     }
 
@@ -70,7 +71,7 @@ public static class Worker
             .Prepare("INSERT INTO jobs (id, status, callback_url, payload, attempts, created_at) VALUES (?, 'queued', ?, ?, 0, ?)")
             .Bind(job.Id, job.CallbackUrl, Json.Stringify(job.Payload), job.CreatedAt)
             .RunAsync();
-        await environment.Queue("JOBS").SendJsonAsync(job);
+        await environment.Queue("JOBS").SendAsync(job);
         return Response.Json(new { id = job.Id, status = "queued" }, status: 202);
     }
 
@@ -81,7 +82,7 @@ public static class Worker
             .Bind(job.Id)
             .RunAsync();
         var headers = new Headers { ["content-type"] = "application/json", ["x-job-id"] = job.Id };
-        var response = await Http.FetchAsync(job.CallbackUrl, new FetchOptions
+        var response = await Http.FetchAsync(job.CallbackUrl, new RequestInit
         {
             Method = "POST",
             Headers = headers,

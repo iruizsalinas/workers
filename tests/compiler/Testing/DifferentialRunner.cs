@@ -16,7 +16,7 @@ internal static class DifferentialRunner
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => Response.Json(Test.Run());
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => Response.Json(Test.Run());
             }
             """;
         var compilation = global::WorkerCompiler.CreateCompilation([CSharpSyntaxTree.ParseText(source)]);

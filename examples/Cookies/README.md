@@ -6,7 +6,7 @@ Visit `/?theme=dark`, then `/` to read the stored preference. The query paramete
 
 ## Cookie APIs
 
-`request.Cookies.Get(name)` reads the first cookie with that name, `GetAll(name)` reads duplicates, and `Contains(name)` checks for its presence. Values are percent-decoded on read.
+`request.Cookies.Get(name)` reads the first cookie with that name, `GetAll(name)` reads duplicates, and `Has(name)` checks for its presence. Values are percent-decoded on read.
 
 `response.Cookies.Set(name, value, options)` appends a `Set-Cookie` header. `response.Cookies.Delete(name, options)` appends an expired cookie. Both preserve other cookies on the response.
 

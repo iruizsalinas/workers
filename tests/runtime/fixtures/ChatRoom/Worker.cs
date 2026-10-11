@@ -5,9 +5,9 @@ namespace ChatRoomScenario;
 public static class Worker
 {
     [Fetch]
-    public static Task<Response> FetchAsync(Request request, Env environment, Context context)
+    public static Task<Response> FetchAsync(Request request, Env environment, ExecutionContext context)
     {
-        var parts = request.Path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var parts = new Url(request.Url).Pathname.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 2 || parts[0] != "rooms")
             return Task.FromResult(new Response("Use /rooms/<room>") { Status = 404 });
 
@@ -17,35 +17,28 @@ public static class Worker
     }
 }
 
-[DurableObject("ChatRoom")]
-public sealed class ChatRoom
+public sealed class ChatRoom : DurableObject
 {
-    private readonly DurableObjectState _state;
+    public ChatRoom() => Ctx.SetWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
 
-    public ChatRoom(DurableObjectState state, Env environment)
-    {
-        _state = state;
-        _state.SetWebSocketAutoResponse(new WebSocketAutoResponse("ping", "pong"));
-    }
-
-    public Response FetchAsync(Request request)
+    public override Task<Response> FetchAsync(Request request)
     {
         var upgrade = request.Headers.Get("upgrade");
         if (upgrade is null || upgrade.ToLowerInvariant() != "websocket")
-            return new Response("Expected WebSocket") { Status = 426 };
+            return Task.FromResult(new Response("Expected WebSocket") { Status = 426 });
 
-        var name = request.QueryParameters.Get("name") ?? "anonymous";
-        var pair = WebSocketPair.Create();
+        var name = new Url(request.Url).SearchParams.Get("name") ?? "anonymous";
+        var pair = new WebSocketPair();
         var client = pair.Client;
         var server = pair.Server;
         server.SerializeAttachment(new ChatAttachment(name, new Date().ToIsoString()));
-        _state.AcceptWebSocket(server, [$"user:{name}"]);
-        server.SendJson(new { type = "welcome", name, online = _state.GetWebSockets().Count });
+        Ctx.AcceptWebSocket(server, [$"user:{name}"]);
+        server.Send(Json.Stringify(new { type = "welcome", name, online = Ctx.GetWebSockets().Count }));
         Broadcast(new { type = "join", name }, server);
-        return new Response { Status = 101, WebSocket = client };
+        return Task.FromResult(new Response { Status = 101, WebSocket = client });
     }
 
-    public void WebSocketMessageAsync(WebSocket socket, WebSocketMessage message)
+    public override Task WebSocketMessageAsync(WebSocket socket, WebSocketMessage message)
     {
         var attachment = socket.DeserializeAttachment<ChatAttachment>()
             ?? new ChatAttachment("anonymous", new Date().ToIsoString());
@@ -53,14 +46,14 @@ public sealed class ChatRoom
         if (text == "who")
         {
             var users = new List<string>();
-            foreach (var peer in _state.GetWebSockets())
+            foreach (var peer in Ctx.GetWebSockets())
             {
                 var info = peer.DeserializeAttachment<ChatAttachment>();
                 if (info is not null)
                     users.Add(info.Name);
             }
-            socket.SendJson(new { type = "users", users });
-            return;
+            socket.Send(Json.Stringify(new { type = "users", users }));
+            return Task.CompletedTask;
         }
 
         Broadcast(new
@@ -70,26 +63,30 @@ public sealed class ChatRoom
             text,
             at = new Date().ToIsoString()
         });
+        return Task.CompletedTask;
     }
 
-    public void WebSocketCloseAsync(WebSocket socket, int code, string reason, bool wasClean)
+    public override Task WebSocketCloseAsync(WebSocket socket, int code, string reason, bool wasClean)
     {
         var attachment = socket.DeserializeAttachment<ChatAttachment>();
         if (attachment is not null)
             Broadcast(new { type = "leave", name = attachment.Name, code, reason, wasClean }, socket);
+        return Task.CompletedTask;
     }
 
-    public void WebSocketErrorAsync(WebSocket socket, Exception error)
+    public override Task WebSocketErrorAsync(WebSocket socket, JsonValue error)
     {
         var attachment = socket.DeserializeAttachment<ChatAttachment>();
-        Log.Error($"WebSocket error for {attachment?.Name ?? "anonymous"}: {error.Message}");
+        Log.Error($"WebSocket error for {attachment?.Name ?? "anonymous"}");
+        Log.Error(error);
+        return Task.CompletedTask;
     }
 
     private void Broadcast<T>(T payload, WebSocket? except = null)
     {
-        foreach (var socket in _state.GetWebSockets())
+        foreach (var socket in Ctx.GetWebSockets())
             if (socket != except)
-                socket.SendJson(payload);
+                socket.Send(Json.Stringify(payload));
     }
 }
 

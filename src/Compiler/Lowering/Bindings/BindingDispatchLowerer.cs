@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
@@ -30,30 +31,30 @@ internal sealed partial class JavaScriptEmitter
         string ThenMap(string? converter, string shape) => converter is null ? result : $"{result}.then(value => {string.Format(shape, converter)})";
         return (owner, method.Name) switch
         {
-            ("Workers.Request" or "Workers.Response", "JsonAsync") => Then(Converter(JsonWebMode)),
-            ("Workers.IKvNamespace", "GetJsonAsync") => Then(Converter(JsonWebMode)),
-            ("Workers.IKvNamespace", "GetJsonWithMetadataAsync") =>
-                ThenMap(Converter(JsonWebMode), "(value.value = ({0})(value.value), value)"),
-            ("Workers.IKvNamespace", "GetJsonBulkAsync") =>
+            ("Workers.Request" or "Workers.Response" or "Workers.R2ObjectBody", "JsonAsync") => Then(Converter(JsonWebMode)),
+            ("Workers.KVNamespace", "GetJsonAsync") or ("Workers.DurableObjectStorage" or "Workers.DurableObjectTransaction", "GetAsync")
+                when method.Parameters[0].Type.SpecialType == SpecialType.System_String => Then(Converter(JsonWebMode)),
+            ("Workers.KVNamespace", "GetJsonAsync") or ("Workers.DurableObjectStorage" or "Workers.DurableObjectTransaction", "GetAsync" or "ListAsync") =>
                 ThenMap(Converter(JsonWebMode), "Object.fromEntries(Object.entries(value).map(([key, item]) => [key, ({0})(item)]))"),
-            ("Workers.QueryParameters", "As") => typeArgument is INamedTypeSymbol queryType && IsUserInstanceType(queryType)
+            ("Workers.KVNamespace", "GetJsonWithMetadataAsync") =>
+                ThenMap(Converter(JsonWebMode), "(value.value = ({0})(value.value), value)"),
+            ("Workers.SyncKvStorage", "List") => Converter(JsonWebMode) is { } entries
+                ? $"(value => Object.fromEntries(Object.entries(value).map(([key, item]) => [key, ({entries})(item)])))({result})"
+                : result,
+            ("Workers.SyncKvStorage", "Get") or ("Workers.WebSocket", "DeserializeAttachment") => Call(Converter(JsonWebMode)),
+            ("Workers.Fetcher" or "Workers.RpcStub" or "Workers.RawBinding", "InvokeAsync") => Then(Converter(JsonWebMode)),
+            ("Workers.UrlSearchParams", "As") => typeArgument is INamedTypeSymbol queryType && IsUserInstanceType(queryType)
                 && Converter(JsonQueryMode) is { } query
                     ? $"({query})({result})"
-                    : throw new NotSupportedException($"WRK119: QueryParameters.As<T>() needs a Worker class or record type, not '{typeArgument}'."),
-            ("Workers.WebSocket", "DeserializeAttachment") => Call(Converter(JsonWebMode)),
+                    : throw new NotSupportedException($"WRK119: UrlSearchParams.As<T>() needs a Worker class or record type, not '{typeArgument}'."),
             ("Workers.D1PreparedStatement", "FirstAsync") => Then(Converter(JsonRowMode)),
-            ("Workers.D1PreparedStatement", "AllAsync") =>
+            ("Workers.D1PreparedStatement", "AllAsync" or "RunAsync") =>
                 ThenMap(Converter(JsonRowMode), "(value.results = value.results.map({0}), value)"),
-            ("Workers.ID1Database" or "Workers.D1DatabaseSession", "BatchAsync") =>
+            ("Workers.D1Database" or "Workers.D1DatabaseSession", "BatchAsync") =>
                 ThenMap(Converter(JsonRowMode), "value.map(result => (result.results = result.results.map({0}), result))"),
-            ("Workers.DurableObjectStorage" or "Workers.DurableObjectTransaction", "GetAsync")
-                when method.Parameters[0].Type.SpecialType == SpecialType.System_String =>
-                Then(Converter(JsonWebMode)),
-            ("Workers.DurableObjectKvStorage", "Get") => Call(Converter(JsonWebMode)),
-            ("Workers.DurableObjectSqlCursor<T>", "One" or "Next") => Call(Converter(JsonRowMode)),
-            ("Workers.DurableObjectSqlCursor<T>", "ToArray") =>
+            ("Workers.SqlStorageCursor<T>", "One" or "Next") => Call(Converter(JsonRowMode)),
+            ("Workers.SqlStorageCursor<T>", "ToArray") =>
                 Converter(JsonRowMode) is { } rows ? $"{result}.map({rows})" : result,
-            ("Workers.R2ObjectBody", "JsonAsync") => Then(Converter(JsonWebMode)),
             _ => result
         };
     }
@@ -95,58 +96,46 @@ internal sealed partial class JavaScriptEmitter
         BindingIntrinsic intrinsic,
         IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
     {
+        var values = string.Join(", ", arguments.Select(item => item.Value));
         return intrinsic.Kind switch
         {
+            BindingIntrinsicKind.Direct => $"{receiver}.{intrinsic.JavascriptName}({values})",
+            BindingIntrinsicKind.Property => $"{receiver}.{intrinsic.JavascriptName}",
+            BindingIntrinsicKind.PropertyByName => $"{receiver}[{arguments[0].Value}]",
+            BindingIntrinsicKind.Fluent => $"(value => {{ value.{intrinsic.JavascriptName}({values}); return value; }})({receiver})",
+            BindingIntrinsicKind.Dispose => $"{receiver}[Symbol.dispose]()",
             BindingIntrinsicKind.RequestJson => $"{RequireHelperName(arguments.Count == 0 ? JavaScriptHelper.HttpError : JavaScriptHelper.BoundedBody, "requestJson")}({string.Join(", ", new[] { receiver }.Concat(arguments.Select(item => item.Value)))})",
             BindingIntrinsicKind.RequestBodyRead => arguments.Count == 0
                 ? $"{receiver}.{intrinsic.JavascriptName}()"
                 : $"{RequireHelperName(JavaScriptHelper.BoundedBody, intrinsic.JavascriptName == "text" ? "requestText" : "requestBytes")}({receiver}, {arguments[0].Value})",
-            BindingIntrinsicKind.Direct => $"{receiver}.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))})",
-            BindingIntrinsicKind.KvBytesGet => EmitKvGet(receiver, intrinsic.JavascriptName, arguments, "arrayBuffer"),
-            BindingIntrinsicKind.KvJsonGet => EmitKvGet(receiver, intrinsic.JavascriptName, arguments, "json"),
+            BindingIntrinsicKind.KvGet => EmitKvGet(receiver, "get", arguments, intrinsic.JavascriptName),
+            BindingIntrinsicKind.KvGetWithMetadata => EmitKvGet(receiver, "getWithMetadata", arguments, intrinsic.JavascriptName),
             BindingIntrinsicKind.KvJsonPut => EmitKvJsonPut(receiver, intrinsic.JavascriptName, arguments),
+            // A failed onlyIf condition yields the object's metadata without a body; the API reports it as null.
+            BindingIntrinsicKind.R2Get => $"{receiver}.get({values}).then(value => value != null && \"body\" in value ? value : null)",
             BindingIntrinsicKind.DurableObjectGet => EmitDurableObjectGet(receiver, method, arguments),
-            BindingIntrinsicKind.CacheMatch => $"{receiver}.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))}).then(value => value ?? null)",
-            BindingIntrinsicKind.ServiceRpc => EmitServiceRpc(receiver, arguments),
-            BindingIntrinsicKind.Property => $"{receiver}.{intrinsic.JavascriptName}",
-            BindingIntrinsicKind.Fluent => $"(value => {{ value.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))}); return value; }})({receiver})",
-            BindingIntrinsicKind.Dispose => $"{receiver}[Symbol.dispose]()",
-            BindingIntrinsicKind.RateLimit => $"{receiver}.{intrinsic.JavascriptName}({{ key: {arguments.Single(item => item.Parameter.Name == "key").Value} }})",
-            BindingIntrinsicKind.CryptoRandomBytes => $"{receiver}.getRandomValues(new Uint8Array({arguments[0].Value}))",
-            BindingIntrinsicKind.CryptoTimingSafeEqual => $"{receiver}.subtle.timingSafeEqual({arguments[0].Value}, {arguments[1].Value})",
-            BindingIntrinsicKind.CryptoDigestStream => $"new {receiver}.DigestStream({string.Join(", ", arguments.Select(item => item.Value))})",
-            BindingIntrinsicKind.CryptoDigestBody => EmitCryptoDigest(receiver, method, arguments),
-            BindingIntrinsicKind.DigestResult => $"{receiver}.digest.then(value => new Uint8Array(value))",
-            BindingIntrinsicKind.ReadableFromEnumerable => EmitReadableFrom(arguments[0].Value),
-            BindingIntrinsicKind.WebSocketJson => $"{receiver}.send(JSON.stringify({arguments[0].Value}))",
-            BindingIntrinsicKind.WebSocketMessageText => $"(typeof {receiver} === \"string\" ? {receiver} : new TextDecoder().decode({receiver}))",
-            BindingIntrinsicKind.CryptoSignHmac => EmitCryptoHmac(receiver, method, arguments, verify: false),
-            BindingIntrinsicKind.CryptoVerifyHmac => EmitCryptoHmac(receiver, method, arguments, verify: true),
-            BindingIntrinsicKind.CryptoBytesResult => $"{receiver}.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))}).then(value => new Uint8Array(value))",
-            BindingIntrinsicKind.CryptoImportKey => $"{receiver}.importKey({(method.Parameters[0].Type.ToDisplayString() == "Workers.JsonWebKey" ? "\"jwk\", " : "")}{string.Join(", ", arguments.Select(item => item.Value))})",
-            BindingIntrinsicKind.CryptoExportJwk => $"{receiver}.exportKey(\"jwk\", {arguments[0].Value})",
-            BindingIntrinsicKind.BlobSliceBytes => $"{receiver}.slice({arguments[0].Value}, {arguments[1].Value}).arrayBuffer().then(value => new Uint8Array(value))",
-            BindingIntrinsicKind.QueryNames => $"Array.from({receiver}.{intrinsic.JavascriptName}())",
-            BindingIntrinsicKind.CompressStream => $"{receiver}.pipeThrough(new CompressionStream({arguments[0].Value}))",
-            BindingIntrinsicKind.DecompressStream => $"{receiver}.pipeThrough(new DecompressionStream({arguments[0].Value}))",
             BindingIntrinsicKind.DictionaryObject => EmitDictionaryObject(receiver, method, intrinsic.JavascriptName, arguments),
-            BindingIntrinsicKind.QueueSend => EmitQueueSend(receiver, intrinsic.JavascriptName, arguments),
-            BindingIntrinsicKind.QueueSendBatch => EmitQueueSendBatch(receiver, intrinsic.JavascriptName, arguments),
-            BindingIntrinsicKind.QueueRequest => EmitQueueRequest(intrinsic.JavascriptName, arguments),
-            BindingIntrinsicKind.RequestWithUrl => $"new Request({arguments[0].Value}, {receiver})",
-            BindingIntrinsicKind.Utf8Decode => EmitUtf8Decode(arguments),
+            BindingIntrinsicKind.SyncStorageGet => $"({receiver}.get({arguments[0].Value}) ?? null)",
             BindingIntrinsicKind.SqlCursorNext => $"(row => row.done ? null : row.value)({receiver}.next())",
-            BindingIntrinsicKind.DateResult => $"{receiver}.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))}).then(value => value == null ? null : new Date(value))",
+            BindingIntrinsicKind.CacheMatch => $"{receiver}.{intrinsic.JavascriptName}({values}).then(value => value ?? null)",
+            BindingIntrinsicKind.Rpc => EmitRpc(receiver, method, arguments),
+            BindingIntrinsicKind.DateResult => $"{receiver}.{intrinsic.JavascriptName}({values}).then(value => value == null ? null : new Date(value))",
             BindingIntrinsicKind.IteratorArray => $"Array.from({receiver}.{intrinsic.JavascriptName}())",
-            BindingIntrinsicKind.ResponseRead => $"new Response({receiver}).{intrinsic.JavascriptName}()",
+            // Every name maps to all of its values; scalar members take the first one.
+            BindingIntrinsicKind.QueryAs =>
+                $"((parameters) => Object.fromEntries(Array.from(new Set(parameters.keys()), name => [name, parameters.getAll(name)])))({receiver})",
+            BindingIntrinsicKind.ReadableFromEnumerable => EmitReadableFrom(arguments[0].Value),
+            BindingIntrinsicKind.WebSocketMessageText => $"(typeof {receiver} === \"string\" ? {receiver} : new TextDecoder().decode({receiver}))",
             BindingIntrinsicKind.WebSocketMessageBytes => $"(typeof {receiver} === \"string\" ? new TextEncoder().encode({receiver}) : new Uint8Array({receiver}))",
             BindingIntrinsicKind.EventListener => intrinsic.JavascriptName == "message"
                 ? $"{receiver}.addEventListener(\"message\", event => ({arguments[0].Value})(event.data))"
                 : $"{receiver}.addEventListener(\"{intrinsic.JavascriptName}\", {arguments[0].Value})",
-            BindingIntrinsicKind.SyncStorageGet => $"({receiver}.get({arguments[0].Value}) ?? null)",
-            // Every name maps to all of its values; scalar members take the first one.
-            BindingIntrinsicKind.QueryAs =>
-                $"((parameters) => Object.fromEntries(Array.from(new Set(parameters.keys()), name => [name, parameters.getAll(name)])))({receiver})",
+            BindingIntrinsicKind.CryptoDigestBody => EmitCryptoDigest(receiver, method, arguments),
+            BindingIntrinsicKind.CryptoSignHmac => EmitCryptoHmac(receiver, method, arguments, verify: false),
+            BindingIntrinsicKind.CryptoVerifyHmac => EmitCryptoHmac(receiver, method, arguments, verify: true),
+            BindingIntrinsicKind.CryptoBytesResult => $"{receiver}.{intrinsic.JavascriptName}({values}).then(value => new Uint8Array(value))",
+            BindingIntrinsicKind.CryptoImportKey => $"{receiver}.importKey({(method.Parameters[0].Type.ToDisplayString() == "Workers.JsonWebKey" ? "\"jwk\", " : "")}{values})",
+            BindingIntrinsicKind.CryptoExportJwk => $"{receiver}.exportKey(\"jwk\", {arguments[0].Value})",
             _ => throw new InvalidOperationException($"Unknown binding intrinsic kind '{intrinsic.Kind}'.")
         };
     }
@@ -157,12 +146,16 @@ internal sealed partial class JavaScriptEmitter
         InvocationExpressionSyntax invocation,
         IMethodSymbol method)
     {
+        // A params array passed as an array, rather than as separate values, is spread into the native call.
+        var spreadParams = _model.GetOperation(invocation) is IInvocationOperation operation
+            && operation.Arguments.Any(argument => argument.Parameter?.IsParams == true && argument.ArgumentKind == ArgumentKind.Explicit);
         var values = new List<(IParameterSymbol Parameter, string Value)>();
         for (var index = 0; index < invocation.ArgumentList.Arguments.Count; index++)
         {
             var argument = invocation.ArgumentList.Arguments[index];
             var parameter = BoundParameter(argument);
-            values.Add((parameter, ArgumentValue(argument)));
+            var value = ArgumentValue(argument);
+            values.Add((parameter, spreadParams && parameter.IsParams ? "..." + value : value));
         }
         return values;
     }

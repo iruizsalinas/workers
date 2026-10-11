@@ -11,7 +11,7 @@ public sealed class ReachabilityTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx) =>
                     new Response(Formatting.Render(3));
             }
             """,
@@ -47,7 +47,7 @@ public sealed class ReachabilityTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx) =>
                     new Response(Helper.Value(1) + Helper.Value("x"));
             }
             """);

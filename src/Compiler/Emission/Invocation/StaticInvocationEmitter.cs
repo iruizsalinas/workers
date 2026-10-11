@@ -21,10 +21,11 @@ internal sealed partial class JavaScriptEmitter
             ("double", "Parse") when HasParameters(method, SpecialType.System_String) => NumericParse(arguments[0], 2),
             ("bool", "Parse") when HasParameters(method, SpecialType.System_String) => NumericParse(arguments[0], 3),
             ("string", _) when method?.IsStatic == true => StringStaticInvocation(invocation, method, name!, arguments),
-            ("Workers.Timers", "SetTimeout") => $"setTimeout({arguments[0]}, {arguments[1]})",
-            ("Workers.Timers", "ClearTimeout") => $"clearTimeout({arguments[0]})",
+            ("Workers.Timers", "SetTimeout" or "SetInterval" or "ClearTimeout" or "ClearInterval") =>
+                $"{LowerFirst(name!)}({string.Join(", ", arguments)})",
             ("Workers.Response", "Json") => JsonResponse(arguments),
             ("Workers.Response", "Redirect") => HelperInvocation(JavaScriptHelper.Redirect, arguments),
+            ("Workers.Response", "Error") => "Response.error()",
             _ => ""
         };
         return result.Length != 0;

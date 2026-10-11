@@ -7,11 +7,11 @@ public static class Worker
     [Fetch]
     public static async Task<Response> FetchAsync(
         Request request,
-        Env environment,
-        Context context)
+        Env env,
+        ExecutionContext ctx)
     {
-        var key = request.QueryParameters.Get("key") ?? "message";
-        var value = await environment.Kv("KV").GetTextAsync(key);
+        var key = new Url(request.Url).SearchParams.Get("key") ?? "message";
+        var value = await env.KV("KV").GetAsync(key);
 
         return value is null
             ? new Response("Not found") { Status = 404 }

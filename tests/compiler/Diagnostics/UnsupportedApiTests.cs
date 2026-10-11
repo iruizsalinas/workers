@@ -10,12 +10,12 @@ public sealed class UnsupportedApiTests
             public static class First
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => new Response("first");
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => new Response("first");
             }
             public static class Second
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => new Response("second");
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => new Response("second");
             }
             """));
 
@@ -30,9 +30,9 @@ public sealed class UnsupportedApiTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => new Response("ok");
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => new Response("ok");
             }
-            [WorkerEntrypoint]
+            [DefaultExport]
             public sealed class Rpc : WorkerEntrypoint
             {
                 public string Ping() => "pong";
@@ -47,10 +47,8 @@ public sealed class UnsupportedApiTests
     {
         var error = Assert.Throws<NotSupportedException>(() => Compile("""
             using Workers;
-            [DurableObject("Gateway")]
-            public sealed class State;
-            [WorkerEntrypoint("Gateway")]
-            public sealed class Rpc : WorkerEntrypoint;
+            namespace State { public sealed class Gateway : DurableObject; }
+            namespace Rpc { public sealed class Gateway : WorkerEntrypoint; }
             """));
 
         Assert.Equal("WRK113: Multiple Worker classes export the name 'Gateway'.", error.Message);
@@ -76,7 +74,6 @@ public sealed class UnsupportedApiTests
     {
         var error = Assert.Throws<NotSupportedException>(() => Compile("""
             using Workers;
-            [WorkerEntrypoint("Rpc")]
             public sealed class Rpc : WorkerEntrypoint
             {
                 public string Find() => "sync";
@@ -95,7 +92,7 @@ public sealed class UnsupportedApiTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx)
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx)
                 {
                     var values = request.Headers.GetEnumerator();
                     return new Response("ok");
@@ -111,9 +108,9 @@ public sealed class UnsupportedApiTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx)
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx)
                 {
-                    var values = request.QueryParameters.As<object>();
+                    var values = new Url(request.Url).SearchParams.As<object>();
                     return new Response("ok");
                 }
             }

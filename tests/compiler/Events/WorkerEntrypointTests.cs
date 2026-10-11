@@ -7,7 +7,6 @@ public sealed class WorkerEntrypointTests
     {
         var module = Compile("""
             using Workers;
-            [WorkerEntrypoint("Constants")]
             public sealed class Constants : WorkerEntrypoint
             {
                 private const string Value = "ok";
@@ -24,7 +23,6 @@ public sealed class WorkerEntrypointTests
     {
         var module = Compile("""
             using Workers;
-            [WorkerEntrypoint("Names")]
             public sealed class Names : WorkerEntrypoint
             {
                 public Response Asyncify(string value) => new Response(value);
@@ -42,13 +40,12 @@ public sealed class WorkerEntrypointTests
     {
         var module = Compile("""
             using Workers;
-            [WorkerEntrypoint("Users")]
             public sealed class Users : WorkerEntrypoint
             {
                 public async Task<string> FindAsync(string prefix, int limit = 10)
                 {
-                    Context.WaitUntil(Task.CompletedTask);
-                    return await Environment.Kv("DATA").GetTextAsync(prefix) ?? limit.ToString();
+                    Ctx.WaitUntil(Task.CompletedTask);
+                    return await Env.KV("DATA").GetAsync(prefix) ?? limit.ToString();
                 }
             }
             """);
@@ -65,7 +62,6 @@ public sealed class WorkerEntrypointTests
     {
         var module = Compile("""
             using Workers;
-            [WorkerEntrypoint("Users")]
             public sealed class Users : WorkerEntrypoint
             {
                 public string Find(string value) => Normalize(value);
@@ -82,7 +78,6 @@ public sealed class WorkerEntrypointTests
     {
         var module = Compile("""
             using Workers;
-            [WorkerEntrypoint("Users")]
             public sealed class Users : WorkerEntrypoint
             {
                 private async IAsyncEnumerable<int> ValuesAsync()
@@ -101,7 +96,6 @@ public sealed class WorkerEntrypointTests
     {
         var module = Compile("""
             using Workers;
-            [WorkerEntrypoint("Counter")]
             public sealed class Counter : WorkerEntrypoint
             {
                 private int _count;
@@ -109,7 +103,8 @@ public sealed class WorkerEntrypointTests
             }
             """);
 
-        Assert.Contains("constructor(ctx, env) { super(ctx, env);", module);
+        Assert.Contains("constructor(ctx, env) {", module);
+        Assert.Contains("super(ctx, env);", module);
         Assert.Contains("this._count = 0;", module);
     }
 
@@ -118,7 +113,6 @@ public sealed class WorkerEntrypointTests
     {
         var module = Compile("""
             using Workers;
-            [WorkerEntrypoint("Counter")]
             public sealed class Counter : WorkerEntrypoint
             {
                 private int _next;
@@ -132,14 +126,13 @@ public sealed class WorkerEntrypointTests
     }
 
     [Theory]
-    [InlineData("invalid-name")]
-    [InlineData("class")]
+    [InlineData("@class")]
+    [InlineData("@delete")]
     public void RejectsInvalidJavascriptExportNames(string name)
     {
         var error = Assert.Throws<NotSupportedException>(() => Compile($$"""
             using Workers;
-            [WorkerEntrypoint("{{name}}")]
-            public sealed class Entry : WorkerEntrypoint { public string Ping() => "ok"; }
+            public sealed class {{name}} : WorkerEntrypoint { public string Ping() => "ok"; }
             """));
 
         Assert.Contains("WRK117", error.Message);
@@ -152,7 +145,6 @@ public sealed class WorkerEntrypointTests
     {
         var error = Assert.Throws<NotSupportedException>(() => Compile($$"""
             using Workers;
-            [WorkerEntrypoint("Entry")]
             public sealed class Entry : WorkerEntrypoint { {{member}} }
             """));
 

@@ -10,12 +10,12 @@ public sealed class HttpBodyTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var form = await request.FormDataAsync();
                     var response = new Response(form);
                     var streamResponse = new Response(request.Body!);
-                    var queryResponse = new Response(request.QueryParameters);
+                    var queryResponse = new Response(new Url(request.Url).SearchParams);
                     var used = response.BodyUsed;
                     var parsed = await response.FormDataAsync();
                     return Response.Json(new { used, parsed, streamResponse, queryResponse });

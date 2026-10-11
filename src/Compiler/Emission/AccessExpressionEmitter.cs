@@ -41,7 +41,6 @@ internal sealed partial class JavaScriptEmitter
             return $"{receiver}.get({arguments.Single()})";
         if (type is INamedTypeSymbol lookup && lookup.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>")
             return $"{receiver}.get({string.Join(", ", arguments)})";
-        if (BindingIntrinsicRegistry.IsQueueMessageBatch(type)) receiver += ".messages";
         if (IsSequenceType(type)) return HelperInvocation(JavaScriptHelper.SequenceIndex, [receiver, arguments.Single()]);
         if (IsDictionary(type)) return HelperInvocation(JavaScriptHelper.DictionaryIndex, [receiver, arguments.Single()]);
         if (arguments.Length != 1) throw Unsupported("WRK101", operation.Syntax);

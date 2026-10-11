@@ -8,26 +8,27 @@ public static class Worker
     public static async Task<Response> FetchAsync(
         Request request,
         Env environment,
-        Context context)
+        ExecutionContext context)
     {
-        if (request.Path == "/durable")
+        var path = new Url(request.Url).Pathname;
+        if (path == "/durable")
         {
             var stub = environment.DurableObject("ECHO").GetByName("generated-csharp");
             return await stub.FetchAsync("https://worker.test/from-csharp");
         }
 
-        if (request.Path == "/kv-lifecycle")
+        if (path == "/kv-lifecycle")
         {
             var key = Crypto.RandomUuid();
-            var kv = environment.Kv("KV");
-            await kv.PutTextAsync(key, "stored", new KvPutOptions
+            var kv = environment.KV("KV");
+            await kv.PutAsync(key, "stored", new KVNamespacePutOptions
             {
                 Metadata = new { source = "csharp" }
             });
-            var stored = await kv.GetTextWithMetadataAsync(key);
-            var listed = await kv.ListAsync(new KvListOptions { Prefix = key });
+            var stored = await kv.GetWithMetadataAsync(key);
+            var listed = await kv.ListAsync(new KVNamespaceListOptions { Prefix = key });
             await kv.DeleteAsync(key);
-            var deleted = await kv.GetTextAsync(key);
+            var deleted = await kv.GetAsync(key);
             return Response.Json(new
             {
                 value = stored.Value,
@@ -37,13 +38,13 @@ public static class Worker
             });
         }
 
-        if (request.Path == "/r2-lifecycle")
+        if (path == "/r2-lifecycle")
         {
             var key = $"object-{Crypto.RandomUuid()}.txt";
             var bucket = environment.R2("BUCKET");
             await bucket.PutAsync(key, "r2-value", new R2PutOptions
             {
-                HttpMetadata = new R2HttpMetadata(ContentType: "text/custom")
+                HttpMetadata = new R2HttpMetadata { ContentType = "text/custom" }
             });
             var head = await bucket.HeadAsync(key);
             var listed = await bucket.ListAsync(new R2ListOptions { Prefix = key });
@@ -53,13 +54,13 @@ public static class Worker
             {
                 key = head!.Key,
                 size = head.Size,
-                contentType = head.HttpMetadata.ContentType,
+                contentType = head.HttpMetadata?.ContentType,
                 listed = listed.Objects[0].Key,
                 deleted
             });
         }
 
-        if (request.Path == "/d1-advanced")
+        if (path == "/d1-advanced")
         {
             var advancedDatabase = environment.D1("DB");
             await advancedDatabase.ExecAsync("CREATE TABLE IF NOT EXISTS numbers (value INTEGER NOT NULL); DELETE FROM numbers;");
@@ -67,7 +68,7 @@ public static class Worker
             var second = advancedDatabase.Prepare("INSERT INTO numbers (value) VALUES (?)").Bind(2);
             var batch = await advancedDatabase.BatchAsync<object>([first, second]);
             var raw = await advancedDatabase.Prepare("SELECT value FROM numbers ORDER BY value").RawAsync();
-            var session = advancedDatabase.WithSession(D1SessionMode.FirstPrimary);
+            var session = advancedDatabase.WithSession(D1SessionConstraint.FirstPrimary);
             await session.Prepare("SELECT value FROM numbers LIMIT 1").FirstAsync<int>("value");
             var bookmark = session.GetBookmark();
             return Response.Json(new
@@ -80,7 +81,7 @@ public static class Worker
             });
         }
 
-        if (request.Path == "/d1-rows")
+        if (path == "/d1-rows")
         {
             var filesDatabase = environment.D1("DB");
             await filesDatabase.ExecAsync("DROP TABLE IF EXISTS files; CREATE TABLE files (id INTEGER PRIMARY KEY, name TEXT NOT NULL, data BLOB NOT NULL, public INTEGER NOT NULL, created_at TEXT);");
@@ -106,71 +107,61 @@ public static class Worker
     }
 }
 
-[DurableObject("EchoObject")]
-public sealed class EchoObject
+public sealed class EchoObject : DurableObject
 {
-    private readonly DurableObjectState _state;
-
-    public EchoObject(DurableObjectState state, Env environment)
-    {
-        _state = state;
-    }
-
-    public Response FetchAsync(Request request) =>
-        new Response($"durable:{request.Path}");
+    public override Task<Response> FetchAsync(Request request) =>
+        Task.FromResult(new Response($"durable:{new Url(request.Url).Pathname}"));
 
     public string Greet(string name) => $"Hello, {name}";
 
     public async Task<string> StoreAsync(string value)
     {
-        await _state.Storage.PutAsync("rpc-value", value);
-        await _state.Storage.PutAsync("count", 0);
-        return await _state.Storage.GetAsync<string>("rpc-value") ?? "missing";
+        await Ctx.Storage.PutAsync("rpc-value", value);
+        await Ctx.Storage.PutAsync("count", 0);
+        return await Ctx.Storage.GetAsync<string>("rpc-value") ?? "missing";
     }
 
     public async Task<int> IncrementAsync()
     {
-        var current = await _state.Storage.GetAsync<int>("count");
+        var current = await Ctx.Storage.GetAsync<int>("count");
         var next = current + 1;
-        await _state.Storage.PutAsync("count", next);
+        await Ctx.Storage.PutAsync("count", next);
         return next;
     }
 
     public async Task<bool> StorageLifecycleAsync()
     {
-        await _state.Storage.PutAsync("temporary", "value");
-        var deleted = await _state.Storage.DeleteAsync("temporary");
-        var value = await _state.Storage.GetAsync<string>("temporary");
-        await _state.Storage.PutAsync("typed", new { value = 42 });
-        var typed = await _state.Storage.GetAsync<StoredValue>("typed");
-        await _state.Storage.DeleteAsync("typed");
-        var typedMissing = await _state.Storage.GetAsync<StoredValue>("typed");
+        await Ctx.Storage.PutAsync("temporary", "value");
+        var deleted = await Ctx.Storage.DeleteAsync("temporary");
+        var value = await Ctx.Storage.GetAsync<string>("temporary");
+        await Ctx.Storage.PutAsync("typed", new { value = 42 });
+        var typed = await Ctx.Storage.GetAsync<StoredValue>("typed");
+        await Ctx.Storage.DeleteAsync("typed");
+        var typedMissing = await Ctx.Storage.GetAsync<StoredValue>("typed");
         return deleted && value is null && typed!.Value == 42 && typedMissing is null;
     }
 
     public async Task<bool> TransactionLifecycleAsync()
     {
         var observed = false;
-        await _state.Storage.TransactionAsync(async transaction =>
+        await Ctx.Storage.TransactionAsync(async transaction =>
         {
             await transaction.PutAsync("transactional", "stored");
             var value = await transaction.GetAsync<string>("transactional");
             if (value == "stored")
                 observed = true;
         });
-        var stored = await _state.Storage.GetAsync<string>("transactional");
-        await _state.Storage.DeleteAsync("transactional");
+        var stored = await Ctx.Storage.GetAsync<string>("transactional");
+        await Ctx.Storage.DeleteAsync("transactional");
         return observed && stored == "stored";
     }
 
-    public void AlarmAsync(AlarmInfo info)
-    {
-    }
+    public override Task AlarmAsync(AlarmInvocationInfo alarmInfo) => Task.CompletedTask;
 }
 
 public sealed record StoredValue(int Value);
 
 public sealed record StoredFile(int Id, string Name, byte[] Data, bool Public, [property: JsonName("created_at")] Date? CreatedAt)
 {
-    public string Describe() => $"{Id}:{Name}:{TextCodec.EncodeBase64(Data)}:{Public}:{CreatedAt?.GetUtcFullYear()}";
+    public string Describe() => $"{Id}:{Name}:{Base64.Encode(Data)}:{Public}:{CreatedAt?.GetUtcFullYear()}";
 }

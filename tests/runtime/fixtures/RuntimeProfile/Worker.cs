@@ -3,9 +3,9 @@ using Workers;
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> Fetch(Request request, Env env, Context context)
+    public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
     {
-        if (request.Path == "/json")
+        if (new Url(request.Url).Pathname == "/json")
         {
             var value = Json.Parse(await request.TextAsync());
             return Response.Json(new
@@ -20,17 +20,17 @@ public static class Worker
                 serialized = Json.Stringify(value)
             });
         }
-        if (request.Path == "/typed-json")
+        if (new Url(request.Url).Pathname == "/typed-json")
         {
             var input = await request.JsonAsync<User>();
-            await env.Kv("KV").PutJsonAsync("native-user", input);
-            var stored = await env.Kv("KV").GetJsonAsync<User>("native-user");
+            await env.KV("KV").PutJsonAsync("native-user", input);
+            var stored = await env.KV("KV").GetJsonAsync<User>("native-user");
             var parsed = Json.Parse<User>(Json.Stringify(stored))!;
             return Response.Json(new { name = parsed.DisplayName(), serialized = Json.Stringify(parsed), user = parsed });
         }
-        if (request.Path == "/typed-values")
+        if (new Url(request.Url).Pathname == "/typed-values")
             return Response.Json(await request.JsonAsync<TypedValues>());
-        if (request.Path == "/date")
+        if (new Url(request.Url).Pathname == "/date")
         {
             var date = new Date(Date.Utc(2024, 1, 29, 23, 58, 57, 123));
             var original = date.ToIsoString();
@@ -43,7 +43,7 @@ public static class Worker
                 epoch = new Date(0).ToIsoString()
             });
         }
-        if (request.Path == "/regex")
+        if (new Url(request.Url).Pathname == "/regex")
         {
             var expression = new RegExp("(?<word>[a-z]+)", "g");
             var first = expression.Exec("one two")!;
@@ -60,7 +60,7 @@ public static class Worker
                 noMatch = expression.Exec("123") is null
             });
         }
-        if (request.Path == "/abort")
+        if (new Url(request.Url).Pathname == "/abort")
         {
             var controller = new AbortController();
             controller.Abort("stopped");
@@ -68,26 +68,26 @@ public static class Worker
             try { controller.Signal.ThrowIfAborted(); }
             catch (Exception) { threw = true; }
             var waitRejected = false;
-            try { await Timers.WaitAsync(10, controller.Signal); }
+            try { await Scheduler.WaitAsync(10, controller.Signal); }
             catch (Exception) { waitRejected = true; }
             var combined = AbortSignal.Any([controller.Signal, request.Signal]);
             return Response.Json(new { controller.Signal.Aborted, controller.Signal.Reason, threw, waitRejected, combined = combined.Aborted });
         }
-        if (request.Path == "/text")
+        if (new Url(request.Url).Pathname == "/text")
         {
-            var bytes = TextCodec.EncodeUtf8("hello 😀");
+            var bytes = new TextEncoder().Encode("hello 😀");
             return Response.Json(new
             {
-                decoded = TextCodec.DecodeUtf8(bytes),
-                base64 = TextCodec.EncodeBase64(bytes),
-                fromBase64 = TextCodec.DecodeUtf8(TextCodec.DecodeBase64(TextCodec.EncodeBase64(bytes))),
-                hex = TextCodec.EncodeHex(bytes),
-                fromHex = TextCodec.DecodeUtf8(TextCodec.DecodeHex(TextCodec.EncodeHex(bytes))),
+                decoded = new TextDecoder().Decode(bytes),
+                base64 = Base64.Encode(bytes),
+                fromBase64 = new TextDecoder().Decode(Base64.Decode(Base64.Encode(bytes))),
+                hex = Hex.Encode(bytes),
+                fromHex = new TextDecoder().Decode(Hex.Decode(Hex.Encode(bytes))),
                 encoded = Url.EncodeComponent("a b!*"), decodedUrl = Url.DecodeComponent("a%20b"),
                 uuid = Crypto.RandomUuid()
             });
         }
-        if (request.Path == "/numbers")
+        if (new Url(request.Url).Pathname == "/numbers")
             return Response.Json(new
             {
                 rounded = Numbers.Round(2.5), negative = Numbers.Round(-1.5),
@@ -97,7 +97,7 @@ public static class Worker
                 nullNumber = Numbers.From(null), safe = Numbers.IsSafeInteger(9007199254740991d),
                 invalidSign = Numbers.Sign(double.NaN), random = Numbers.Random()
             });
-        if (request.Path == "/foundation")
+        if (new Url(request.Url).Pathname == "/foundation")
         {
             var numbers = new List<int> { 3, 1, 2, 2 };
             var sorted = numbers.Distinct().OrderBy(number => number).ToArray();
@@ -112,7 +112,7 @@ public static class Worker
 
     private static async Task<int> ComputeAsync(int value)
     {
-        await Timers.WaitAsync(1);
+        await Scheduler.WaitAsync(1);
         return value * value;
     }
 }

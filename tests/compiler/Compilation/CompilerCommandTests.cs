@@ -15,14 +15,14 @@ public sealed class CompilerCommandTests
             var arguments = Path.Combine(root.FullName, "compiler.rsp");
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Append(typeof(global::Workers.Response).Assembly.Location);
-            File.WriteAllLines(arguments, references.Select(path => $"/reference:\"{path}\"")
+            System.IO.File.WriteAllLines(arguments, references.Select(path => $"/reference:\"{path}\"")
                 .Prepend(flags).Prepend("Worker.cs").Prepend("/target:library"));
-            File.WriteAllText(Path.Combine(root.FullName, "Worker.cs"), $$"""
+            System.IO.File.WriteAllText(Path.Combine(root.FullName, "Worker.cs"), $$"""
                 using Workers;
                 public static class Worker
                 {
                     [Fetch]
-                    public static Response Fetch(Request request, Env env, Context context) { {{body}} }
+                    public static Response Fetch(Request request, Env env, ExecutionContext context) { {{body}} }
                     private static int Add(int value) => value + 1;
                 }
                 """);
@@ -35,12 +35,12 @@ public sealed class CompilerCommandTests
             if (expectedCode == 1)
             {
                 Assert.Contains(diagnostic, error.ToString());
-                Assert.False(File.Exists(output));
+                Assert.False(System.IO.File.Exists(output));
             }
             else
             {
                 Assert.Empty(error.ToString());
-                Assert.True(File.Exists(output));
+                Assert.True(System.IO.File.Exists(output));
             }
         }
         finally { root.Delete(recursive: true); }
@@ -59,18 +59,18 @@ public sealed class CompilerCommandTests
             var compilation = global::WorkerCompiler.CreateCompilation([
                 Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText("public sealed class Dependency { public const int Value = 42; public static int Get() => 42; }")
             ]);
-            using (var file = File.Create(dependency)) Assert.True(compilation.Emit(file).Success);
+            using (var file = System.IO.File.Create(dependency)) Assert.True(compilation.Emit(file).Success);
             var arguments = Path.Combine(root.FullName, "compiler.rsp");
             var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
                 .Append(typeof(global::Workers.Response).Assembly.Location).Append(dependency);
-            File.WriteAllLines(arguments, references.Select(path => $"/reference:\"{path}\"")
+            System.IO.File.WriteAllLines(arguments, references.Select(path => $"/reference:\"{path}\"")
                 .Prepend("Worker.cs").Prepend("/target:library /define:PROJECT_CONFIGURATION"));
-            File.WriteAllText(Path.Combine(root.FullName, "Worker.cs"), $$"""
+            System.IO.File.WriteAllText(Path.Combine(root.FullName, "Worker.cs"), $$"""
                 using Workers;
                 public static class Worker
                 {
                     [Fetch]
-                    public static Response Fetch(Request request, Env env, Context context)
+                    public static Response Fetch(Request request, Env env, ExecutionContext context)
                     {
                 #if PROJECT_CONFIGURATION
                         return Response.Json({{expression}});
@@ -89,13 +89,13 @@ public sealed class CompilerCommandTests
             if (expectedCode == 0)
             {
                 Assert.Empty(error.ToString());
-                Assert.Contains(expected, File.ReadAllText(output));
+                Assert.Contains(expected, System.IO.File.ReadAllText(output));
             }
             else
             {
                 Assert.Contains(expected, error.ToString());
                 Assert.DoesNotContain("error CS", error.ToString());
-                Assert.False(File.Exists(output));
+                Assert.False(System.IO.File.Exists(output));
             }
         }
         finally { root.Delete(recursive: true); }
@@ -181,18 +181,18 @@ public sealed class CompilerCommandTests
             Directory.CreateDirectory(Path.GetDirectoryName(sources)!);
 
             var worker = Path.Combine(linked, "Worker.cs");
-            File.WriteAllText(worker, """
+            System.IO.File.WriteAllText(worker, """
                 using Workers;
 
                 public static class Worker
                 {
                     [Fetch]
-                    public static Response Fetch(Request request, Env env, Context context) =>
+                    public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                         new Response("linked");
                 }
                 """);
-            File.WriteAllText(Path.Combine(project, "Excluded.cs"), "this is deliberately not valid C#");
-            File.WriteAllLines(sources, [worker]);
+            System.IO.File.WriteAllText(Path.Combine(project, "Excluded.cs"), "this is deliberately not valid C#");
+            System.IO.File.WriteAllLines(sources, [worker]);
 
             var exitCode = global::WorkerCompiler.Run(
             [
@@ -203,7 +203,7 @@ public sealed class CompilerCommandTests
             ]);
 
             Assert.Equal(0, exitCode);
-            Assert.Contains("new Response(\"linked\")", File.ReadAllText(output));
+            Assert.Contains("new Response(\"linked\")", System.IO.File.ReadAllText(output));
         }
         finally
         {

@@ -7,17 +7,14 @@ public sealed class SqliteDurableObjectTests
     {
         var module = Compile("""
             using Workers;
-            [DurableObject("Store")]
-            public sealed class Store
+            public sealed class Store : DurableObject
             {
-                private readonly DurableObjectState state;
-                public Store(DurableObjectState state, Env env) => this.state = state;
-                public Response FetchAsync(Request request)
+                public override Task<Response> FetchAsync(Request request)
                 {
-                    state.Storage.TransactionSync(() => state.Storage.Sql.Exec<object>("DELETE FROM rows"));
-                    state.Storage.Kv.Put("key", new { value = 1 });
-                    var rows = state.Storage.Sql.Exec<Row>("SELECT value FROM rows").ToArray();
-                    return Response.Json(rows);
+                    Ctx.Storage.TransactionSync(() => Ctx.Storage.Sql.Exec<object>("DELETE FROM rows"));
+                    Ctx.Storage.Kv.Put("key", new { value = 1 });
+                    var rows = Ctx.Storage.Sql.Exec<Row>("SELECT value FROM rows").ToArray();
+                    return Task.FromResult(Response.Json(rows));
                 }
             }
             public sealed record Row(int Value);

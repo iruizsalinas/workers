@@ -10,7 +10,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     Response.Json(new { and = true & false, or = true | false, xor = true ^ true });
             }
             """);
@@ -28,7 +28,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     bool? missing = null;
                     return Response.Json(new { and = false & missing, or = true | missing, xor = true ^ missing });
@@ -50,7 +50,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     int? missing = null;
                     int? value = 2;
@@ -73,7 +73,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx) =>
                     new Response($"{Remainder(7, 2)}");
 
                 private static int Remainder(int left, int right) => left % right;
@@ -93,7 +93,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx) =>
                     Response.Json(new { equal = new Key(1) == new Key(1), different = new Key(1) != new Key(2) });
             }
             public sealed record Key(int Value);
@@ -106,7 +106,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx) =>
                     Response.Json(new { equal = new Money(1) == new Money(1) });
             }
             public sealed class Money(int cents)
@@ -128,7 +128,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     Response.Json(new { both = true && false, either = true || false });
             }
             """);
@@ -145,7 +145,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx) =>
                     new Response($"{Calculate(7, 2)}");
 
                 private static int Calculate(int left, int right) =>
@@ -168,7 +168,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx) =>
                     new Response(Join(null, "value"));
 
                 private static string Join(string? left, string? right) => left + right;
@@ -187,7 +187,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx) =>
                     new Response($"{Add(0.1f, 0.2f)}");
 
                 private static float Add(float left, float right) => left + right;
@@ -205,7 +205,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx) =>
                     Response.Json(new { integer = Negate(int.MinValue), single = NegateSingle(0.1f) });
 
                 private static int Negate(int value) => -value;
@@ -225,7 +225,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) => new Response(Negate(1u).ToString());
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx) => new Response(Negate(1u).ToString());
                 private static long Negate(uint value) => -value;
             }
             """));
@@ -261,7 +261,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx)
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx)
                 {
                     var code = 66;
                     var ratio = 2.75;

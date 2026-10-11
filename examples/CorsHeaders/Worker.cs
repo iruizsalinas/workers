@@ -11,7 +11,7 @@ public static class Worker
     [Fetch]
     public static Task<Response> FetchAsync(
         Request request,
-        Env environment,
-        Context context)
-        => Routes.HandleAsync(request, environment, context);
+        Env env,
+        ExecutionContext ctx)
+        => Routes.HandleAsync(request, env, ctx);
 }

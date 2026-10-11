@@ -12,13 +12,13 @@ public sealed class CookieTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var source = await Http.FetchAsync("data:text/plain,source");
                     var rejected = false;
                     try { source.Cookies.Set("session", "value"); }
                     catch (Exception) { rejected = true; }
-                    var response = new Response(source);
+                    var response = new Response(source.Body, source);
                     response.Headers.Append("set-cookie", "raw=1");
                     var cookies = response.Cookies;
                     cookies.Set("session", "first", new CookieOptions { Path = "/app" });
@@ -55,7 +55,7 @@ public sealed class CookieTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var response = new Response();
                     var events = new List<string>();
@@ -97,9 +97,9 @@ public sealed class CookieTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    var incoming = new Request("https://worker.test/", new FetchOptions
+                    var incoming = new Request("https://worker.test/", new RequestInit
                     {
                         Headers = new Headers { ["cookie"] = "session=a%20b; theme=\"dark\"; session=outer; flag; =empty; bad=%E0%A4%A" }
                     });
@@ -113,10 +113,10 @@ public sealed class CookieTests
                         theme = cookies.Get("theme"),
                         bad = cookies.Get("bad"),
                         missing = cookies.Get("missing"),
-                        hasFlag = cookies.Contains("flag"),
-                        hasTheme = cookies.Contains("theme"),
+                        hasFlag = cookies.Has("flag"),
+                        hasTheme = cookies.Has("theme"),
                         names,
-                        none = request.Cookies.Contains("session")
+                        none = request.Cookies.Has("session")
                     });
                 }
             }
@@ -140,7 +140,7 @@ public sealed class CookieTests
             response.Cookies.Set("session", "a; Domain=evil.test\r\nx");
             response.Cookies.Set("prefs", "dark", new CookieOptions
                 {
-                    Path = "/app", Domain = "example.com", MaxAgeSeconds = 3600, Expires = new Date(0),
+                    Path = "/app", Domain = "example.com", MaxAge = 3600, Expires = new Date(0),
                     HttpOnly = false, SameSite = SameSite.Strict
             });
             response.Cookies.Set("__Host-id", "1", new CookieOptions { SameSite = SameSite.None, Partitioned = true });
@@ -158,7 +158,7 @@ public sealed class CookieTests
     public void DeleteCookieExpiresTheMatchingCookie()
     {
         var cookies = SetCookies("""
-            response.Cookies.Delete("prefs", new CookieOptions { Path = "/app", MaxAgeSeconds = 60 });
+            response.Cookies.Delete("prefs", new CookieOptions { Path = "/app", MaxAge = 60 });
             """);
 
         Assert.Equal(["prefs=; Path=/app; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax"], cookies);
@@ -172,7 +172,7 @@ public sealed class CookieTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var options = new CookieOptions { Path = null };
                     return Response.Json(new { options.HttpOnly, options.Secure, lax = options.SameSite == SameSite.Lax, options.Partitioned, noPath = options.Path is null });
@@ -198,7 +198,7 @@ public sealed class CookieTests
             global::JavaScriptEmitter.StructuralDefaultProperties("Workers.CookieOptions"));
         Assert.Null(defaults.Domain);
         Assert.Null(defaults.Expires);
-        Assert.Null(defaults.MaxAgeSeconds);
+        Assert.Null(defaults.MaxAge);
     }
 
     [Theory]
@@ -208,7 +208,7 @@ public sealed class CookieTests
     [InlineData("""Set("a", "v", new CookieOptions { Path = "/x; Domain=evil" })""", "Invalid cookie path")]
     [InlineData("""Set("a", "v", new CookieOptions { Path = "relative" })""", "Invalid cookie path")]
     [InlineData("""Set("a", "v", new CookieOptions { Domain = "evil.test; Secure" })""", "Invalid cookie domain")]
-    [InlineData("""Set("a", "v", new CookieOptions { MaxAgeSeconds = -1 })""", "non-negative integer")]
+    [InlineData("""Set("a", "v", new CookieOptions { MaxAge = -1 })""", "non-negative integer")]
     [InlineData("""Set("a", "v", new CookieOptions { Expires = new Date("not a date") })""", "not a valid date")]
     [InlineData("""Set("a", "v", new CookieOptions { SameSite = (SameSite)7 })""", "Invalid cookie SameSite")]
     [InlineData("""Set("a", "v", new CookieOptions { Secure = false, SameSite = SameSite.None })""", "requires Secure")]
@@ -226,7 +226,7 @@ public sealed class CookieTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     try
                     {
@@ -250,7 +250,7 @@ public sealed class CookieTests
         public static class Worker
         {
             [Fetch]
-            public static Response Fetch(Request request, Env env, Context context)
+            public static Response Fetch(Request request, Env env, ExecutionContext context)
             {
                 var response = new Response();
                 {{response}}

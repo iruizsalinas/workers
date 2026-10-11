@@ -11,13 +11,13 @@ public sealed class PlatformBindingTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context ctx)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext ctx)
                 {
                     var body = await env.R2("FILES").GetAsync("key", new R2GetOptions
                     {
-                        Range = new R2Range(0, 10, null)
+                        Range = new R2Range { Offset = 0, Length = 10 }
                     });
-                    await env.Queue("JOBS").SendJsonAsync(new { key = "value" }, new QueueSendOptions { DelaySeconds = 5 });
+                    await env.Queue("JOBS").SendAsync(new { key = "value" }, new QueueSendOptions { DelaySeconds = 5 });
                     var cached = await CacheStorage.Default.MatchAsync(request, new CacheQueryOptions { IgnoreMethod = true });
                     var upstream = await env.Service("API").FetchAsync("https://example.com");
                     return cached ?? upstream;
@@ -25,8 +25,8 @@ public sealed class PlatformBindingTests
             }
             """);
 
-        Assert.Contains("env[\"FILES\"].get(\"key\", { range: { offset: 0, length: 10, suffix: undefined } })", module);
-        Assert.Contains("env[\"JOBS\"].send({ key: \"value\" }, { ...({ delaySeconds: 5 } ?? {}), contentType: \"json\" })", module);
+        Assert.Contains("env[\"FILES\"].get(\"key\", { range: { offset: 0, length: 10 } })", module);
+        Assert.Contains("env[\"JOBS\"].send({ key: \"value\" }, { delaySeconds: 5 })", module);
         Assert.Contains("caches.default.match(request, { ignoreMethod: true }).then(value => value ?? null)", module);
         Assert.Contains("env[\"API\"].fetch(\"https://example.com\")", module);
     }
@@ -40,7 +40,7 @@ public sealed class PlatformBindingTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context ctx)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext ctx)
                 {
                     var cached = await CacheStorage.Default.MatchAsync(request);
                     return cached is not null ? cached : new Response("miss");
@@ -62,11 +62,11 @@ public sealed class PlatformBindingTests
             public static class Worker
             {
                 [Queue]
-                public static async Task Consume(QueueMessageBatch<Job> batch, Env env, Context ctx)
+                public static async Task Consume(MessageBatch<Job> batch, Env env, ExecutionContext ctx)
                 {
-                    var count = batch.Count;
-                    var first = batch[0];
-                    foreach (var message in batch)
+                    var count = batch.Messages.Count;
+                    var first = batch.Messages[0];
+                    foreach (var message in batch.Messages)
                     {
                         message.Retry(new QueueRetryOptions { DelaySeconds = 30 });
                         message.Ack();
@@ -91,9 +91,9 @@ public sealed class PlatformBindingTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context ctx)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext ctx)
                 {
-                    var outcome = await env.RateLimiter("LIMITER").LimitAsync("customer");
+                    var outcome = await env.RateLimit("LIMITER").LimitAsync(new RateLimitOptions { Key = "customer" });
                     return Response.Json(new { outcome.Success });
                 }
             }

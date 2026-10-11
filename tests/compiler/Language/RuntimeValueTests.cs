@@ -10,7 +10,7 @@ public sealed class RuntimeValueTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     Func<Task<Response>> noArguments = async () => await BuildAsync("one");
                     Func<string, Task<Response>> oneArgument = async value => await BuildAsync(value);
@@ -38,7 +38,7 @@ public sealed class RuntimeValueTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     string? value = request.Headers.Get("x-value");
                     return Response.Json(new { missing = value is null, present = value != null });
@@ -58,7 +58,7 @@ public sealed class RuntimeValueTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     DateTimeOffset? value = null;
                     return Response.Json(new { offset = value?.Offset });
@@ -78,7 +78,7 @@ public sealed class RuntimeValueTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     string? value = "present";
                     return new Response(value!);
@@ -98,7 +98,7 @@ public sealed class RuntimeValueTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx)
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx)
                 {
                     Log.Info("hello");
                     Log.Error("failure");

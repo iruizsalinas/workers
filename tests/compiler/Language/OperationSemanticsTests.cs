@@ -10,7 +10,7 @@ public sealed class OperationSemanticsTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     char letter = 'c';
                     return Response.Json(letter - 'a');
@@ -256,7 +256,7 @@ public sealed class OperationSemanticsTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     int value = 1;
                     return Response.Json({{expression}});

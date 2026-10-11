@@ -8,7 +8,7 @@ public static class Worker
         .Use(async (request, route, next) =>
         {
             var response = await next();
-            return new Response(response) { Headers = { ["x-router"] = "csharp" } };
+            return new Response(response.Body, response) { Headers = { ["x-router"] = "csharp" } };
         })
         .Get("/", (request, route) => new Response("Notes API") { Headers = { ["x-example"] = "value" } })
         .Get("/notes/{id:uuid}", GetNoteAsync)
@@ -18,12 +18,12 @@ public static class Worker
         .Fallback((request, route) => Response.Json(new { error = "Not found" }, status: 404));
 
     [Fetch]
-    public static Task<Response> FetchAsync(Request request, Env environment, Context context) =>
-        Routes.HandleAsync(request, environment, context);
+    public static Task<Response> FetchAsync(Request request, Env env, ExecutionContext ctx) =>
+        Routes.HandleAsync(request, env, ctx);
 
     private static async Task<Response> GetNoteAsync(Request request, RouteContext route)
     {
-        var note = await route.Env.Kv("NOTES").GetJsonAsync<Note>(NoteKey(route));
+        var note = await route.Env.KV("NOTES").GetJsonAsync<Note>(NoteKey(route));
         if (note is null) throw new HttpError(404, "Note not found");
         return Response.Json(note);
     }
@@ -35,13 +35,13 @@ public static class Worker
             throw new HttpError(400, "Text is required");
 
         var note = new Note(route.Parameter("id").ToLowerInvariant(), input.Text.Trim());
-        await route.Env.Kv("NOTES").PutJsonAsync(NoteKey(route), note);
+        await route.Env.KV("NOTES").PutJsonAsync(NoteKey(route), note);
         return Response.Json(note);
     }
 
     private static async Task<Response> DeleteNoteAsync(Request request, RouteContext route)
     {
-        await route.Env.Kv("NOTES").DeleteAsync(NoteKey(route));
+        await route.Env.KV("NOTES").DeleteAsync(NoteKey(route));
         return new Response { Status = 204 };
     }
 

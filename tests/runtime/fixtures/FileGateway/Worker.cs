@@ -5,19 +5,20 @@ namespace FileGateway;
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
+    public static async Task<Response> FetchAsync(Request request, Env environment, ExecutionContext context)
     {
         var bucket = environment.R2("FILES");
-        if (request.Path == "/files" && request.Method == "GET")
+        var url = new Url(request.Url);
+        if (url.Pathname == "/files" && request.Method == "GET")
         {
-            var objects = await ListAllAsync(bucket, request.QueryParameters.Get("prefix") ?? "");
+            var objects = await ListAllAsync(bucket, url.SearchParams.Get("prefix") ?? "");
             return Response.Json(new { count = objects.Count, objects });
         }
 
-        if (!request.Path.StartsWith("/files/"))
+        if (!url.Pathname.StartsWith("/files/"))
             return new Response("Not found") { Status = 404 };
 
-        var key = Url.DecodeComponent(request.Path.Substring("/files/".Length));
+        var key = Url.DecodeComponent(url.Pathname.Substring("/files/".Length));
         switch (request.Method)
         {
             case "PUT":
@@ -34,7 +35,7 @@ public static class Worker
         }
     }
 
-    private static async Task<Response> UploadAsync(Request request, IR2Bucket bucket, string key)
+    private static async Task<Response> UploadAsync(Request request, R2Bucket bucket, string key)
     {
         var body = request.Body;
         if (body is null)
@@ -44,8 +45,7 @@ public static class Worker
         var digestTask = DigestAsync(streams[1]);
         var uploadTask = bucket.PutAsync(key, streams[0], new R2PutOptions
         {
-            HttpMetadata = new R2HttpMetadata(
-                ContentType: request.Headers.Get("content-type") ?? "application/octet-stream"),
+            HttpMetadata = new R2HttpMetadata { ContentType = request.Headers.Get("content-type") ?? "application/octet-stream" },
             CustomMetadata = new Dictionary<string, string>
             {
                 ["uploadedBy"] = request.Headers.Get("x-user") ?? "anonymous"
@@ -59,13 +59,13 @@ public static class Worker
 
     private static async Task<string> DigestAsync(ReadableStream body)
     {
-        var digestStream = Crypto.CreateDigestStream(DigestStreamAlgorithm.Sha256);
+        var digestStream = new DigestStream(DigestStreamAlgorithm.Sha256);
         await body.PipeToAsync(digestStream);
-        var digest = await digestStream.DigestAsync();
-        return TextCodec.EncodeHex(digest).ToLowerInvariant();
+        var digest = await digestStream.Digest;
+        return Hex.Encode(digest).ToLowerInvariant();
     }
 
-    private static async Task<Response> DownloadAsync(IR2Bucket bucket, string key)
+    private static async Task<Response> DownloadAsync(R2Bucket bucket, string key)
     {
         var item = await bucket.GetAsync(key);
         if (item is null)
@@ -82,12 +82,11 @@ public static class Worker
                 ["x-uploaded-at"] = item.Uploaded.ToIsoString()
             }
         };
-        var uploadedBy = item.CustomMetadata["uploadedBy"];
-        response.Headers["x-uploaded-by"] = uploadedBy;
+        response.Headers["x-uploaded-by"] = item.CustomMetadata?["uploadedBy"] ?? "anonymous";
         return response;
     }
 
-    private static async Task<Response> HeadAsync(IR2Bucket bucket, string key)
+    private static async Task<Response> HeadAsync(R2Bucket bucket, string key)
     {
         var item = await bucket.HeadAsync(key);
         if (item is null)
@@ -96,7 +95,7 @@ public static class Worker
         return new Response { Headers = { ["etag"] = item.HttpEtag, ["content-length"] = item.Size.ToString() } };
     }
 
-    private static async Task<IReadOnlyList<FileItem>> ListAllAsync(IR2Bucket bucket, string prefix)
+    private static async Task<IReadOnlyList<FileItem>> ListAllAsync(R2Bucket bucket, string prefix)
     {
         var objects = new List<FileItem>();
         string? cursor = null;
@@ -107,7 +106,7 @@ public static class Worker
                 Prefix = prefix,
                 Cursor = cursor,
                 Limit = 100,
-                Include = ["httpMetadata", "customMetadata"]
+                Include = [R2ListInclude.HttpMetadata, R2ListInclude.CustomMetadata]
             });
             foreach (var item in page.Objects)
                 objects.Add(new FileItem(
@@ -126,7 +125,7 @@ public static class Worker
 
 public sealed record FileItem(
     string Key,
-    ulong Size,
+    long Size,
     string Etag,
     string Uploaded,
-    IReadOnlyDictionary<string, string> Metadata);
+    IReadOnlyDictionary<string, string>? Metadata);

@@ -52,7 +52,6 @@ internal sealed partial class JavaScriptEmitter
                 var enumerable = Expression(collection);
                 if (collection.Type?.SpecialType == SpecialType.System_String)
                     enumerable = $"{_helpers.Require(JavaScriptHelper.LinqValues)}({enumerable})";
-                else if (BindingIntrinsicRegistry.IsQueueMessageBatch(collection.Type)) enumerable += ".messages";
                 else if (IsDictionary(collection.Type)) enumerable = $"Object.entries({enumerable})";
                 if (loop.Locals.Length != 1 || loop.LoopControlVariable is not IVariableDeclaratorOperation)
                     throw Unsupported("WRK108", loop.Syntax);

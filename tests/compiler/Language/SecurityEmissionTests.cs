@@ -10,7 +10,7 @@ public sealed class SecurityEmissionTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var anonymous = new { __proto__ = "anonymous", @default = 1 };
                     var record = new Payload(__proto__: "record");
@@ -43,7 +43,7 @@ public sealed class SecurityEmissionTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => Response.Json(new Model());
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => Response.Json(new Model());
             }
             public sealed class Model
             {

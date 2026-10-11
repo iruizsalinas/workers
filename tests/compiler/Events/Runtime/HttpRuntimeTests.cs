@@ -10,9 +10,9 @@ public sealed class HttpRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    var url = request.Url;
+                    var url = new Url(request.Url);
                     return Response.Json(new
                     {
                         url.Origin,
@@ -22,7 +22,7 @@ public sealed class HttpRuntimeTests
                         url.Port,
                         url.Username,
                         url.Password,
-                        url.Fragment,
+                        url.Hash,
                         request.Redirect,
                         hasSignal = request.Signal != null
                     });
@@ -34,7 +34,7 @@ public sealed class HttpRuntimeTests
         Assert.Contains("origin: url.origin", module);
         Assert.Contains("protocol: url.protocol", module);
         Assert.Contains("hostname: url.hostname", module);
-        Assert.Contains("fragment: url.hash", module);
+        Assert.Contains("hash: url.hash", module);
         Assert.Contains("redirect: request.redirect", module);
         Assert.Contains("hasSignal: request.signal != null", module);
     }
@@ -47,7 +47,7 @@ public sealed class HttpRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     new Response(body: "missing") { Status = 404 };
             }
             """);
@@ -63,7 +63,7 @@ public sealed class HttpRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var events = new List<string>();
                     GetResponse(events).Headers.Set(
@@ -93,7 +93,7 @@ public sealed class HttpRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     new Response("missing") { Status = 404, StatusText = "Not Found" };
             }
             """);
@@ -109,7 +109,7 @@ public sealed class HttpRuntimeTests
             public static class Worker
             {
                 [Tail]
-                public static void Tail(TailEvent tail, Env env, Context context) =>
+                public static void Tail(IReadOnlyList<TraceItem> tail, Env env, ExecutionContext context) =>
                     Log.Info(tail.Count.ToString());
             }
             """);
@@ -126,17 +126,17 @@ public sealed class HttpRuntimeTests
             public static class Worker
             {
                 [Tail]
-                public static void Tail(TailEvent tail) =>
-                    Log.Info(tail[0].Event!.Request!.Headers.Get("content-type"));
+                public static void Tail(IReadOnlyList<TraceItem> tail) =>
+                    Log.Info(tail[0].Event!.Request.Headers.Get("content-type"));
 
                 [Scheduled]
-                public static void Scheduled(ScheduledEvent scheduled) =>
+                public static void Scheduled(ScheduledController scheduled) =>
                     Log.Info(scheduled.ScheduledTime.ToString());
             }
             """);
 
-        Assert.Contains("new Headers($workers$sequenceIndex(tail, 0).event.request.headers).get(\"content-type\")", module);
-        Assert.Contains("scheduled.scheduledTime", module);
+        Assert.Contains("new Headers((value => value != null && \"request\" in value ? value : null)($workers$sequenceIndex(tail, 0).event).request.headers).get(\"content-type\")", module);
+        Assert.Contains("new Date(value))(scheduled.scheduledTime)", module);
         Assert.DoesNotContain("scheduled.type", module);
     }
 
@@ -148,7 +148,7 @@ public sealed class HttpRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var response = Response.Json(new { ok = true }, status: 201, statusText: "Created");
                     return Response.Json(new { response.Status, response.StatusText, text = await response.TextAsync() });
@@ -169,11 +169,11 @@ public sealed class HttpRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    var socket = WebSocketPair.Create().Server;
+                    var socket = new WebSocketPair().Server;
                     socket.Close(reason: "done", code: 1000);
-                    env.Kv("DATA").PutTextAsync(value: "hello", key: "message");
+                    env.KV("DATA").PutAsync(value: "hello", key: "message");
                     return new Response();
                 }
             }

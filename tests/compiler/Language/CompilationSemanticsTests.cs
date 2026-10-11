@@ -10,7 +10,7 @@ public sealed class CompilationSemanticsTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     new Response(Pair(b: (int)Numbers.Max(left: 1, right: 2), a: 3));
 
                 private static string Pair(int a = 10, int b = 20) => $"{a}:{b}";
@@ -29,7 +29,7 @@ public sealed class CompilationSemanticsTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => new Response(Pair(b: 2));
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => new Response(Pair(b: 2));
                 private static string Pair(int a = 10, int b = 20) => $"{a}:{b}";
             }
             """);
@@ -46,7 +46,7 @@ public sealed class CompilationSemanticsTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var values = new List<int> { 2, 4, 6 };
                     bool? configured = null;
@@ -68,15 +68,15 @@ public sealed class CompilationSemanticsTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var parcel = new Parcel(Count: 3, Label: "priority");
                     var rewritten = new Request(
-                        options: new FetchOptions { Method = "POST" },
-                        url: "https://worker.test/reordered");
+                        init: new RequestInit { Method = "POST" },
+                        input: "https://worker.test/reordered");
                     var resolved = new Url(
                         baseUrl: "https://worker.test/root/",
-                        value: "child");
+                        url: "child");
                     return Response.Json(new { parcel, rewritten, resolved });
                 }
             }
@@ -85,7 +85,7 @@ public sealed class CompilationSemanticsTests
 
         Assert.Contains("{ count: 3, label: \"priority\" }", module);
         Assert.Matches(@"=> new Request\(\$workers\$arg2(?:\$\d+)?, \$workers\$arg1(?:\$\d+)?\)", module);
-        Assert.Matches(@"=> new URL\(\$workers\$arg2(?:\$\d+)?, \$workers\$arg1(?:\$\d+)?\)", module);
+        Assert.Matches(@"=> new URL\(\$workers\$arg2(?:\$\d+)?, \$workers\$arg1(?:\$\d+)? \?\? undefined\)", module);
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public sealed class CompilationSemanticsTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var state = ParcelState.Ready;
                     return Response.Json(new { state, ready = state == ParcelState.Ready, limit = Limits.Maximum });

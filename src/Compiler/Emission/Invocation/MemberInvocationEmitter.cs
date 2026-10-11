@@ -22,15 +22,20 @@ internal sealed partial class JavaScriptEmitter
                 : throw UnsupportedSymbol(method, invocation);
         if (TryEmitFoundationInvocation(invocation, method, receiver, name, arguments, out var framework)) return framework;
         if (type == "Workers.Env" && EnvironmentBindings.Contains(name)) return $"{receiver}[{arguments[0]}]";
+        // A string variable is read as configured; typed variables are JSON values mapped to C# types.
+        if (type == "Workers.Env" && name == "Variable")
+            return method!.TypeArguments.FirstOrDefault() is { } variableType
+                   && JsonBoundaryConverter(variableType, invocation, JsonWebMode) is { } convertVariable
+                ? $"({convertVariable})({receiver}[{arguments[0]}])"
+                : $"{receiver}[{arguments[0]}]";
         if (type == "Workers.CacheStorage" && name == "OpenAsync") return $"caches.open({arguments[0]})";
         if (type == "Workers.Http" && name == "FetchAsync") return $"fetch({string.Join(", ", arguments)})";
-        if (type == "Workers.WebSocketPair" && name == "Create") return "new WebSocketPair()";
-        if (type == "Workers.TcpSocket" && name == "Connect") return SocketConnect(method, arguments);
+        if (type == "Workers.Socket" && name == "Connect") return $"{_imports.Require("cloudflare:sockets", "connect", "connectSocket")}({string.Join(", ", arguments)})";
         if (type == "Workers.Router" && method is not null) return RouterInvocation(invocation, method, receiver, arguments);
         if (type == "Workers.RouteContext" && name == "Parameter") return RouteParameterInvocation(receiver, arguments);
         if (type == "Workers.Cors" && name == "Allow") return HelperInvocation(JavaScriptHelper.Cors, arguments);
-        if (type == "Workers.Cookies" && name is "Get" or "GetAll" or "Contains")
-            return $"{receiver}.{(name == "Contains" ? "has" : LowerFirst(name))}({arguments[0]})";
+        if (type == "Workers.Cookies" && name is "Get" or "GetAll" or "Has")
+            return $"{receiver}.{LowerFirst(name)}({arguments[0]})";
         if (type == "Workers.ResponseCookies" && name is "Set" or "Delete")
             return ResponseCookieInvocation(receiver, name, arguments);
         if (type == "Workers.Crypto") receiver = "globalThis.crypto";
@@ -55,19 +60,10 @@ internal sealed partial class JavaScriptEmitter
         return $"{receiver}.append(\"set-cookie\", {HelperInvocation(JavaScriptHelper.SetCookie, cookie)})";
     }
 
-    private string SocketConnect(IMethodSymbol? method, string[] arguments)
-    {
-        var connect = _imports.Require("cloudflare:sockets", "connect", "connectSocket");
-        if (method?.Parameters.Length >= 2 && method.Parameters[0].Type.SpecialType == SpecialType.System_String
-            && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32)
-            return $"{connect}({{ hostname: {arguments[0]}, port: {arguments[1]} }}{(arguments.Length > 2 ? $", {arguments[2]}" : "")})";
-        return $"{connect}({string.Join(", ", arguments)})";
-    }
-
     private static readonly HashSet<string> EnvironmentBindings =
     [
-        "Get", "Variable", "Secret", "Raw", "Kv", "R2", "Service", "Assets", "Mtls", "Dispatcher", "Queue", "D1",
-        "DurableObject", "RateLimiter", "Analytics", "Email", "Version", "Ai", "Workflow", "Images", "Media",
-        "Vectorize", "SecretStore", "Hyperdrive"
+        "Get", "Secret", "Raw", "KV", "R2", "D1", "Queue", "DurableObject", "Service", "Assets", "MtlsCertificate",
+        "DispatchNamespace", "RateLimit", "AnalyticsEngine", "SendEmail", "VersionMetadata", "Ai", "Workflow", "Images",
+        "Media", "Vectorize", "SecretsStoreSecret", "Hyperdrive"
     ];
 }

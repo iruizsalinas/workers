@@ -10,7 +10,7 @@ public sealed class LinqAdvancedTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<Item> items = [new Item("a", 1), new Item("a", 2), new Item("b", 3)];
                     var groups = items.GroupBy(item => item.Name, item => item.Value);
@@ -47,7 +47,7 @@ public sealed class LinqAdvancedTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<int> values = [1, 2, 3];
                     List<Item> items = [new Item(1, 3), new Item(2, 1), new Item(1, 2)];
@@ -92,7 +92,7 @@ public sealed class LinqAdvancedTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<Item> items = [new Item("a", 1)];
                     return Response.Json({{operation}});
@@ -115,7 +115,7 @@ public sealed class LinqAdvancedTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     List<Item> values = [new Item(1)];
                     return Response.Json({{operation}});

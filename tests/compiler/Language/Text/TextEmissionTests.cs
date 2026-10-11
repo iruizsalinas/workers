@@ -10,7 +10,7 @@ public sealed class TextEmissionTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx)
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx)
                 {
                     var text = """raw ` ${ value } text""";
                     var number = 1.5f;
@@ -33,7 +33,7 @@ public sealed class TextEmissionTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx)
+                public static Response Fetch(Request request, Env env, ExecutionContext ctx)
                 {
                     string? value = null;
                     return new Response($"literal ${{ marker }} ` slash \\ {value}");
@@ -53,9 +53,9 @@ public sealed class TextEmissionTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request @default, Env env, Context ctx)
+                public static Response Fetch(Request @default, Env env, ExecutionContext ctx)
                 {
-                    var @delete = @default.Path;
+                    var @delete = new Url(@default.Url).Pathname;
                     return new Response(@delete);
                 }
             }

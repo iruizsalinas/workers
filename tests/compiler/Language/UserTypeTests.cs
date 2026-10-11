@@ -10,7 +10,7 @@ public sealed class UserTypeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var counter = new Counter(2) { Label = "items" };
                     return Response.Json(new { value = counter.Add(3), counter.Doubled, counter.Label });
@@ -46,7 +46,7 @@ public sealed class UserTypeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var person = new Person(Last: "Lovelace", First: "Ada") { Age = 36 };
                     return Response.Json(new { person.FullName, greeting = person.Greet("Hello"), person.Age });
@@ -92,7 +92,7 @@ public sealed class UserTypeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     Response.Json(new {{typeName}}());
             }
             {{declaration}}
@@ -109,7 +109,7 @@ public sealed class UserTypeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     Response.Json(new Container.Item("nested"));
             }
             public static class Container
@@ -132,7 +132,7 @@ public sealed class UserTypeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     Response.Json(new Model());
             }
             public class Model { {{property}} }
@@ -149,7 +149,7 @@ public sealed class UserTypeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var counter = new Counter();
                     var pair = new Pair { Value = 3, value = 4 };
@@ -186,7 +186,7 @@ public sealed class UserTypeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
+                public static Response Fetch(Request request, Env env, ExecutionContext context) =>
                     Response.Json(new Model());
             }
             public sealed class Model

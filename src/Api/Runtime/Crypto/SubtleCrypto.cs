@@ -5,6 +5,8 @@ public sealed class SubtleCrypto
 {
     private SubtleCrypto() { }
 
+    /// <summary>Compares two equal-length byte sequences in constant time; throws when the lengths differ.</summary>
+    public bool TimingSafeEqual(ReadOnlyMemory<byte> a, ReadOnlyMemory<byte> b) => WorkerApi.NotExecutable<bool>();
     public Task<byte[]> DigestAsync(DigestAlgorithm algorithm, ReadOnlyMemory<byte> data) => WorkerApi.NotExecutable<Task<byte[]>>();
     public Task<byte[]> EncryptAsync(IEncryptionAlgorithm algorithm, CryptoKey key, ReadOnlyMemory<byte> data) => WorkerApi.NotExecutable<Task<byte[]>>();
     public Task<byte[]> DecryptAsync(IEncryptionAlgorithm algorithm, CryptoKey key, ReadOnlyMemory<byte> data) => WorkerApi.NotExecutable<Task<byte[]>>();

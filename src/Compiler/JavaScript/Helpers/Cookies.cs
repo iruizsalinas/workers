@@ -43,7 +43,7 @@ internal static partial class HelperSource
         const {{name("cookieDomain")}} = /^\.?[0-9A-Za-z](?:[0-9A-Za-z-]*[0-9A-Za-z])?(?:\.[0-9A-Za-z](?:[0-9A-Za-z-]*[0-9A-Za-z])?)*$/;
         const {{name("cookieSameSite")}} = ["Lax", "Strict", "None"];
         function {{name("setCookie")}}(name, value, options, expire = false) {
-          const { path, domain, expires, maxAgeSeconds, httpOnly, secure, sameSite, partitioned } =
+          const { path, domain, expires, maxAge, httpOnly, secure, sameSite, partitioned } =
             { path: "/", httpOnly: true, secure: true, sameSite: 0, partitioned: false, ...options };
           if (typeof name !== "string" || !{{name("cookieToken")}}.test(name))
             throw new TypeError(`Invalid cookie name ${JSON.stringify(name)}.`);
@@ -63,10 +63,10 @@ internal static partial class HelperSource
           if (expire) {
             attributes.push("Max-Age=0", "Expires=Thu, 01 Jan 1970 00:00:00 GMT");
           } else {
-            if (maxAgeSeconds != null) {
-              if (!Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds < 0)
-                throw new RangeError("Cookie MaxAgeSeconds must be a non-negative integer; use response.Cookies.Delete to delete a cookie.");
-              attributes.push(`Max-Age=${maxAgeSeconds}`);
+            if (maxAge != null) {
+              if (!Number.isSafeInteger(maxAge) || maxAge < 0)
+                throw new RangeError("Cookie MaxAge must be a non-negative integer; use response.Cookies.Delete to delete a cookie.");
+              attributes.push(`Max-Age=${maxAge}`);
             }
             if (expires != null) {
               if (Number.isNaN(expires.getTime())) throw new RangeError("Cookie Expires is not a valid date.");

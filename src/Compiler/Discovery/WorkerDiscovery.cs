@@ -22,36 +22,29 @@ internal static class WorkerDiscovery
             .SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
             .ToArray();
         var distinctClasses = DistinctTypes(compilation, classes);
-        var unsupportedAttributedType = compilation.SyntaxTrees
-            .SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
-            .FirstOrDefault(declaration => declaration is not ClassDeclarationSyntax
-                && (HasAttribute(compilation, declaration, "Workers.DurableObjectAttribute")
-                    || HasAttribute(compilation, declaration, "Workers.WorkerEntrypointAttribute")));
-        if (unsupportedAttributedType is not null)
+        var misplacedDefault = distinctClasses.FirstOrDefault(declaration =>
+            HasAttribute(compilation, declaration, "Workers.DefaultExportAttribute")
+            && !DerivesFrom(compilation, declaration, "Workers.WorkerEntrypoint"));
+        if (misplacedDefault is not null)
             throw new NotSupportedException(
-                $"WRK116: Generated type '{unsupportedAttributedType.Identifier.ValueText}' must be an ordinary class declaration.");
+                $"WRK116: [DefaultExport] applies only to a WorkerEntrypoint class, not '{misplacedDefault.Identifier.ValueText}'.");
 
         var events = EventTypes
             .Select(type => FindEvent(compilation, methods, type))
             .OfType<WorkerEvent>()
             .ToArray();
-        var durableObjects = distinctClasses.Where(declaration => HasAttribute(
-            compilation,
-            declaration,
-            "Workers.DurableObjectAttribute")).ToArray();
-        var workerEntrypoints = distinctClasses.Where(declaration => HasAttribute(
-            compilation,
-            declaration,
-            "Workers.WorkerEntrypointAttribute")).ToArray();
+        var durableObjects = distinctClasses.Where(declaration => DerivesFrom(compilation, declaration, "Workers.DurableObject")).ToArray();
+        var workerEntrypoints = distinctClasses.Where(declaration => DerivesFrom(compilation, declaration, "Workers.WorkerEntrypoint")).ToArray();
         var htmlHandlers = distinctClasses.Where(declaration => IsHtmlHandler(compilation, declaration)).ToArray();
 
         var defaultExports = events.Length == 0 ? 0 : 1;
-        defaultExports += workerEntrypoints.Count(declaration => IsDefaultEntrypoint(compilation, declaration));
+        defaultExports += workerEntrypoints.Count(declaration => HasAttribute(compilation, declaration, "Workers.DefaultExportAttribute"));
         if (defaultExports > 1)
             throw new NotSupportedException("WRK112: Multiple default Worker exports are not supported.");
 
         var duplicateExport = durableObjects.Concat(workerEntrypoints)
-            .GroupBy(declaration => ClassExportName(compilation, declaration), StringComparer.Ordinal)
+            .Where(declaration => !HasAttribute(compilation, declaration, "Workers.DefaultExportAttribute"))
+            .GroupBy(declaration => declaration.Identifier.ValueText, StringComparer.Ordinal)
             .FirstOrDefault(group => group.Skip(1).Any());
         if (duplicateExport is not null)
             throw new NotSupportedException($"WRK113: Multiple Worker classes export the name '{duplicateExport.Key}'.");
@@ -100,33 +93,17 @@ internal static class WorkerDiscovery
             .GetAttributes()
             .Any(candidate => candidate.AttributeClass?.ToDisplayString() == attribute) == true;
 
-    private static bool IsHtmlHandler(CSharpCompilation compilation, ClassDeclarationSyntax declaration)
+    private static bool IsHtmlHandler(CSharpCompilation compilation, ClassDeclarationSyntax declaration) =>
+        DerivesFrom(compilation, declaration, "Workers.HtmlElementHandler")
+        || DerivesFrom(compilation, declaration, "Workers.HtmlDocumentHandler");
+
+    private static bool DerivesFrom(CSharpCompilation compilation, ClassDeclarationSyntax declaration, string baseType)
     {
         var type = compilation.GetSemanticModel(declaration.SyntaxTree).GetDeclaredSymbol(declaration)?.BaseType;
-        while (type is not null)
-        {
-            if (type.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler")
+        for (; type is not null; type = type.BaseType)
+            if (type.ToDisplayString() == baseType)
                 return true;
-            type = type.BaseType;
-        }
         return false;
-    }
-
-    private static bool IsDefaultEntrypoint(CSharpCompilation compilation, ClassDeclarationSyntax declaration)
-    {
-        var attribute = compilation.GetSemanticModel(declaration.SyntaxTree)
-            .GetDeclaredSymbol(declaration)!
-            .GetAttributes()
-            .Single(candidate => candidate.AttributeClass?.ToDisplayString() == "Workers.WorkerEntrypointAttribute");
-        return attribute.ConstructorArguments.Length == 0 || attribute.ConstructorArguments[0].Value is null;
-    }
-
-    private static string ClassExportName(CSharpCompilation compilation, ClassDeclarationSyntax declaration)
-    {
-        var symbol = compilation.GetSemanticModel(declaration.SyntaxTree).GetDeclaredSymbol(declaration)!;
-        var attribute = symbol.GetAttributes().Single(candidate => candidate.AttributeClass?.ToDisplayString() is
-            "Workers.DurableObjectAttribute" or "Workers.WorkerEntrypointAttribute");
-        return attribute.ConstructorArguments.FirstOrDefault().Value?.ToString() ?? symbol.Name;
     }
 
     private static bool HasValidEventSignature(
@@ -141,14 +118,16 @@ internal static class WorkerDiscovery
 
         var expected = eventName switch
         {
-            "fetch" => new[] { "Workers.Request", "Workers.Env", "Workers.Context" },
-            "scheduled" => new[] { "Workers.ScheduledEvent", "Workers.Env", "Workers.Context" },
-            "queue" => new[] { "Workers.QueueMessageBatch<T>", "Workers.Env", "Workers.Context" },
-            "email" => new[] { "Workers.ForwardableEmailMessage", "Workers.Env", "Workers.Context" },
-            "tail" => new[] { "Workers.TailEvent", "Workers.Env", "Workers.Context" },
+            "fetch" => new[] { "Workers.Request", "Workers.Env", "Workers.ExecutionContext" },
+            "scheduled" => new[] { "Workers.ScheduledController", "Workers.Env", "Workers.ExecutionContext" },
+            "queue" => new[] { "Workers.MessageBatch<T>", "Workers.Env", "Workers.ExecutionContext" },
+            "email" => new[] { "Workers.ForwardableEmailMessage", "Workers.Env", "Workers.ExecutionContext" },
+            "tail" => new[] { "System.Collections.Generic.IReadOnlyList<Workers.TraceItem>", "Workers.Env", "Workers.ExecutionContext" },
             _ => throw new InvalidOperationException($"Unknown Worker event '{eventName}'.")
         };
-        if (method.Parameters.Select(parameter => parameter.Type.OriginalDefinition.ToDisplayString())
+        if (method.Parameters.Select(parameter => parameter.Type.OriginalDefinition.ToDisplayString() is var definition
+                && definition.EndsWith("<T>", StringComparison.Ordinal) && definition.StartsWith("Workers.", StringComparison.Ordinal)
+                    ? definition : parameter.Type.ToDisplayString())
             .Where((type, index) => type != expected[index]).Any())
             return false;
 

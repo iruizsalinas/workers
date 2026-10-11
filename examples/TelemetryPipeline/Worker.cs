@@ -5,32 +5,32 @@ namespace TelemetryPipeline;
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
+    public static async Task<Response> FetchAsync(Request request, Env env, ExecutionContext ctx)
     {
-        if (request.Method != "GET" || request.Path != "/health")
+        if (request.Method != "GET" || new Url(request.Url).Pathname != "/health")
             return new Response("Not found") { Status = 404 };
 
-        var row = await environment.D1("DB")
+        var row = await env.D1("DB")
             .Prepare("SELECT COUNT(*) AS pending FROM readings WHERE processed_at IS NULL")
             .FirstAsync<HealthRow>();
         return Response.Json(new { ok = true, pending = row?.Pending ?? 0 });
     }
 
     [Scheduled]
-    public static void Scheduled(ScheduledEvent scheduled, Env environment, Context context) =>
-        context.WaitUntil(EnqueueDueSensorsAsync(environment, scheduled.ScheduledTime.GetTime()));
+    public static void Scheduled(ScheduledController scheduled, Env env, ExecutionContext ctx) =>
+        ctx.WaitUntil(EnqueueDueSensorsAsync(env, scheduled.ScheduledTime.GetTime()));
 
     [Queue]
     public static async Task QueueAsync(
-        QueueMessageBatch<SensorJob> batch,
-        Env environment,
-        Context context)
+        MessageBatch<SensorJob> batch,
+        Env env,
+        ExecutionContext ctx)
     {
-        foreach (var message in batch)
+        foreach (var message in batch.Messages)
         {
             try
             {
-                await ProcessAsync(environment, message.Body);
+                await ProcessAsync(env, message.Body);
                 message.Ack();
             }
             catch (Exception exception)
@@ -44,28 +44,28 @@ public static class Worker
         }
     }
 
-    private static async Task EnqueueDueSensorsAsync(Env environment, double scheduledTime)
+    private static async Task EnqueueDueSensorsAsync(Env env, double scheduledTime)
     {
-        var due = await environment.D1("DB")
+        var due = await env.D1("DB")
             .Prepare("SELECT sensor_id AS sensorId FROM sensors WHERE next_read_at <= ? LIMIT 50")
             .Bind(scheduledTime)
             .AllAsync<SensorRow>();
 
-        var jobs = new List<SensorJob>();
+        var jobs = new List<MessageSendRequest<SensorJob>>();
         foreach (var sensor in due.Results)
-            jobs.Add(new SensorJob(sensor.SensorId, Crypto.RandomUuid()));
+            jobs.Add(new MessageSendRequest<SensorJob> { Body = new SensorJob(sensor.SensorId, Crypto.RandomUuid()) });
         if (jobs.Count != 0)
-            await environment.Queue("READINGS").SendJsonBatchAsync(jobs);
+            await env.Queue("READINGS").SendBatchAsync(jobs);
     }
 
-    private static async Task ProcessAsync(Env environment, SensorJob job)
+    private static async Task ProcessAsync(Env env, SensorJob job)
     {
-        var gate = environment.DurableObject("RATE_GATE").GetByName("outbound-api");
-        var lease = await gate.InvokeAsync<Lease>("reserve", [job.RequestId]);
+        var gate = env.DurableObject("RATE_GATE").GetByName("outbound-api");
+        var lease = await gate.InvokeAsync<Lease>("reserve", job.RequestId);
         if (lease is null || !lease.Allowed)
             throw new InvalidOperationException("Outbound API is busy");
 
-        var options = new FetchOptions { Signal = AbortSignal.Timeout(5000) };
+        var options = new RequestInit { Signal = AbortSignal.Timeout(5000) };
         var responses = await Task.WhenAll(
             Http.FetchAsync($"https://sensors.example/v1/readings/{job.SensorId}", options),
             Http.FetchAsync($"https://weather.example/v1/context/{job.SensorId}", options));
@@ -73,29 +73,24 @@ public static class Worker
             throw new InvalidOperationException("Reading provider failed");
 
         var reading = await responses[0].JsonAsync<Reading>();
-        var context = await responses[1].JsonAsync<WeatherContext>();
-        if (reading is null || context is null)
+        var weather = await responses[1].JsonAsync<WeatherContext>();
+        if (reading is null || weather is null)
             throw new InvalidOperationException("Reading provider returned invalid JSON");
 
-        await environment.D1("DB").Prepare(
+        await env.D1("DB").Prepare(
                 "INSERT OR REPLACE INTO readings (id, sensor_id, value, condition, processed_at) VALUES (?, ?, ?, ?, ?)")
-            .Bind(job.RequestId, job.SensorId, reading.Value, context.Condition, Date.Now())
+            .Bind(job.RequestId, job.SensorId, reading.Value, weather.Condition, Date.Now())
             .RunAsync();
-        await gate.InvokeVoidAsync("complete", [lease.Token]);
+        await gate.InvokeAsync("complete", lease.Token);
     }
 }
 
-[DurableObject("RateGate")]
-public sealed class RateGate
+public sealed class RateGate : DurableObject
 {
-    private readonly DurableObjectState _state;
-
-    public RateGate(DurableObjectState state, Env environment) => _state = state;
-
     public async Task<Lease> ReserveAsync(string requestId)
     {
         var lease = new Lease(false, "");
-        await _state.Storage.TransactionAsync(async storage =>
+        await Ctx.Storage.TransactionAsync(async storage =>
         {
             var expiresAt = await storage.GetAsync<long?>("expiresAt") ?? 0;
             if (expiresAt > Date.Now())
@@ -108,7 +103,7 @@ public sealed class RateGate
         return lease;
     }
 
-    public Task CompleteAsync(string token) => _state.Storage.TransactionAsync(async storage =>
+    public Task CompleteAsync(string token) => Ctx.Storage.TransactionAsync(async storage =>
     {
         var owner = await storage.GetAsync<string>("owner");
         if (owner != token)

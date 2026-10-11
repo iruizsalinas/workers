@@ -10,13 +10,13 @@ public sealed class RouterTests
             public static class Worker
             {
                 [Fetch]
-                public static Task<Response> Fetch(Request request, Env env, Context context) =>
+                public static Task<Response> Fetch(Request request, Env env, ExecutionContext context) =>
                     new Router()
                         .Use(Cors.Allow(credentials: true, origins: ["https://app.example"], headers: ["content-type"]))
                         .Use(async (request, route, next) =>
                         {
                             var response = await next();
-                            return new Response(response) { Headers = { ["x-router"] = "csharp" } };
+                            return new Response(response.Body, response) { Headers = { ["x-router"] = "csharp" } };
                         })
                         .OnError((error, request, route) => Response.Json(new { error = error.Message }, status: error.Status))
                         .Post("/json", async (request, route) => Response.Json(await request.JsonAsync<object>()))
@@ -41,7 +41,7 @@ public sealed class RouterTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     try { throw new HttpError(message: "missing", status: 404); }
                     catch (HttpError error)
@@ -68,7 +68,7 @@ public sealed class RouterTests
             public static class Worker
             {
                 [Fetch]
-                public static Task<Response> Fetch(Request request, Env env, Context context) =>
+                public static Task<Response> Fetch(Request request, Env env, ExecutionContext context) =>
                     new Router()
                         .Get("/users/{id:int}", (request, route) => new Response(route.Parameter("id")))
                         .Delete("/users/{id:int}", async (request, route) => new Response { Status = 204 })
@@ -100,7 +100,7 @@ public sealed class RouterTests
                     .Post("/items/{id:uuid}", SaveAsync);
 
                 [Fetch]
-                public static Task<Response> Fetch(Request request, Env env, Context context) =>
+                public static Task<Response> Fetch(Request request, Env env, ExecutionContext context) =>
                     Routes.HandleAsync(request, env, context);
 
                 private static Response Home(Request request, RouteContext route) => new Response("home");
@@ -108,7 +108,7 @@ public sealed class RouterTests
                 private static async Task<Response> SaveAsync(Request request, RouteContext route)
                 {
                     var id = route.Parameter("id").ToLowerInvariant();
-                    await route.Env.Kv("ITEMS").PutTextAsync(id, await request.TextAsync());
+                    await route.Env.KV("ITEMS").PutAsync(id, await request.TextAsync());
                     return new Response { Status = 201 };
                 }
             }
@@ -128,7 +128,7 @@ public sealed class RouterTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => new Response("ok");
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => new Response("ok");
             }
             """);
 
@@ -153,7 +153,7 @@ public sealed class RouterTests
             public static class Worker
             {
                 [Fetch]
-                public static Task<Response> Fetch(Request request, Env env, Context context) =>
+                public static Task<Response> Fetch(Request request, Env env, ExecutionContext context) =>
                     new Router().Get("{{pattern}}", (request, route) => new Response("ok")).HandleAsync(request, env, context);
             }
             """));
@@ -169,7 +169,7 @@ public sealed class RouterTests
             public static class Worker
             {
                 [Fetch]
-                public static Task<Response> Fetch(Request request, Env env, Context context) =>
+                public static Task<Response> Fetch(Request request, Env env, ExecutionContext context) =>
                     new Router().Get(env.Variable("ROUTE"), (request, route) => new Response("ok")).HandleAsync(request, env, context);
             }
             """));
@@ -185,7 +185,7 @@ public sealed class RouterTests
             public static class Worker
             {
                 [Fetch]
-                public static Task<Response> Fetch(Request request, Env env, Context context) =>
+                public static Task<Response> Fetch(Request request, Env env, ExecutionContext context) =>
                     new Router()
                         .Get("/users/{id}", (request, route) => new Response(route.Parameter("userId")))
                         .HandleAsync(request, env, context);
@@ -196,7 +196,7 @@ public sealed class RouterTests
             public static class Worker
             {
                 [Fetch]
-                public static Task<Response> Fetch(Request request, Env env, Context context) =>
+                public static Task<Response> Fetch(Request request, Env env, ExecutionContext context) =>
                     new Router().Get("/", Show).HandleAsync(request, env, context);
 
                 private static Response Show(Request request, RouteContext route) => new Response(route.Parameter("id"));
@@ -207,7 +207,7 @@ public sealed class RouterTests
             public static class Worker
             {
                 [Fetch]
-                public static Task<Response> Fetch(Request request, Env env, Context context) =>
+                public static Task<Response> Fetch(Request request, Env env, ExecutionContext context) =>
                     new Router().Fallback((request, route) => new Response(route.Parameter("id"))).HandleAsync(request, env, context);
             }
             """));

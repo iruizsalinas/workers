@@ -116,7 +116,6 @@ describe("examples", () => {
     expect(sendBatch.mock.calls[0][0]).toEqual([
       {
         body: { sensorId: "sensor-17", requestId: expect.any(String) },
-        contentType: "json",
       },
     ]);
   });

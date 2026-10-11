@@ -5,9 +5,21 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 internal sealed partial class JavaScriptEmitter
 {
     private static bool IsGeneratedInstanceType(INamedTypeSymbol type) =>
-        type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.DurableObjectAttribute")
-        || type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "Workers.WorkerEntrypointAttribute")
-        || type.BaseType?.ToDisplayString() is "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler";
+        type.BaseType?.ToDisplayString() is "Workers.DurableObject" or "Workers.WorkerEntrypoint"
+            or "Workers.HtmlElementHandler" or "Workers.HtmlDocumentHandler";
+
+    // Names the runtime calls as handlers. A Durable Object or entrypoint receives them only by overriding
+    // the base class handler, so its signature is checked; other methods must not compile to these names.
+    // Methods the runtime calls on each base class; a same-named RPC method would be invoked as a handler.
+    private static readonly HashSet<string> DurableObjectHandlerNames =
+    [
+        "fetch", "connect", "alarm", "webSocketMessage", "webSocketClose", "webSocketError"
+    ];
+
+    private static readonly HashSet<string> EntrypointHandlerNames =
+    [
+        "fetch", "connect", "scheduled", "queue", "email", "tail", "trace", "test"
+    ];
 
     private static bool IsIterator(MethodDeclarationSyntax method) =>
         method.DescendantNodes(node => node is not AnonymousFunctionExpressionSyntax and not LocalFunctionStatementSyntax)
@@ -22,13 +34,9 @@ internal sealed partial class JavaScriptEmitter
     private static void ValidateGeneratedClass(ClassDeclarationSyntax declaration, SemanticModel model, string typeName)
     {
         var type = model.GetDeclaredSymbol(declaration)!;
-        var expectedBase = type.GetAttributes().Any(attribute =>
-            attribute.AttributeClass?.ToDisplayString() == "Workers.DurableObjectAttribute")
-                ? "object"
-                : type.GetAttributes().Any(attribute =>
-                    attribute.AttributeClass?.ToDisplayString() == "Workers.WorkerEntrypointAttribute")
-                    ? "Workers.WorkerEntrypoint"
-                    : SupportedHtmlHandlerBase(type);
+        var expectedBase = type.BaseType?.ToDisplayString() is "Workers.DurableObject" or "Workers.WorkerEntrypoint"
+            ? type.BaseType.ToDisplayString()
+            : SupportedHtmlHandlerBase(type);
         var invalidType = type.IsAbstract
             || type.Arity != 0
             || type.ContainingType is not null
@@ -80,18 +88,19 @@ internal sealed partial class JavaScriptEmitter
 
     private static string GeneratedInstanceMethodName(IMethodSymbol method)
     {
-        var name = method.Name switch
-        {
-            "FetchAsync" => "fetch",
-            "AlarmAsync" => "alarm",
-            "WebSocketMessageAsync" => "webSocketMessage",
-            "WebSocketCloseAsync" => "webSocketClose",
-            "WebSocketErrorAsync" => "webSocketError",
-            var value => LowerNativeMethodName(value)
-        };
+        var name = LowerNativeMethodName(method.Name);
         if (name == "constructor")
             throw new NotSupportedException(
                 $"WRK118: Method '{method.ToDisplayString()}' compiles to the reserved JavaScript class method name 'constructor'.");
+        var handlers = method.ContainingType.BaseType?.ToDisplayString() switch
+        {
+            "Workers.DurableObject" => DurableObjectHandlerNames,
+            "Workers.WorkerEntrypoint" => EntrypointHandlerNames,
+            _ => null
+        };
+        if (!method.IsOverride && handlers?.Contains(name) == true)
+            throw new NotSupportedException(
+                $"WRK118: Method '{method.ToDisplayString()}' compiles to the runtime handler name '{name}'; override the base class handler instead.");
         return method.DeclaredAccessibility == Accessibility.Public ? name : "#" + name;
     }
 

@@ -5,21 +5,18 @@ namespace BatchAccumulator;
 public static class Worker
 {
     [Fetch]
-    public static Task<Response> FetchAsync(Request request, Env environment, Context context) =>
-        environment.DurableObject("ACCUMULATORS").GetByName(request.QueryParameters.Get("bucket") ?? "default").FetchAsync(request);
+    public static Task<Response> FetchAsync(Request request, Env environment, ExecutionContext context) =>
+        environment.DurableObject("ACCUMULATORS").GetByName(new Url(request.Url).SearchParams.Get("bucket") ?? "default").FetchAsync(request);
 }
 
-[DurableObject("BatchAccumulator")]
-public sealed class Accumulator
+public sealed class Accumulator : DurableObject
 {
-    private readonly DurableObjectState _state;
-    private readonly DurableObjectSqlStorage _sql;
+    private readonly SqlStorage _sql;
 
-    public Accumulator(DurableObjectState state, Env environment)
+    public Accumulator()
     {
-        _state = state;
-        _sql = state.Storage.Sql;
-        state.BlockConcurrencyWhileAsync(async () =>
+        _sql = Ctx.Storage.Sql;
+        Ctx.BlockConcurrencyWhileAsync(async () =>
         {
             _sql.Exec<object>("CREATE TABLE IF NOT EXISTS pending (id TEXT PRIMARY KEY, amount INTEGER NOT NULL, created_at INTEGER NOT NULL)");
             _sql.Exec<object>("CREATE TABLE IF NOT EXISTS totals (id INTEGER PRIMARY KEY, total INTEGER NOT NULL, batches INTEGER NOT NULL)");
@@ -28,29 +25,30 @@ public sealed class Accumulator
         });
     }
 
-    public async Task<Response> FetchAsync(Request request)
+    public override async Task<Response> FetchAsync(Request request)
     {
-        if (request.Method == "POST" && request.Path == "/add")
+        var path = new Url(request.Url).Pathname;
+        if (request.Method == "POST" && path == "/add")
         {
             var input = await request.JsonAsync<AddInput>();
             if (input is null || input.Amount == 0)
                 return Response.Json(new { error = "amount must be a non-zero integer" }, status: 400);
             var id = Crypto.RandomUuid();
-            _state.Storage.TransactionSync(() =>
+            Ctx.Storage.TransactionSync(() =>
             {
                 _sql.Exec<object>("INSERT INTO pending (id, amount, created_at) VALUES (?, ?, ?)", id, input.Amount, Date.Now());
-                _state.Storage.Kv.Put($"meta:{id}", new PendingMetadata(input.Amount, Date.Now()));
+                Ctx.Storage.Kv.Put($"meta:{id}", new PendingMetadata(input.Amount, Date.Now()));
             });
-            if (await _state.Storage.GetAlarmAsync() is null)
-                await _state.Storage.SetAlarmAsync(new Date(Date.Now() + 1000));
+            if (await Ctx.Storage.GetAlarmAsync() is null)
+                await Ctx.Storage.SetAlarmAsync(new Date(Date.Now() + 1000));
             return Response.Json(new { id, queued = true }, status: 202);
         }
 
-        if (request.Method == "GET" && request.Path == "/state")
+        if (request.Method == "GET" && path == "/state")
         {
             var totals = _sql.Exec<TotalsRow>("SELECT total, batches FROM totals WHERE id = 1").One();
             var pending = _sql.Exec<PendingRow>("SELECT id, amount, created_at AS createdAt FROM pending ORDER BY created_at").ToArray();
-            var metadata = _state.Storage.Kv.List<PendingMetadata>(new DurableObjectKvListOptions { Prefix = "meta:" });
+            var metadata = Ctx.Storage.Kv.List<PendingMetadata>(new SyncKvListOptions { Prefix = "meta:" });
             var metadataCount = 0;
             foreach (var entry in metadata)
                 metadataCount++;
@@ -61,24 +59,24 @@ public sealed class Accumulator
                 pending,
                 metadataCount,
                 databaseSize = _sql.DatabaseSize,
-                alarm = await _state.Storage.GetAlarmAsync()
+                alarm = await Ctx.Storage.GetAlarmAsync()
             });
         }
 
-        if (request.Method == "DELETE" && request.Path == "/reset")
+        if (request.Method == "DELETE" && path == "/reset")
         {
-            _state.Storage.TransactionSync(() =>
+            Ctx.Storage.TransactionSync(() =>
             {
                 _sql.Exec<object>("DELETE FROM pending");
                 _sql.Exec<object>("UPDATE totals SET total = 0, batches = 0 WHERE id = 1");
             });
-            await _state.Storage.DeleteAlarmAsync();
+            await Ctx.Storage.DeleteAlarmAsync();
             return new Response { Status = 204 };
         }
         return new Response("Not found") { Status = 404 };
     }
 
-    public async Task AlarmAsync()
+    public override async Task AlarmAsync(AlarmInvocationInfo alarmInfo)
     {
         var rows = _sql.Exec<PendingRow>("SELECT id, amount, created_at AS createdAt FROM pending ORDER BY created_at").ToArray();
         if (rows.Count == 0)
@@ -86,15 +84,15 @@ public sealed class Accumulator
         var delta = 0;
         foreach (var row in rows)
             delta += row.Amount;
-        _state.Storage.TransactionSync(() =>
+        Ctx.Storage.TransactionSync(() =>
         {
             _sql.Exec<object>("UPDATE totals SET total = total + ?, batches = batches + 1 WHERE id = 1", delta);
             _sql.Exec<object>("DELETE FROM pending");
-            _state.Storage.Kv.Put("lastBatch", new BatchMetadata(rows.Count, delta, Date.Now()));
+            Ctx.Storage.Kv.Put("lastBatch", new BatchMetadata(rows.Count, delta, Date.Now()));
         });
         foreach (var row in rows)
-            _state.Storage.Kv.Delete($"meta:{row.Id}");
-        await _state.Storage.SyncAsync();
+            Ctx.Storage.Kv.Delete($"meta:{row.Id}");
+        await Ctx.Storage.SyncAsync();
     }
 }
 

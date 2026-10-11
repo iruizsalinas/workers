@@ -7,12 +7,12 @@ public static class Worker
     [Fetch]
     public static async Task<Response> FetchAsync(
         Request request,
-        Env environment,
-        Context context)
+        Env env,
+        ExecutionContext ctx)
     {
-        await environment.Queue("JOBS").SendJsonAsync(new
+        await env.Queue("JOBS").SendAsync(new
         {
-            path = request.Path,
+            path = new Url(request.Url).Pathname,
             queuedAt = new Date()
         });
 

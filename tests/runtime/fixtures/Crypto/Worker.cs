@@ -3,13 +3,14 @@ using Workers;
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> Fetch(Request request, Env env, Context context)
+    public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
     {
-        var algorithm = request.QueryParameters.Get("algorithm") ?? "SHA-256";
+        var url = new Url(request.Url);
+        var algorithm = url.SearchParams.Get("algorithm") ?? "SHA-256";
         var data = await request.BytesAsync();
         try
         {
-            return request.Path switch
+            return url.Pathname switch
             {
                 "/digest" => await DigestAsync(algorithm, data),
                 "/encrypt" => await EncryptAsync(algorithm, data),
@@ -21,10 +22,10 @@ public static class Worker
                 "/kem" => await KemAsync(algorithm),
                 "/stream" => await StreamAsync(algorithm, data),
                 "/random" => Random(request),
-                "/errors" => await ErrorsAsync(request.QueryParameters.Get("case") ?? "usage"),
-                "/format" => await FormatAsync(algorithm, request.QueryParameters.Get("format") ?? "pkcs8"),
+                "/errors" => await ErrorsAsync(url.SearchParams.Get("case") ?? "usage"),
+                "/format" => await FormatAsync(algorithm, url.SearchParams.Get("format") ?? "pkcs8"),
                 "/stream-text" => await StreamTextAsync(),
-                "/stream-error" => await StreamErrorAsync(request.QueryParameters.Get("case") ?? "abort"),
+                "/stream-error" => await StreamErrorAsync(url.SearchParams.Get("case") ?? "abort"),
                 _ => new Response { Status = 404 }
             };
         }
@@ -43,9 +44,9 @@ public static class Worker
         };
         return Response.Json(new
         {
-            bytes = TextCodec.EncodeHex(await Crypto.DigestAsync(hash, data)),
-            subtle = TextCodec.EncodeHex(await Crypto.Subtle.DigestAsync(hash, data)),
-            text = TextCodec.EncodeHex(await Crypto.DigestAsync(hash, "héllo"))
+            bytes = Hex.Encode(await Crypto.DigestAsync(hash, data)),
+            subtle = Hex.Encode(await Crypto.Subtle.DigestAsync(hash, data)),
+            text = Hex.Encode(await Crypto.DigestAsync(hash, "héllo"))
         });
     }
 
@@ -134,8 +135,8 @@ public static class Worker
         }
         IEncryptionAlgorithm options = algorithm switch
         {
-            "AES-GCM" => new AesGcmParams { Iv = Crypto.RandomBytes(16), AdditionalData = [1, 2], TagLength = 128 },
-            "AES-CBC" => new AesCbcParams { Iv = Crypto.RandomBytes(16) },
+            "AES-GCM" => new AesGcmParams { Iv = Crypto.GetRandomValues(new byte[16]), AdditionalData = [1, 2], TagLength = 128 },
+            "AES-CBC" => new AesCbcParams { Iv = Crypto.GetRandomValues(new byte[16]) },
             "AES-CTR" => new AesCtrParams { Counter = new byte[16], Length = 64 },
             _ => new RsaOaepParams { Label = [3] }
         };
@@ -144,7 +145,7 @@ public static class Worker
         var jwk = await Crypto.Subtle.ExportJwkAsync(decryptKey);
         var imported = await Crypto.Subtle.ImportKeyAsync(jwk, ImportParameters(algorithm, DigestAlgorithm.Sha256, EcNamedCurve.P256), true, [CryptoKeyUsage.Decrypt]);
         var second = await Crypto.Subtle.DecryptAsync(options, imported, encrypted);
-        return Response.Json(new { encrypted = TextCodec.EncodeHex(encrypted), decrypted = TextCodec.EncodeHex(decrypted), imported = Crypto.TimingSafeEqual(second, data), jwk.Kty, usages = imported.Usages, name = imported.Algorithm.Name });
+        return Response.Json(new { encrypted = Hex.Encode(encrypted), decrypted = Hex.Encode(decrypted), imported = Crypto.Subtle.TimingSafeEqual(second, data), jwk.Kty, usages = imported.Usages, name = imported.Algorithm.Name });
     }
 
     private static async Task<Response> SignAsync(string algorithm, byte[] data, bool context)
@@ -153,7 +154,7 @@ public static class Worker
         CryptoKey publicKey;
         if (algorithm == "HMAC")
         {
-            privateKey = await Crypto.Subtle.ImportKeyAsync(CryptoBinaryKeyFormat.Raw, TextCodec.EncodeUtf8("secret"),
+            privateKey = await Crypto.Subtle.ImportKeyAsync(CryptoBinaryKeyFormat.Raw, new TextEncoder().Encode("secret"),
                 new HmacKeyParams { Hash = DigestAlgorithm.Sha256 }, true, [CryptoKeyUsage.Sign, CryptoKeyUsage.Verify]);
             publicKey = privateKey;
         }
@@ -167,7 +168,7 @@ public static class Worker
         var options = SignParameters(algorithm, context ? new byte[] { 1, 2, 3 } : null);
         var signature = await Crypto.Subtle.SignAsync(options, privateKey, data);
         var valid = await Crypto.Subtle.VerifyAsync(options, publicKey, signature, data);
-        var invalid = await Crypto.Subtle.VerifyAsync(options, publicKey, signature, TextCodec.EncodeUtf8("tampered"));
+        var invalid = await Crypto.Subtle.VerifyAsync(options, publicKey, signature, new TextEncoder().Encode("tampered"));
         var jwk = await Crypto.Subtle.ExportJwkAsync(publicKey);
         var importParameters = ImportParameters(algorithm, DigestAlgorithm.Sha256, EcNamedCurve.P256);
         var imported = await Crypto.Subtle.ImportKeyAsync(jwk, importParameters, true, [CryptoKeyUsage.Verify]);
@@ -179,8 +180,8 @@ public static class Worker
         var hashed = algorithm == "HMAC" || algorithm.StartsWith("RSA");
         return Response.Json(new
         {
-            valid, invalid, importedValid, binaryValid, signature = TextCodec.EncodeHex(signature), jwk, algorithm = privateKey.Algorithm,
-            publicExponent = privateKey.Algorithm.PublicExponent is { } exponent ? TextCodec.EncodeHex(exponent) : null,
+            valid, invalid, importedValid, binaryValid, signature = Hex.Encode(signature), jwk, algorithm = privateKey.Algorithm,
+            publicExponent = privateKey.Algorithm.PublicExponent is { } exponent ? Hex.Encode(exponent) : null,
             privateKey.Type, privateKey.Extractable,
             hashMatches = hashed ? privateKey.Algorithm.Hash == DigestAlgorithm.Sha256 : privateKey.Algorithm.Hash is null
         });
@@ -203,17 +204,17 @@ public static class Worker
         }
         else
         {
-            var salt = TextCodec.EncodeUtf8("salt");
+            var salt = new TextEncoder().Encode("salt");
             IKeyImportAlgorithm baseKey = algorithm == "HKDF" ? new HkdfKeyParams() : new Pbkdf2KeyParams();
             options = algorithm == "HKDF"
-                ? new HkdfParams { Hash = DigestAlgorithm.Sha256, Salt = salt, Info = TextCodec.EncodeUtf8("info") }
+                ? new HkdfParams { Hash = DigestAlgorithm.Sha256, Salt = salt, Info = new TextEncoder().Encode("info") }
                 : new Pbkdf2Params { Hash = DigestAlgorithm.Sha256, Salt = salt, Iterations = 2 };
-            key = await Crypto.Subtle.ImportKeyAsync(CryptoBinaryKeyFormat.Raw, TextCodec.EncodeUtf8("password"), baseKey, false, [CryptoKeyUsage.DeriveBits, CryptoKeyUsage.DeriveKey]);
+            key = await Crypto.Subtle.ImportKeyAsync(CryptoBinaryKeyFormat.Raw, new TextEncoder().Encode("password"), baseKey, false, [CryptoKeyUsage.DeriveBits, CryptoKeyUsage.DeriveKey]);
         }
         var bits = await Crypto.Subtle.DeriveBitsAsync(options, key, 256);
         var derived = await Crypto.Subtle.DeriveKeyAsync(options, key, new AesKeyParams { Name = AesAlgorithm.AesGcm, Length = 256 }, true, [CryptoKeyUsage.Encrypt]);
         var exported = await Crypto.Subtle.ExportKeyAsync(CryptoBinaryKeyFormat.Raw, derived);
-        return Response.Json(new { bits = TextCodec.EncodeHex(bits), same = Crypto.TimingSafeEqual(bits, exported), peers = peerSecret is null || Crypto.TimingSafeEqual(bits, peerSecret), length = derived.Algorithm.Length });
+        return Response.Json(new { bits = Hex.Encode(bits), same = Crypto.Subtle.TimingSafeEqual(bits, exported), peers = peerSecret is null || Crypto.Subtle.TimingSafeEqual(bits, peerSecret), length = derived.Algorithm.Length });
     }
 
     private static async Task<Response> WrapAsync(string algorithm, CryptoKeyFormat format)
@@ -235,7 +236,7 @@ public static class Worker
         var options = WrapParameters(algorithm);
         var wrapped = await Crypto.Subtle.WrapKeyAsync(format, key, wrapping, options);
         var unwrapped = await Crypto.Subtle.UnwrapKeyAsync(format, wrapped, unwrapping, options, new AesKeyParams { Name = AesAlgorithm.AesGcm }, true, [CryptoKeyUsage.Encrypt, CryptoKeyUsage.Decrypt]);
-        return Response.Json(new { same = Crypto.TimingSafeEqual(await Crypto.Subtle.ExportKeyAsync(CryptoBinaryKeyFormat.Raw, key), await Crypto.Subtle.ExportKeyAsync(CryptoBinaryKeyFormat.Raw, unwrapped)), unwrapped.Extractable, usages = unwrapped.Usages });
+        return Response.Json(new { same = Crypto.Subtle.TimingSafeEqual(await Crypto.Subtle.ExportKeyAsync(CryptoBinaryKeyFormat.Raw, key), await Crypto.Subtle.ExportKeyAsync(CryptoBinaryKeyFormat.Raw, unwrapped)), unwrapped.Extractable, usages = unwrapped.Usages });
     }
 
     private static async Task<Response> KemAsync(string algorithm)
@@ -251,8 +252,8 @@ public static class Worker
         var jwk = await Crypto.Subtle.ExportJwkAsync(pair.PublicKey);
         return Response.Json(new
         {
-            sameBits = Crypto.TimingSafeEqual(encapsulated.SharedKey, decapsulated),
-            sameKey = Crypto.TimingSafeEqual(await Crypto.Subtle.ExportKeyAsync(CryptoBinaryKeyFormat.Raw, keys.SharedKey), await Crypto.Subtle.ExportKeyAsync(CryptoBinaryKeyFormat.Raw, shared)),
+            sameBits = Crypto.Subtle.TimingSafeEqual(encapsulated.SharedKey, decapsulated),
+            sameKey = Crypto.Subtle.TimingSafeEqual(await Crypto.Subtle.ExportKeyAsync(CryptoBinaryKeyFormat.Raw, keys.SharedKey), await Crypto.Subtle.ExportKeyAsync(CryptoBinaryKeyFormat.Raw, shared)),
             publicType = publicKey.Type, isPublic = publicKey.Type == CryptoKeyType.Public, jwk,
             supported = SubtleCrypto.Supports(CryptoOperation.EncapsulateBits, parameters),
             supportedKey = SubtleCrypto.Supports(CryptoOperation.EncapsulateKey, parameters, secretAlgorithm),
@@ -269,26 +270,26 @@ public static class Worker
             "CRC32C" => DigestStreamAlgorithm.Crc32C, "CRC64NVME" => DigestStreamAlgorithm.Crc64Nvme,
             _ => DigestStreamAlgorithm.Sha256
         };
-        using var stream = Crypto.CreateDigestStream(hash);
+        using var stream = new DigestStream(hash);
         var writer = stream.GetWriter();
         await writer.WriteAsync(data);
         await writer.CloseAsync();
         var bytesWritten = stream.BytesWritten;
-        var digest = await stream.DigestAsync();
-        return Response.Json(new { hex = TextCodec.EncodeHex(digest), bytesWritten, same = Crypto.TimingSafeEqual(digest, await stream.DigestAsync()) });
+        var digest = await stream.Digest;
+        return Response.Json(new { hex = Hex.Encode(digest), bytesWritten, same = Crypto.Subtle.TimingSafeEqual(digest, await stream.Digest) });
     }
 
     private static Response Random(Request request)
     {
-        var count = int.Parse(request.QueryParameters.Get("count") ?? "16");
+        var count = int.Parse(new Url(request.Url).SearchParams.Get("count") ?? "16");
         var bytes = new byte[count];
         var filled = Crypto.GetRandomValues(bytes);
-        return Response.Json(new { count = filled.Length, same = Crypto.TimingSafeEqual(bytes, filled), sameReference = bytes == filled });
+        return Response.Json(new { count = filled.Length, same = Crypto.Subtle.TimingSafeEqual(bytes, filled), sameReference = bytes == filled });
     }
 
     private static async Task<Response> ErrorsAsync(string scenario)
     {
-        if (scenario == "timing") return Response.Json(Crypto.TimingSafeEqual(new byte[1], new byte[2]));
+        if (scenario == "timing") return Response.Json(Crypto.Subtle.TimingSafeEqual(new byte[1], new byte[2]));
         var key = await Crypto.Subtle.GenerateKeyAsync(new HmacKeyParams { Hash = DigestAlgorithm.Sha256 }, false, [CryptoKeyUsage.Verify]);
         if (scenario == "export") return Response.Json(await Crypto.Subtle.ExportJwkAsync(key));
         if (scenario == "iv")
@@ -319,24 +320,24 @@ public static class Worker
             : (isPublic ? new[] { CryptoKeyUsage.Verify } : new[] { CryptoKeyUsage.Sign });
         var bytes = await Crypto.Subtle.ExportKeyAsync(binaryFormat, key);
         var imported = await Crypto.Subtle.ImportKeyAsync(binaryFormat, bytes, ImportParameters(algorithm, DigestAlgorithm.Sha384, EcNamedCurve.P384), true, keyUsages);
-        return Response.Json(new { same = Crypto.TimingSafeEqual(bytes, await Crypto.Subtle.ExportKeyAsync(binaryFormat, imported)), imported.Type, usages = imported.Usages, supported = SubtleCrypto.Supports(CryptoOperation.GenerateKey, parameters) });
+        return Response.Json(new { same = Crypto.Subtle.TimingSafeEqual(bytes, await Crypto.Subtle.ExportKeyAsync(binaryFormat, imported)), imported.Type, usages = imported.Usages, supported = SubtleCrypto.Supports(CryptoOperation.GenerateKey, parameters) });
     }
 
     private static async Task<Response> StreamTextAsync()
     {
-        using var stream = Crypto.CreateDigestStream(DigestStreamAlgorithm.Sha256, new DigestStreamOptions { ToWellFormed = true });
+        using var stream = new DigestStream(DigestStreamAlgorithm.Sha256, new DigestStreamOptions { ToWellFormed = true });
         var writer = stream.GetWriter();
         await writer.WriteAsync("\ud83d");
         await writer.WriteAsync("\ude00");
         await writer.WriteAsync("\ud800");
         await writer.CloseAsync();
-        return Response.Json(new { hex = TextCodec.EncodeHex(await stream.DigestAsync()), count = stream.BytesWritten });
+        return Response.Json(new { hex = Hex.Encode(await stream.Digest), count = stream.BytesWritten });
     }
 
     private static async Task<Response> StreamErrorAsync(string scenario)
     {
-        var stream = Crypto.CreateDigestStream(DigestStreamAlgorithm.Sha256);
-        var rejected = RejectedAsync(stream.DigestAsync());
+        var stream = new DigestStream(DigestStreamAlgorithm.Sha256);
+        var rejected = RejectedAsync(stream.Digest);
         if (scenario == "dispose") stream.Dispose();
         else if (scenario == "writer") await stream.GetWriter().AbortAsync("cancelled");
         else await stream.AbortAsync("cancelled");

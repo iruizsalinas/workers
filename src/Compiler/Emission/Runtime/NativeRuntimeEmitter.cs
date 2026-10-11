@@ -21,7 +21,7 @@ internal sealed partial class JavaScriptEmitter
         {
             "Workers.Json" when method.Name == "Stringify" => $"JSON.stringify({values})",
             "Workers.Json" when method.Name == "Parse" => NativeJsonRead(method, $"JSON.parse({values})", source),
-            "Workers.JsonValue" => method.Name switch
+            "Workers.JsonValue" when !method.IsStatic => method.Name switch
             {
                 "AsString" or "AsNumber" or "AsBoolean" =>
                     $"{_helpers.Require(JavaScriptHelper.JsonExpect)}({receiver}, \"{method.Name[2..].ToLowerInvariant()}\")",
@@ -50,16 +50,21 @@ internal sealed partial class JavaScriptEmitter
                 _ => $"{receiver}.{LowerFirst(method.Name)}({values})"
             },
             "Workers.Log" => $"console.{LowerFirst(method.Name)}({values})",
-            "Workers.Url" when method.Name == "EncodeComponent" => $"encodeURIComponent({values})",
-            "Workers.Url" when method.Name == "DecodeComponent" => $"decodeURIComponent({values})",
-            "Workers.Timers" when method.Name == "WaitAsync" =>
+            "Workers.Url" => method.Name switch
+            {
+                "EncodeComponent" => $"encodeURIComponent({values})",
+                "DecodeComponent" => $"decodeURIComponent({values})",
+                "CanParse" or "Parse" => $"URL.{LowerFirst(method.Name)}({arguments[0]}{(arguments.Length > 1 ? $", {arguments[1]} ?? undefined" : "")})",
+                _ => ""
+            },
+            "Workers.Scheduler" when method.Name == "WaitAsync" =>
                 $"scheduler.wait({arguments[0]}{(arguments.Length > 1 ? $", {{ signal: {arguments[1]} ?? undefined }}" : "")})",
             "Workers.Crypto" when method.Name == "RandomUuid" => "globalThis.crypto.randomUUID()",
-            "Workers.TextCodec" when method.Name == "EncodeUtf8" => $"new TextEncoder().encode({values})",
-            "Workers.TextCodec" when method.Name == "EncodeBase64" => $"({arguments[0]}).toBase64()",
-            "Workers.TextCodec" when method.Name == "DecodeBase64" => $"Uint8Array.fromBase64({arguments[0]})",
-            "Workers.TextCodec" when method.Name == "EncodeHex" => $"({arguments[0]}).toHex()",
-            "Workers.TextCodec" when method.Name == "DecodeHex" => $"Uint8Array.fromHex({arguments[0]})",
+            "Workers.JsonValue" when method.Name == "From" => arguments[0],
+            "Workers.Base64" => method.Name == "Encode"
+                ? $"({arguments[0]}).toBase64({{ alphabet: {(arguments.Length > 1 ? arguments[1] : "\"base64\"")}, omitPadding: {(arguments.Length > 2 ? arguments[2] : "false")} }})"
+                : $"Uint8Array.fromBase64({arguments[0]}, {{ alphabet: {(arguments.Length > 1 ? arguments[1] : "\"base64\"")} }})",
+            "Workers.Hex" => method.Name == "Encode" ? $"({arguments[0]}).toHex()" : $"Uint8Array.fromHex({arguments[0]})",
             _ => ""
         };
         return result.Length != 0;
@@ -89,6 +94,9 @@ internal sealed partial class JavaScriptEmitter
             "Workers.JsonWebKey" when property.Name == "KeyOps" => $"{receiver}.key_ops",
             "Workers.CryptoKeyAlgorithm" when property.Name == "Hash" => $"({receiver}.hash?.name ?? null)",
             "Workers.CryptoKeyAlgorithm" when property.Name == "PublicExponent" => $"(value => value == null ? null : new Uint8Array(value))({receiver}.publicExponent)",
+            "Workers.TextDecoder" when property.Name == "IgnoreBom" => $"{receiver}.ignoreBOM",
+            "Workers.DigestStream" when property.Name == "Digest" => $"{receiver}.digest.then(value => new Uint8Array(value))",
+            "Workers.ExecOutput" when property.Name is "Stdout" or "Stderr" => $"new Uint8Array({receiver}.{LowerFirst(property.Name)})",
             "Workers.EncapsulatedBits" => $"new Uint8Array({receiver}.{LowerFirst(property.Name)})",
             "Workers.EncapsulatedKey" when property.Name == "Ciphertext" => $"new Uint8Array({receiver}.ciphertext)",
             "Workers.JsonValue" => property.Name switch
@@ -100,8 +108,19 @@ internal sealed partial class JavaScriptEmitter
             },
             "Workers.AbortController" or "Workers.AbortSignal" or "Workers.RegExp" or "Workers.RegExpMatch" =>
                 $"{receiver}.{LowerFirst(property.Name)}",
-            "Workers.Request" when property.Name == "Signal" => $"{receiver}.signal",
             _ => null
         };
     }
+
+    // Values of runtime enums, which cross into JavaScript as the strings the platform expects.
+    private static string? NativeEnumValue(string type, string name) => type switch
+    {
+        "Workers.RedirectMode" or "Workers.ResponseBodyEncoding" or "Workers.ResponseType" or "Workers.R2ListInclude"
+            or "Workers.VectorizeMetadataRetrievalLevel" => LowerFirst(name),
+        "Workers.SecureTransport" or "Workers.QueueContentType" or "Workers.Base64Alphabet" => name.ToLowerInvariant(),
+        "Workers.RequestCache" => name switch { "NoStore" => "no-store", "NoCache" => "no-cache", _ => null },
+        "Workers.CompressionFormat" => name switch { "Gzip" => "gzip", "Deflate" => "deflate", "DeflateRaw" => "deflate-raw", _ => null },
+        "Workers.D1SessionConstraint" => name switch { "FirstPrimary" => "first-primary", "FirstUnconstrained" => "first-unconstrained", _ => null },
+        _ => null
+    };
 }

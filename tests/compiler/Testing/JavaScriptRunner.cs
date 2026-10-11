@@ -14,7 +14,7 @@ internal static class JavaScriptRunner
         try
         {
             var path = Path.Combine(directory.FullName, "worker.mjs");
-            File.WriteAllText(path, module);
+            System.IO.File.WriteAllText(path, module);
             var start = new ProcessStartInfo("node")
             {
                 RedirectStandardOutput = true,

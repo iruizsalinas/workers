@@ -9,7 +9,7 @@ public static class Worker
         .Use(async (request, route, next) =>
         {
             var response = await next();
-            return new Response(response) { Headers = { ["x-body-policy"] = "bounded" } };
+            return new Response(response.Body, response) { Headers = { ["x-body-policy"] = "bounded" } };
         })
         .Post("/json/{limit:int}", async (request, route) =>
             Response.Json(await request.JsonAsync<Input>(maxBytes: int.Parse(route.Parameter("limit")))))
@@ -21,7 +21,7 @@ public static class Worker
         .Post("/twice/{kind}/{limit:int}", TwiceAsync);
 
     [Fetch]
-    public static Task<Response> FetchAsync(Request request, Env env, Context context) =>
+    public static Task<Response> FetchAsync(Request request, Env env, ExecutionContext context) =>
         Routes.HandleAsync(request, env, context);
 
     private static async Task<Response> ReadAsync(Request request, string kind, int limit) => kind switch

@@ -10,7 +10,7 @@ public sealed class ResponseTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var response = new Response(request.Body)
                     {
@@ -19,7 +19,7 @@ public sealed class ResponseTests
                         EncodeBody = ResponseBodyEncoding.Manual,
                         Cf = new { example = true }
                     };
-                    var pair = WebSocketPair.Create();
+                    var pair = new WebSocketPair();
                     pair.Server.Accept();
                     return new Response { Status = 101, WebSocket = pair.Client };
                 }
@@ -38,7 +38,7 @@ public sealed class ResponseTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var headers = new Headers { ["x-example"] = "original" };
                     var response = new Response("Hello")
@@ -86,7 +86,7 @@ public sealed class ResponseTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var fetched = await Http.FetchAsync("data:text/plain,fetched");
                     var rejected = false;
@@ -95,7 +95,7 @@ public sealed class ResponseTests
                     catch (Exception) { rejected = true; }
                     try { fetched.Clone().Headers.Set("x-example", "value"); }
                     catch (Exception) { cloneRejected = true; }
-                    var writable = new Response(fetched) { Headers = { ["x-example"] = "value" } };
+                    var writable = new Response(fetched.Body, fetched) { Headers = { ["x-example"] = "value" } };
                     var source = new Response("shared");
                     var independent = source.Clone();
                     var shared = new Response(source.Body, source);
@@ -126,18 +126,20 @@ public sealed class ResponseTests
     }
 
     [Fact]
-    public void CopyConstructorEvaluatesItsSourceOnceAndKeepsItsSettings()
+    public void ReconstructionKeepsSourceSettingsWithAsyncInitializers()
     {
         var result = JavaScriptRunner.FetchJson("""
             using Workers;
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var calls = new int[1];
-                    var plain = new Response(Create(calls));
-                    var initialized = new Response(Create(calls)) { Headers = { ["x-added"] = await ValueAsync() } };
+                    var first = Create(calls);
+                    var plain = new Response(first.Body, first);
+                    var second = Create(calls);
+                    var initialized = new Response(second.Body, second) { Headers = { ["x-added"] = await ValueAsync() } };
                     return Response.Json(new
                     {
                         calls = calls[0],
@@ -172,11 +174,11 @@ public sealed class ResponseTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var redirect = Response.Redirect("/login");
                     redirect.Cookies.Delete("session");
-                    var permanent = Response.Redirect(status: 308, location: "https://example.test/");
+                    var permanent = Response.Redirect(status: 308, url: "https://example.test/");
                     var invalid = false;
                     try { Response.Redirect("/", 200); }
                     catch (Exception) { invalid = true; }
@@ -209,7 +211,7 @@ public sealed class ResponseTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     BodyInit text = "hello";
                     BodyInit bytes = new byte[] { 65, 66 };
@@ -256,7 +258,7 @@ public sealed class ResponseTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var events = new List<string>();
                     var router = new Router().Get("/", (req, route) => new Response(Record(events, "body"))
@@ -289,7 +291,7 @@ public sealed class ResponseTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var events = new List<string>();
                     var source = new Response("original")
@@ -297,7 +299,7 @@ public sealed class ResponseTests
                         Status = 202, StatusText = "Accepted",
                         Headers = { ["x-source"] = "original", ["x-retained"] = "retained" }
                     };
-                    var response = new Response(source: Source(events, source), body: Record(events, "body"))
+                    var response = new Response(init: Source(events, source), body: Record(events, "body"))
                     {
                         Headers = { [Record(events, "x-source")] = await ValueAsync(events) },
                         Status = 201
@@ -335,7 +337,7 @@ public sealed class ResponseTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var response = new Response("Hello") { Status = 201, Headers = { ["x-example"] = "value" } };
                     response.Status = 202;

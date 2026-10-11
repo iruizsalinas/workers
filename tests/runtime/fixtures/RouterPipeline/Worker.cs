@@ -5,13 +5,14 @@ namespace RouterPipeline;
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> FetchAsync(Request request, Env env, Context context)
+    public static async Task<Response> FetchAsync(Request request, Env env, ExecutionContext context)
     {
-        if (request.Path.StartsWith("/config/"))
+        var path = new Url(request.Url).Pathname;
+        if (path.StartsWith("/config/"))
         {
             try
             {
-                switch (request.Path)
+                switch (path)
                 {
                     case "/config/credentials": Cors.Allow(["*"], credentials: true); break;
                     case "/config/origin": Cors.Allow(["https://app.example/path"]); break;
@@ -34,24 +35,24 @@ public static class Worker
         var trace = "";
         var hits = 0;
         var router = new Router()
-            .Use(Cors.Allow(origins: request.Path == "/wildcard" ? ["*"] : ["https://app.example", "https://second.example"],
-                methods: ["GET", "HEAD", "POST"], credentials: request.Path != "/wildcard",
+            .Use(Cors.Allow(origins: path == "/wildcard" ? ["*"] : ["https://app.example", "https://second.example"],
+                methods: ["GET", "HEAD", "POST"], credentials: path != "/wildcard",
                 headers: ["Content-Type", "Authorization"], exposedHeaders: ["x-trace"], maxAge: 600))
             .Use(async (request, route, next) =>
             {
                 trace += "outer>";
                 var response = await next();
                 trace += "<outer";
-                return new Response(response) { Headers = { ["x-trace"] = trace, ["x-hits"] = hits.ToString() }};
+                return new Response(response.Body, response) { Headers = { ["x-trace"] = trace, ["x-hits"] = hits.ToString() }};
             })
             .Use(async (request, route, next) =>
             {
                 trace += "inner>";
-                if (request.Path == "/private" && request.Headers.Get("authorization") != "Bearer good")
+                if (path == "/private" && request.Headers.Get("authorization") != "Bearer good")
                     throw new HttpError(401, "Unauthorized");
-                if (request.Path == "/short") return new Response("short") { Status = 202 };
+                if (path == "/short") return new Response("short") { Status = 202 };
                 var response = await next();
-                if (request.Path == "/double-next") await next();
+                if (path == "/double-next") await next();
                 trace += "<inner";
                 return response;
             })
@@ -88,14 +89,14 @@ public static class Worker
                 return error is HttpError http ? new Response(http.Message) { Status = http.Status } : new Response { Status = 500 };
             })
             .Get("/downstream-cors", (request, route) => new Response("ok") { Headers = { ["access-control-allow-origin"] = "*", ["access-control-allow-credentials"] = "true" }})
-            .Get("/stream", (request, route) => new Response(ReadableStream.FromAsyncEnumerable(Chunks())))
+            .Get("/stream", (request, route) => new Response(ReadableStream.From(Chunks())))
             .Options("/options", (request, route) => new Response("ordinary options"));
 
-        if (request.Path is "/custom" or "/custom-unexpected") router.OnError(FormatError);
-        if (request.Path == "/broken-error-handler") router.OnError(BrokenFormatter);
-        if (request.Path == "/async-error-handler") router.OnError(async (error, request, route) =>
+        if (path is "/custom" or "/custom-unexpected") router.OnError(FormatError);
+        if (path == "/broken-error-handler") router.OnError(BrokenFormatter);
+        if (path == "/async-error-handler") router.OnError(async (error, request, route) =>
         {
-            await Timers.WaitAsync(1);
+            await Scheduler.WaitAsync(1);
             return Response.Json(new { error = error.Message }, status: error.Status, headers: new Headers { ["x-async"] = "true" });
         });
         return await router.HandleAsync(request, env, context);
@@ -104,10 +105,10 @@ public static class Worker
     private static Response FormatError(RouterError error, Request request, RouteContext route)
     {
         Log.Error(error.Exception.Message);
-        return Response.Json(new { error = error.Message, path = request.Path }, status: error.Status);
+        return Response.Json(new { error = error.Message, path = new Url(request.Url).Pathname }, status: error.Status);
     }
 
-    private static Response Fail(Request request, RouteContext route) => request.Path switch
+    private static Response Fail(Request request, RouteContext route) => new Url(request.Url).Pathname switch
     {
         "/http-error" => throw new HttpError(404, "Note not found"),
         "/custom" => throw new HttpError(409, "Conflict"),
@@ -121,9 +122,9 @@ public static class Worker
 
     private static async IAsyncEnumerable<ReadOnlyMemory<byte>> Chunks()
     {
-        yield return TextCodec.EncodeUtf8("one");
-        await Timers.WaitAsync(1);
-        yield return TextCodec.EncodeUtf8("two");
+        yield return new TextEncoder().Encode("one");
+        await Scheduler.WaitAsync(1);
+        yield return new TextEncoder().Encode("two");
     }
 }
 

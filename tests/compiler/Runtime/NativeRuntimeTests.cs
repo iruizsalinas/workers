@@ -10,7 +10,7 @@ public sealed class NativeRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context)
+                public static Response Fetch(Request request, Env env, ExecutionContext context)
                 {
                     var value = Json.Parse("{\"name\":\"Ada\"}");
                     var date = new Date(Date.Utc(2024, 1, 29));
@@ -61,7 +61,7 @@ public sealed class NativeRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => Response.Json({{expression}});
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => Response.Json({{expression}});
             }
             """));
         Assert.Contains("WRK105", error.Message);
@@ -75,9 +75,9 @@ public sealed class NativeRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context)
                 {
-                    await Timers.WaitAsync(1, request.Signal);
+                    await Scheduler.WaitAsync(1, request.Signal);
                     return new Response("ok");
                 }
             }
@@ -99,7 +99,7 @@ public sealed class NativeRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => Response.Json(new User("Ada"));
+                public static Response Fetch(Request request, Env env, ExecutionContext context) => Response.Json(new User("Ada"));
             }
             """));
         Assert.Contains("WRK119", error.Message);
@@ -114,7 +114,7 @@ public sealed class NativeRuntimeTests
             public static class Worker
             {
                 [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context) =>
+                public static async Task<Response> Fetch(Request request, Env env, ExecutionContext context) =>
                     Response.Json(await request.JsonAsync<Event>());
             }
             """));

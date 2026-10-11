@@ -13,15 +13,39 @@ public sealed partial class RuntimeApiConformanceTests
     // Workers API types and the runtime declarations that implement them.
     private static readonly Dictionary<string, string> RuntimeTypeNames = new()
     {
-        ["Workers.Context"] = "ExecutionContext",
+        ["Workers.ExecutionContext"] = "ExecutionContext",
+        ["Workers.ScheduledController"] = "ScheduledController",
+        ["Workers.MessageBatch<T>"] = "MessageBatch",
+        ["Workers.Message<T>"] = "Message",
+        ["Workers.ForwardableEmailMessage"] = "ForwardableEmailMessage",
+        ["Workers.TraceItem"] = "TraceItem",
+        ["Workers.TraceItemFetchEventInfo"] = "TraceItemFetchEventInfo",
+        ["Workers.TraceItemFetchEventInfoRequest"] = "TraceItemFetchEventInfoRequest",
+        ["Workers.TraceItemFetchEventInfoResponse"] = "TraceItemFetchEventInfoResponse",
+        ["Workers.TraceLog"] = "TraceLog",
+        ["Workers.TraceException"] = "TraceException",
+        ["Workers.AlarmInvocationInfo"] = "AlarmInvocationInfo",
         ["Workers.Request"] = "Request",
         ["Workers.Response"] = "Response",
         ["Workers.Headers"] = "Headers",
-        ["Workers.QueryParameters"] = "URLSearchParams",
+        ["Workers.Url"] = "URL",
+        ["Workers.UrlSearchParams"] = "URLSearchParams",
+        ["Workers.FormData"] = "FormData",
+        ["Workers.Blob"] = "Blob",
+        ["Workers.File"] = "File",
+        ["Workers.IncomingRequestCfProperties"] = "IncomingRequestCfPropertiesBase|IncomingRequestCfPropertiesGeographicInformation|IncomingRequestCfPropertiesBotManagement",
+        ["Workers.IncomingRequestCfPropertiesBotManagementBase"] = "IncomingRequestCfPropertiesBotManagementBase",
         ["Workers.ReadableStream"] = "ReadableStream",
-        ["Workers.ReadableStreamReader"] = "ReadableStreamDefaultReader",
+        ["Workers.ReadableStreamDefaultReader"] = "ReadableStreamDefaultReader",
         ["Workers.WritableStream"] = "WritableStream",
-        ["Workers.WritableStreamWriter"] = "WritableStreamDefaultWriter",
+        ["Workers.WritableStreamDefaultWriter"] = "WritableStreamDefaultWriter",
+        ["Workers.TransformStream"] = "TransformStream",
+        ["Workers.IdentityTransformStream"] = "IdentityTransformStream",
+        ["Workers.FixedLengthStream"] = "FixedLengthStream",
+        ["Workers.CompressionStream"] = "CompressionStream",
+        ["Workers.DecompressionStream"] = "DecompressionStream",
+        ["Workers.TextEncoder"] = "TextEncoder",
+        ["Workers.TextDecoder"] = "TextDecoder",
         ["Workers.DigestStream"] = "DigestStream",
         ["Workers.Crypto"] = "Crypto",
         ["Workers.SubtleCrypto"] = "SubtleCrypto",
@@ -56,55 +80,114 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.HkdfParams"] = "SubtleCryptoDeriveKeyAlgorithm",
         ["Workers.EcdhKeyDeriveParams"] = "SubtleCryptoDeriveKeyAlgorithm",
         ["Workers.DigestStreamOptions"] = "DigestStreamOptions",
-        ["Workers.TcpSocket"] = "Socket",
+        ["Workers.Socket"] = "Socket",
+        ["Workers.SocketInfo"] = "SocketInfo",
+        ["Workers.SocketAddress"] = "SocketAddress",
+        ["Workers.SocketOptions"] = "SocketOptions",
         ["Workers.WebSocket"] = "WebSocket",
-        ["Workers.ScheduledEvent"] = "ScheduledController",
-        ["Workers.QueueMessage<T>"] = "Message",
-        ["Workers.QueueMessageBatch<T>"] = "MessageBatch",
-        ["Workers.ForwardableEmailMessage"] = "ForwardableEmailMessage",
+        ["Workers.CloseEvent"] = "CloseEvent",
+        ["Workers.ErrorEvent"] = "ErrorEvent",
+        ["Workers.WebSocketRequestResponsePair"] = "WebSocketRequestResponsePair",
         ["Workers.HtmlRewriter"] = "HTMLRewriter",
         ["Workers.HtmlElement"] = "Element",
         ["Workers.HtmlEndTag"] = "EndTag",
-        ["Workers.HtmlTextChunk"] = "Text",
+        ["Workers.HtmlText"] = "Text",
         ["Workers.HtmlComment"] = "Comment",
+        ["Workers.HtmlDoctype"] = "Doctype",
         ["Workers.HtmlDocumentEnd"] = "DocumentEnd",
-        ["Workers.ICache"] = "Cache",
-        ["Workers.IFetcherBinding"] = "Fetcher",
-        ["Workers.IKvNamespace"] = "KVNamespace",
-        ["Workers.IR2Bucket"] = "R2Bucket",
+        ["Workers.HtmlContentOptions"] = "ContentOptions",
+        ["Workers.Cache"] = "Cache",
+        ["Workers.CacheQueryOptions"] = "CacheQueryOptions",
+        ["Workers.RequestInit"] = "RequestInit",
+        ["Workers.RequestInitCfProperties"] = "RequestInitCfProperties",
+        ["Workers.StreamPipeOptions"] = "StreamPipeOptions",
+        ["Workers.Fetcher"] = "Fetcher",
+        ["Workers.DispatchNamespace"] = "DispatchNamespace",
+        ["Workers.KVNamespace"] = "KVNamespace",
+        ["Workers.KVNamespaceGetOptions"] = "KVNamespaceGetOptions",
+        ["Workers.KVNamespacePutOptions"] = "KVNamespacePutOptions",
+        ["Workers.KVNamespaceListOptions"] = "KVNamespaceListOptions",
+        ["Workers.KVNamespaceListResult"] = "KVNamespaceListResult",
+        ["Workers.KVNamespaceListKey"] = "KVNamespaceListKey",
+        ["Workers.KVNamespaceGetWithMetadataResult<T>"] = "KVNamespaceGetWithMetadataResult",
+        ["Workers.R2Bucket"] = "R2Bucket",
+        ["Workers.R2Object"] = "R2Object",
         ["Workers.R2ObjectBody"] = "R2ObjectBody",
+        ["Workers.R2Objects"] = "R2Objects",
+        ["Workers.R2GetOptions"] = "R2GetOptions",
+        ["Workers.R2PutOptions"] = "R2PutOptions",
+        ["Workers.R2MultipartOptions"] = "R2MultipartOptions",
+        ["Workers.R2ListOptions"] = "R2ListOptions",
+        ["Workers.R2Conditional"] = "R2Conditional",
+        ["Workers.R2HttpMetadata"] = "R2HTTPMetadata",
         ["Workers.R2MultipartUpload"] = "R2MultipartUpload",
-        ["Workers.ID1Database"] = "D1Database",
-        ["Workers.D1PreparedStatement"] = "D1PreparedStatement",
+        ["Workers.R2UploadedPart"] = "R2UploadedPart",
+        ["Workers.D1Database"] = "D1Database",
         ["Workers.D1DatabaseSession"] = "D1DatabaseSession",
-        ["Workers.IQueueProducer"] = "Queue",
-        ["Workers.IDurableObjectNamespace"] = "DurableObjectNamespace",
+        ["Workers.D1PreparedStatement"] = "D1PreparedStatement",
+        ["Workers.D1Result<T>"] = "D1Result|D1Response",
+        ["Workers.D1ExecResult"] = "D1ExecResult",
+        ["Workers.D1Meta"] = "D1Meta",
+        ["Workers.Queue"] = "Queue",
+        ["Workers.QueueSendOptions"] = "QueueSendOptions",
+        ["Workers.QueueSendBatchOptions"] = "QueueSendBatchOptions",
+        ["Workers.MessageSendRequest<T>"] = "MessageSendRequest",
+        ["Workers.QueueRetryOptions"] = "QueueRetryOptions",
+        ["Workers.QueueMetrics"] = "QueueMetrics",
+        ["Workers.DurableObjectNamespace"] = "DurableObjectNamespace",
+        ["Workers.DurableObjectNamespaceNewUniqueIdOptions"] = "DurableObjectNamespaceNewUniqueIdOptions",
+        ["Workers.DurableObjectNamespaceGetDurableObjectOptions"] = "DurableObjectNamespaceGetDurableObjectOptions",
         ["Workers.DurableObjectId"] = "DurableObjectId",
+        ["Workers.DurableObjectStub"] = "DurableObjectStub",
         ["Workers.DurableObjectState"] = "DurableObjectState",
         ["Workers.DurableObjectStorage"] = "DurableObjectStorage",
         ["Workers.DurableObjectTransaction"] = "DurableObjectTransaction",
-        ["Workers.DurableObjectKvStorage"] = "SyncKvStorage",
-        ["Workers.DurableObjectSqlStorage"] = "SqlStorage",
-        ["Workers.DurableObjectSqlCursor<T>"] = "SqlStorageCursor",
-        ["Workers.DurableObjectContainer"] = "Container",
-        ["Workers.ContainerTcpPort"] = "Fetcher",
-        ["Workers.ContainerExecProcess"] = "ExecProcess",
-        ["Workers.IDynamicDispatcherBinding"] = "DispatchNamespace",
-        ["Workers.IRateLimiter"] = "RateLimit",
-        ["Workers.IAnalyticsEngineDataset"] = "AnalyticsEngineDataset",
-        ["Workers.ISendEmailBinding"] = "SendEmail",
-        ["Workers.IAiBinding"] = "Ai",
-        ["Workers.IWorkflowBinding"] = "Workflow",
+        ["Workers.DurableObjectGetOptions"] = "DurableObjectGetOptions",
+        ["Workers.DurableObjectPutOptions"] = "DurableObjectPutOptions",
+        ["Workers.DurableObjectListOptions"] = "DurableObjectListOptions",
+        ["Workers.SyncKvStorage"] = "SyncKvStorage",
+        ["Workers.SyncKvListOptions"] = "SyncKvListOptions",
+        ["Workers.SqlStorage"] = "SqlStorage",
+        ["Workers.SqlStorageCursor<T>"] = "SqlStorageCursor",
+        ["Workers.Container"] = "Container",
+        ["Workers.ContainerStartupOptions"] = "ContainerStartupOptions",
+        ["Workers.ContainerExecOptions"] = "ContainerExecOptions",
+        ["Workers.ExecProcess"] = "ExecProcess",
+        ["Workers.ExecOutput"] = "ExecOutput",
+        ["Workers.RateLimit"] = "RateLimit",
+        ["Workers.RateLimitOptions"] = "RateLimitOptions",
+        ["Workers.RateLimitOutcome"] = "RateLimitOutcome",
+        ["Workers.AnalyticsEngineDataset"] = "AnalyticsEngineDataset",
+        ["Workers.AnalyticsEngineDataPoint"] = "AnalyticsEngineDataPoint",
+        ["Workers.SendEmail"] = "SendEmail",
+        ["Workers.EmailMessage"] = "EmailMessage",
+        ["Workers.EmailMessageBuilder"] = "EmailReplyMessageBuilder|EmailDestinations",
+        ["Workers.EmailSendResult"] = "EmailSendResult",
+        ["Workers.Ai"] = "Ai",
+        ["Workers.Workflow"] = "Workflow",
         ["Workers.WorkflowInstance"] = "WorkflowInstance",
-        ["Workers.IImagesBinding"] = "ImagesBinding",
-        ["Workers.ImagesPipeline"] = "ImageTransformer",
-        ["Workers.IMediaBinding"] = "MediaBinding",
-        ["Workers.MediaPipeline"] = "MediaTransformer",
-        ["Workers.MediaOutput"] = "MediaTransformationResult",
-        ["Workers.IVectorizeIndex"] = "Vectorize",
-        ["Workers.ISecretStoreBinding"] = "SecretsStoreSecret",
-        ["Workers.IHyperdriveBinding"] = "Hyperdrive",
-        ["Workers.IVersionMetadataBinding"] = "WorkerVersionMetadata",
+        ["Workers.WorkflowInstanceCreateOptions"] = "WorkflowInstanceCreateOptions",
+        ["Workers.WorkflowInstanceTerminateOptions"] = "WorkflowInstanceTerminateOptions",
+        ["Workers.WorkflowInstanceRestartOptions"] = "WorkflowInstanceRestartOptions",
+        ["Workers.InstanceStatus"] = "InstanceStatus",
+        ["Workers.ImagesBinding"] = "ImagesBinding",
+        ["Workers.ImageTransformer"] = "ImageTransformer",
+        ["Workers.ImageTransformationResult"] = "ImageTransformationResult",
+        ["Workers.ImageOutputOptions"] = "ImageOutputOptions",
+        ["Workers.MediaBinding"] = "MediaBinding",
+        ["Workers.MediaTransformer"] = "MediaTransformer",
+        ["Workers.MediaTransformationGenerator"] = "MediaTransformationGenerator",
+        ["Workers.MediaTransformationResult"] = "MediaTransformationResult",
+        ["Workers.MediaTransformationOutputOptions"] = "MediaTransformationOutputOptions",
+        ["Workers.Vectorize"] = "Vectorize",
+        ["Workers.VectorizeVector"] = "VectorizeVector",
+        ["Workers.VectorizeQueryOptions"] = "VectorizeQueryOptions",
+        ["Workers.VectorizeMatches"] = "VectorizeMatches",
+        ["Workers.VectorizeAsyncMutation"] = "VectorizeAsyncMutation",
+        ["Workers.VectorizeIndexInfo"] = "VectorizeIndexInfo",
+        ["Workers.SecretsStoreSecret"] = "SecretsStoreSecret",
+        ["Workers.Hyperdrive"] = "Hyperdrive",
+        ["Workers.WorkerVersionMetadata"] = "WorkerVersionMetadata",
         ["Workers.RpcStub"] = "StubBase"
     };
 
@@ -112,12 +195,10 @@ public sealed partial class RuntimeApiConformanceTests
     private static readonly HashSet<BindingIntrinsicKind> MemberKinds =
     [
         BindingIntrinsicKind.Direct, BindingIntrinsicKind.Property, BindingIntrinsicKind.Fluent,
-        BindingIntrinsicKind.RequestBodyRead,
-        BindingIntrinsicKind.KvBytesGet, BindingIntrinsicKind.KvJsonGet, BindingIntrinsicKind.KvJsonPut,
-        BindingIntrinsicKind.DurableObjectGet, BindingIntrinsicKind.CacheMatch, BindingIntrinsicKind.DictionaryObject,
-        BindingIntrinsicKind.RateLimit, BindingIntrinsicKind.DateResult, BindingIntrinsicKind.IteratorArray,
-        BindingIntrinsicKind.QueryNames, BindingIntrinsicKind.CryptoBytesResult,
-        BindingIntrinsicKind.CryptoImportKey, BindingIntrinsicKind.CryptoExportJwk
+        BindingIntrinsicKind.RequestBodyRead, BindingIntrinsicKind.KvJsonPut, BindingIntrinsicKind.R2Get,
+        BindingIntrinsicKind.DurableObjectGet, BindingIntrinsicKind.SyncStorageGet, BindingIntrinsicKind.CacheMatch,
+        BindingIntrinsicKind.DictionaryObject, BindingIntrinsicKind.DateResult, BindingIntrinsicKind.IteratorArray,
+        BindingIntrinsicKind.CryptoBytesResult, BindingIntrinsicKind.CryptoImportKey, BindingIntrinsicKind.CryptoExportJwk
     ];
 
     // Receivers whose members are not a fixed runtime interface.
@@ -128,6 +209,17 @@ public sealed partial class RuntimeApiConformanceTests
     {
         ["Workers.HtmlElement.NamespaceUri"] = "namespaceURI",
         ["Workers.JsonWebKey.KeyOps"] = "key_ops",
+        ["Workers.TextDecoder.IgnoreBom"] = "ignoreBOM",
+        ["Workers.KVNamespaceListResult.ListComplete"] = "list_complete",
+        ["Workers.D1Meta.SizeAfter"] = "size_after",
+        ["Workers.D1Meta.RowsRead"] = "rows_read",
+        ["Workers.D1Meta.RowsWritten"] = "rows_written",
+        ["Workers.D1Meta.LastRowId"] = "last_row_id",
+        ["Workers.D1Meta.ChangedDb"] = "changed_db",
+        ["Workers.D1Meta.ServedByRegion"] = "served_by_region",
+        ["Workers.D1Meta.ServedByColo"] = "served_by_colo",
+        ["Workers.D1Meta.ServedByPrimary"] = "served_by_primary",
+        ["Workers.D1Meta.TotalAttempts"] = "total_attempts",
         // Runtime declarations retain the C++ identifier, but the JS dictionary field is public.
         ["Workers.EcdhKeyDeriveParams.Public"] = "$public"
     };
@@ -135,10 +227,9 @@ public sealed partial class RuntimeApiConformanceTests
     // Properties the compiler computes instead of reading a runtime member of the same name.
     private static readonly HashSet<string> ComputedProperties =
     [
-        "Workers.Request.Path", "Workers.Request.PathAndQuery", "Workers.Request.QueryParameters", "Workers.Request.Url",
-        "Workers.Request.Cookies", "Workers.Response.Cookies",
-        "Workers.QueueMessageBatch<T>.Count", "Workers.QueueMessageBatch<T>.Item",
-        "Workers.Headers.Count", "Workers.Headers.Item", "Workers.ScheduledEvent.ScheduledTime"
+        "Workers.Request.Cookies", "Workers.Response.Cookies", "Workers.Headers.Item",
+        // Declared in the truncated/not-truncated union branches of R2Objects, which the declaration scan skips.
+        "Workers.R2Objects.Cursor", "Workers.R2Objects.Truncated"
     ];
 
     [Fact]
@@ -178,7 +269,7 @@ public sealed partial class RuntimeApiConformanceTests
     [InlineData("Workers.Request", "json", true)]
     [InlineData("Workers.R2ObjectBody", "key", true)]
     [InlineData("Workers.DigestStream", "getWriter", true)]
-    [InlineData("Workers.ContainerExecProcess", "getExitCode", false)]
+    [InlineData("Workers.ExecProcess", "getExitCode", false)]
     [InlineData("Workers.RpcStub", "duplicate", false)]
     public void TheCheckFollowsInheritanceAndRejectsUndeclaredMembers(string apiType, string member, bool declared)
     {
@@ -253,18 +344,18 @@ public sealed partial class RuntimeApiConformanceTests
     private static string GenerateRuntimeTypes()
     {
         var repository = new DirectoryInfo(AppContext.BaseDirectory);
-        while (repository is not null && !File.Exists(Path.Combine(repository.FullName, "Workers.slnx")))
+        while (repository is not null && !System.IO.File.Exists(Path.Combine(repository.FullName, "Workers.slnx")))
             repository = repository.Parent;
         var wrangler = Path.Combine(repository?.FullName ?? "", "node_modules", "wrangler", "bin", "wrangler.js");
-        if (!File.Exists(wrangler))
+        if (!System.IO.File.Exists(wrangler))
             throw new InvalidOperationException("Run 'npm ci' first: the runtime declarations come from the installed wrangler.");
 
         var directory = Directory.CreateTempSubdirectory("workers-runtime-types-");
         try
         {
-            File.WriteAllText(Path.Combine(directory.FullName, "wrangler.jsonc"),
+            System.IO.File.WriteAllText(Path.Combine(directory.FullName, "wrangler.jsonc"),
                 """{ "name": "runtime-types", "main": "worker.js", "compatibility_date": "2026-10-11", "compatibility_flags": ["webcrypto_modern_algorithms"] }""");
-            File.WriteAllText(Path.Combine(directory.FullName, "worker.js"), "export default {};");
+            System.IO.File.WriteAllText(Path.Combine(directory.FullName, "worker.js"), "export default {};");
             var start = new ProcessStartInfo("node")
             {
                 WorkingDirectory = directory.FullName,
@@ -281,7 +372,7 @@ public sealed partial class RuntimeApiConformanceTests
             process.WaitForExit();
             if (process.ExitCode != 0)
                 throw new InvalidOperationException($"wrangler types failed:{Environment.NewLine}{output.Result}{error}");
-            return File.ReadAllText(Path.Combine(directory.FullName, "runtime.d.ts")).ReplaceLineEndings("\n");
+            return System.IO.File.ReadAllText(Path.Combine(directory.FullName, "runtime.d.ts")).ReplaceLineEndings("\n");
         }
         finally
         {

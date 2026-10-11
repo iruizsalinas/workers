@@ -12,8 +12,15 @@ internal sealed partial class JavaScriptEmitter
         var type = constructor?.ContainingType;
         var arguments = value.ArgumentList?.Arguments.ToArray() ?? [];
         var typeName = type?.ToDisplayString();
-        if (typeName is "Workers.Date" or "Workers.RegExp" or "Workers.AbortController")
+        if (typeName is "Workers.Date" or "Workers.RegExp" or "Workers.AbortController" or "Workers.FormData"
+            or "Workers.TextEncoder" or "Workers.WebSocketPair" or "Workers.WebSocketRequestResponsePair"
+            or "Workers.TransformStream" or "Workers.IdentityTransformStream" or "Workers.FixedLengthStream"
+            or "Workers.CompressionStream" or "Workers.DecompressionStream")
             return PositionalObjectCreation(value, constructor, arguments, values => $"new {type!.Name}({string.Join(", ", values)})");
+        if (typeName == "Workers.UrlSearchParams")
+            return PositionalObjectCreation(value, constructor, arguments, values => $"new URLSearchParams({string.Join(", ", values)})");
+        if (typeName is "Workers.Blob" or "Workers.File" or "Workers.TextDecoder" or "Workers.DigestStream" or "Workers.EmailMessage")
+            return PositionalObjectCreation(value, constructor, arguments, values => NativeObjectCreation(typeName, values));
         // KeyValuePair values are [key, value] arrays, the shape Object.entries and Map iteration produce.
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>"
             && constructor?.Parameters.Length == 2 && value.Initializer is null)
@@ -27,9 +34,6 @@ internal sealed partial class JavaScriptEmitter
         if (typeName == "Workers.HttpError")
             return PositionalObjectCreation(value, constructor, arguments,
                 values => $"new {_helpers.Require(JavaScriptHelper.HttpError)}({string.Join(", ", values)})");
-        if (typeName == "Workers.WebSocketAutoResponse")
-            return PositionalObjectCreation(value, constructor, arguments,
-                values => $"new WebSocketRequestResponsePair({string.Join(", ", values)})");
         if (IsException(type) && IsUserInstanceType(type!))
             return UserObject(value, constructor, type!, arguments);
         if (IsException(type))
@@ -87,8 +91,6 @@ internal sealed partial class JavaScriptEmitter
         IMethodSymbol? constructor, ArgumentSyntax[] arguments) =>
         PositionalObjectCreation(syntax, constructor, arguments, values =>
         {
-            if (constructor?.Parameters is [{ Type: var only }] && only.ToDisplayString() == "Workers.Response")
-                return CopyResponse(values[0]);
             if (operation.Initializer is null) return $"new Response({string.Join(", ", values)})";
             var body = values.Count > 0 ? values[0] : "null";
             if (values.Count == 1 || values.Count == 0) return Create(body, null);
@@ -100,20 +102,6 @@ internal sealed partial class JavaScriptEmitter
             return ContainsAwait(operation.Initializer)
                 ? $"(await (async ({capturedBody}, {source}) => {creation})({body}, {values[1]}))"
                 : $"(({capturedBody}, {source}) => {creation})({body}, {values[1]})";
-
-            // The source supplies both the body and the settings, so it is evaluated once unless it is a plain variable.
-            string CopyResponse(string value)
-            {
-                if (operation.Initializer is null
-                    && _model.GetSymbolInfo(arguments[0].Expression).Symbol is ILocalSymbol or IParameterSymbol)
-                    return $"new Response({value}.body, {value})";
-                var key = $"response:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
-                var source = _names.Get(key + ":source", "source");
-                var creation = operation.Initializer is null ? $"new Response({source}.body, {source})" : Create($"{source}.body", source);
-                return operation.Initializer is not null && ContainsAwait(operation.Initializer)
-                    ? $"(await (async ({source}) => {creation})({value}))"
-                    : $"(({source}) => {creation})({value})";
-            }
 
             string Create(string bodyValue, string? source)
             {
@@ -136,6 +124,20 @@ internal sealed partial class JavaScriptEmitter
                 return $"new Response({bodyValue}, {{ {string.Join(", ", settings)} }})";
             }
         }, operation.Initializer is not null && ContainsAwait(operation.Initializer));
+
+    // Constructors whose JavaScript form wraps arguments: blob parts are an array, and options are a dictionary.
+    private string NativeObjectCreation(string type, IReadOnlyList<string> values)
+    {
+        string Option(int index, string name) => values.Count > index ? $"{{ {name}: {values[index]} ?? undefined }}" : "undefined";
+        return type switch
+        {
+            "Workers.Blob" => $"new Blob([{values[0]}], {Option(1, "type")})",
+            "Workers.File" => $"new File([{values[0]}], {values[1]}, {Option(2, "type")})",
+            "Workers.TextDecoder" => $"new TextDecoder({(values.Count > 0 ? values[0] : "undefined")}, {{ fatal: {(values.Count > 1 ? values[1] : "false")}, ignoreBOM: {(values.Count > 2 ? values[2] : "false")} }})",
+            "Workers.DigestStream" => $"new globalThis.crypto.DigestStream({string.Join(", ", values)})",
+            _ => $"new {_imports.Require("cloudflare:email", "EmailMessage", "EmailMessage")}({string.Join(", ", values)})"
+        };
+    }
 
     private string NativeObjectInitializer(IObjectCreationOperation operation, string creation)
     {
