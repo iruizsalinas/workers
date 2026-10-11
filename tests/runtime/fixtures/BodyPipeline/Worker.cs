@@ -140,7 +140,7 @@ public static class Worker
             return Response.FromStream(stream.Compress(CompressionFormat.Gzip))
                 .WithHeader("content-type", "application/x-ndjson; charset=utf-8")
                 .WithHeader("content-encoding", "gzip")
-                .AppendHeader("vary", "Accept-Encoding");
+                .WithAppendedHeader("vary", "Accept-Encoding");
         return Response.FromStream(stream)
             .WithHeader("content-type", "application/x-ndjson; charset=utf-8")
             .WithHeader("cache-control", "no-store");

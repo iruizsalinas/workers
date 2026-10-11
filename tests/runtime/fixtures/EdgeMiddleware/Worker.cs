@@ -38,7 +38,7 @@ public static class Worker
         if (metadata.Tag is not null)
             response = response.WithHeader("x-worker-version-tag", metadata.Tag);
         if (asset.Status >= 200 && asset.Status < 300)
-            response = response.AppendHeader("cache-control", "public, max-age=300");
+            response = response.WithAppendedHeader("cache-control", "public, max-age=300");
 
         return Record(environment, request, metadata, response,
             asset.Status == 404 ? "asset_missing" : "asset_served", started);

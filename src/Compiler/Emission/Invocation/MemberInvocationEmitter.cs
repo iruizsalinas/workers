@@ -63,7 +63,7 @@ internal sealed partial class JavaScriptEmitter
         "FromStream" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})",
         "WebSocket" => $"new Response(null, {{ status: 101, webSocket: {arguments[0]} }})",
         "WithHeader" => HeaderMutation(invocation, arguments, "set", receiverOverride),
-        "AppendHeader" => HeaderMutation(invocation, arguments, "append", receiverOverride),
+        "WithAppendedHeader" => HeaderMutation(invocation, arguments, "append", receiverOverride),
         "WithoutHeader" => HeaderMutation(invocation, arguments, "delete", receiverOverride),
         "WithCookie" => CookieMutation(invocation, [arguments[0], arguments[1], OptionalArgument(arguments, 2)], receiverOverride),
         "WithoutCookie" => CookieMutation(invocation, [arguments[0], "\"\"", OptionalArgument(arguments, 1), "true"], receiverOverride),

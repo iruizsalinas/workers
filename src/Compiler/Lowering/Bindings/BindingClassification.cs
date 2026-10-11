@@ -46,7 +46,7 @@ internal static class BindingClassification
         Key("Workers.Body", "FromQueryParameters"),
         Key("Workers.Response", "Empty"), Key("Workers.Response", "Text"), Key("Workers.Response", "Html"),
         Key("Workers.Response", "Json"), Key("Workers.Response", "Redirect"),
-        Key("Workers.Response", "FromBody"), Key("Workers.Response", "WithHeader"), Key("Workers.Response", "AppendHeader"),
+        Key("Workers.Response", "FromBody"), Key("Workers.Response", "WithHeader"), Key("Workers.Response", "WithAppendedHeader"),
         Key("Workers.Response", "FromStream"),
         Key("Workers.Response", "WebSocket"),
         Key("Workers.Response", "WithoutHeader"), Key("Workers.Response", "WithCookie"), Key("Workers.Response", "WithoutCookie"),

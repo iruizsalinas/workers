@@ -115,5 +115,5 @@ public static class Worker
         .WithHeader("access-control-allow-methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS")
         .WithHeader("access-control-allow-headers", "content-type, authorization, x-signature")
         .WithHeader("access-control-max-age", "86400")
-        .AppendHeader("vary", "Origin");
+        .WithAppendedHeader("vary", "Origin");
 }
