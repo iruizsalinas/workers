@@ -9,7 +9,7 @@ public sealed class QueueMessage<T>
 {
     public string Id => WorkerApi.NotExecutable<string>();
     public T Body => WorkerApi.NotExecutable<T>();
-    public DateTimeOffset Timestamp => WorkerApi.NotExecutable<DateTimeOffset>();
+    public Date Timestamp => WorkerApi.NotExecutable<Date>();
     public int Attempts => WorkerApi.NotExecutable<int>();
 
     public void Ack() => WorkerApi.NotExecutable();

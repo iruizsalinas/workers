@@ -39,7 +39,7 @@ public sealed class RouterTests
             {
                 private static readonly Router Routes = new Router()
                     .Get("/", Home)
-                    .Post("/items/{id:guid}", SaveAsync);
+                    .Post("/items/{id:uuid}", SaveAsync);
 
                 [Fetch]
                 public static Task<Response> Fetch(Request request, Env env, Context context) =>
@@ -49,15 +49,15 @@ public sealed class RouterTests
 
                 private static async Task<Response> SaveAsync(Request request, RouteContext route)
                 {
-                    var id = Guid.Parse(route.Parameter("id"));
-                    await route.Env.Kv("ITEMS").PutTextAsync(id.ToString(), await request.TextAsync());
+                    var id = route.Parameter("id").ToLowerInvariant();
+                    await route.Env.Kv("ITEMS").PutTextAsync(id, await request.TextAsync());
                     return Response.Empty(201);
                 }
             }
             """);
 
         Assert.Contains("rank: [], segments: [] };", module);
-        Assert.Contains("$workers$guidParse(value)", module);
+        Assert.Contains("[0-9a-f]{8}", module);
         Assert.Contains("route.env[\"ITEMS\"]", module);
         Assert.Contains("$workers$routerHandle(", module);
     }
@@ -83,7 +83,7 @@ public sealed class RouterTests
     [InlineData("/users?page=1", "it must not contain a query or fragment")]
     [InlineData("/users/{id}.json", "the segment '{id}.json' mixes text and a parameter; a parameter must fill a whole segment, such as '/users/{id}'")]
     [InlineData("/users/{id?}", "optional parameters are not supported; register a second route without the parameter")]
-    [InlineData("/users/{id:long}", "the constraint 'long' is not supported; use 'guid' or 'int'")]
+    [InlineData("/users/{id:long}", "the constraint 'long' is not supported; use 'int' or 'uuid'")]
     [InlineData("/users/{id}/{id}", "the parameter 'id' appears more than once")]
     [InlineData("/files/{*path}/edit", "the catch-all parameter 'path' must be the last segment")]
     [InlineData("/files/{*path:int}", "the catch-all parameter 'path' cannot have a constraint")]

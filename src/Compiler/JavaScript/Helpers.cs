@@ -1,16 +1,10 @@
 internal enum JavaScriptHelper
 {
-    WithHeader, Delay, TaskWhenAll, CancellationCheck, CancellationDelay, CancellationCancelAfter,
-    Stream, Socket, Digest, WebSocketEvents, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
-    RandomNext, SetAdd, QueueStack, Base64, RpcArguments, HexDecode, EscapeDataString, JsonElementToString,
-    JsonElementValueKind, JsonElementGetValue, JsonElementGetProperty, JsonElementGetIndex, JsonDeserializeValue, JsonSerializeClr, SqlStatement, SqlParameters, MongoValues, NumberText, StringCase, TryCall, CollectionMembers, DateFormat,
-    StringTrim, StringContains, StringStartsWith, StringEndsWith, StringSubstring, StringReplace,
-    StringIsNullOrEmpty, StringIsNullOrWhiteSpace, StringJoin, StringOrdinal,
-    StringRemove, StringInsert, StringPad, StringToCharArray, StringSplit, StringBuilder, Regex, Router,
-    NumericParse, NumericFormat, MathAbsInt, MathClamp, MathRound, MathLog, MathSign, GuidParse, GuidFormat,
-    DateTimeOffset, DateTimeAddMonths, DateTimeFromUnixTime, DateTimeCompare, DateTimeDayOfYear,
-    DateTimeIsLeapYear, DateTimeDaysInMonth, DateTimeAddMilliseconds, TimeSpan, DateOnly, TimeOnly, JsonNode,
-    LinqValues, LinqWhere, LinqSelect, LinqSelectMany, LinqAppend, LinqPrepend, LinqSkip, LinqTake,
+    WithHeader, TaskWhenAll, StreamFrom, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
+    SetAdd, QueueStack, RpcArguments, JsonExpect, TryCall, CollectionMembers, StringReplace,
+    StringOrdinal,
+    Router,
+    NumericParse, LinqValues, LinqWhere, LinqSelect, LinqSelectMany, LinqAppend, LinqPrepend, LinqSkip, LinqTake,
     LinqSkipWhile, LinqTakeWhile, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains, LinqDistinct,
     LinqDistinctBy, LinqSequenceEqual, LinqOrder, LinqGroupBy, LinqToDictionary, LinqToLookup,
     LinqNumericAggregate, LinqAggregate, LinqExtremum, LinqSet, LinqReverse, LinqDefaultIfEmpty, LinqChunk, LinqZip,
@@ -24,21 +18,6 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
     public string Require(JavaScriptHelper helper)
     {
         _required.Add(helper);
-        if (helper == JavaScriptHelper.CancellationDelay)
-        {
-            _required.Add(JavaScriptHelper.Delay);
-            _required.Add(JavaScriptHelper.CancellationCheck);
-        }
-        if (helper == JavaScriptHelper.DateTimeDaysInMonth)
-            _required.Add(JavaScriptHelper.DateTimeIsLeapYear);
-        if (helper == JavaScriptHelper.JsonSerializeClr)
-            _required.Add(JavaScriptHelper.NumberText);
-        if (helper == JavaScriptHelper.JsonNode)
-        {
-            _required.Add(JavaScriptHelper.JsonSerializeClr);
-            _required.Add(JavaScriptHelper.NumberText);
-            _required.Add(JavaScriptHelper.JsonDeserializeValue);
-        }
         if (helper is JavaScriptHelper.CollectionMembers or JavaScriptHelper.QueueStack)
             _required.Add(JavaScriptHelper.LinqValues);
         if (helper.IsLinqOperator())
@@ -56,80 +35,20 @@ internal static class JavaScriptHelperExtensions
     public static string EntryPoint(this JavaScriptHelper helper) => helper switch
     {
         JavaScriptHelper.WithHeader => "withHeader",
-        JavaScriptHelper.Delay => "delay",
         JavaScriptHelper.TaskWhenAll => "taskWhenAll",
-        JavaScriptHelper.CancellationCheck => "cancellationCheck",
-        JavaScriptHelper.CancellationDelay => "cancellationDelay",
-        JavaScriptHelper.CancellationCancelAfter => "cancellationCancelAfter",
-        JavaScriptHelper.Stream => "streamRead",
-        JavaScriptHelper.Socket => "socketRead",
-        JavaScriptHelper.Digest => "digestWriter",
-        JavaScriptHelper.WebSocketEvents => "webSocketEvents",
+        JavaScriptHelper.StreamFrom => "streamFrom",
         JavaScriptHelper.SequenceIndex => "sequenceIndex",
         JavaScriptHelper.DictionaryIndex => "dictionaryIndex",
         JavaScriptHelper.IntegerDivide => "integerDivide",
         JavaScriptHelper.IntegerRemainder => "integerRemainder",
-        JavaScriptHelper.RandomNext => "randomNext",
         JavaScriptHelper.SetAdd => "setAdd",
         JavaScriptHelper.QueueStack => "queueStackCreate",
-        JavaScriptHelper.Base64 => "base64Encode",
         JavaScriptHelper.RpcArguments => "rpcArguments",
-        JavaScriptHelper.HexDecode => "hexDecode",
-        JavaScriptHelper.EscapeDataString => "escapeDataString",
-        JavaScriptHelper.JsonElementToString => "jsonElementToString",
-        JavaScriptHelper.JsonElementValueKind => "jsonElementValueKind",
-        JavaScriptHelper.JsonElementGetValue => "jsonElementGetValue",
-        JavaScriptHelper.JsonElementGetProperty => "jsonElementGetProperty",
-        JavaScriptHelper.JsonElementGetIndex => "jsonElementGetIndex",
-        JavaScriptHelper.JsonDeserializeValue => "jsonDeserializeValue",
-        JavaScriptHelper.JsonSerializeClr => "jsonSerializeClr",
-        JavaScriptHelper.SqlStatement => "sqlStatement",
-        JavaScriptHelper.SqlParameters => "sqlParameters",
-        JavaScriptHelper.MongoValues => "mongoDocument",
-        JavaScriptHelper.NumberText => "numberText",
-        JavaScriptHelper.StringCase => "stringCase",
+        JavaScriptHelper.JsonExpect => "jsonExpect",
         JavaScriptHelper.TryCall => "tryCall",
         JavaScriptHelper.CollectionMembers => "collectionKey",
-        JavaScriptHelper.DateFormat => "dateFormat",
-        JavaScriptHelper.StringTrim => "stringTrim",
-        JavaScriptHelper.StringContains => "stringContains",
-        JavaScriptHelper.StringStartsWith => "stringStartsWith",
-        JavaScriptHelper.StringEndsWith => "stringEndsWith",
-        JavaScriptHelper.StringSubstring => "stringSubstring",
-        JavaScriptHelper.StringReplace => "stringReplace",
-        JavaScriptHelper.StringIsNullOrEmpty => "stringIsNullOrEmpty",
-        JavaScriptHelper.StringIsNullOrWhiteSpace => "stringIsNullOrWhiteSpace",
-        JavaScriptHelper.StringJoin => "stringJoin",
-        JavaScriptHelper.StringOrdinal => "stringOrdinal",
-        JavaScriptHelper.StringRemove => "stringRemove",
-        JavaScriptHelper.StringInsert => "stringInsert",
-        JavaScriptHelper.StringPad => "stringPad",
-        JavaScriptHelper.StringToCharArray => "stringToCharArray",
-        JavaScriptHelper.StringSplit => "stringSplit",
-        JavaScriptHelper.StringBuilder => "stringBuilder",
-        JavaScriptHelper.Regex => "regexCreate",
         JavaScriptHelper.Router => "routerCreate",
         JavaScriptHelper.NumericParse => "numericParse",
-        JavaScriptHelper.NumericFormat => "numericFormat",
-        JavaScriptHelper.MathAbsInt => "mathAbsInt",
-        JavaScriptHelper.MathClamp => "mathClamp",
-        JavaScriptHelper.MathRound => "mathRound",
-        JavaScriptHelper.MathLog => "mathLog",
-        JavaScriptHelper.MathSign => "mathSign",
-        JavaScriptHelper.GuidParse => "guidParse",
-        JavaScriptHelper.GuidFormat => "guidFormat",
-        JavaScriptHelper.DateTimeOffset => "dateTimeOffset",
-        JavaScriptHelper.DateTimeAddMonths => "dateTimeAddMonths",
-        JavaScriptHelper.DateTimeFromUnixTime => "dateTimeFromUnixTime",
-        JavaScriptHelper.DateTimeCompare => "dateTimeCompare",
-        JavaScriptHelper.DateTimeDayOfYear => "dateTimeDayOfYear",
-        JavaScriptHelper.DateTimeIsLeapYear => "dateTimeIsLeapYear",
-        JavaScriptHelper.DateTimeDaysInMonth => "dateTimeDaysInMonth",
-        JavaScriptHelper.DateTimeAddMilliseconds => "dateTimeAddMilliseconds",
-        JavaScriptHelper.TimeSpan => "timeSpan",
-        JavaScriptHelper.DateOnly => "dateOnlyCreate",
-        JavaScriptHelper.TimeOnly => "timeOnlyCreate",
-        JavaScriptHelper.JsonNode => "jsonNodeImport",
         JavaScriptHelper.LinqValues => "linqValues",
         JavaScriptHelper.LinqWhere => "linqWhere",
         JavaScriptHelper.LinqSelect => "linqSelect",

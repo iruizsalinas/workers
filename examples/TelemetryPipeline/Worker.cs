@@ -18,7 +18,7 @@ public static class Worker
 
     [Scheduled]
     public static void Scheduled(ScheduledEvent scheduled, Env environment, Context context) =>
-        context.WaitUntil(EnqueueDueSensorsAsync(environment, scheduled.ScheduledTime));
+        context.WaitUntil(EnqueueDueSensorsAsync(environment, scheduled.ScheduledTime.GetTime()));
 
     [Queue]
     public static async Task QueueAsync(
@@ -35,7 +35,7 @@ public static class Worker
             }
             catch (Exception exception)
             {
-                Console.Error.WriteLine($"Sensor job failed: {exception.Message}");
+                Log.Error($"Sensor job failed: {exception.Message}");
                 if (message.Attempts < 4)
                     message.Retry(new QueueRetryOptions { DelaySeconds = 30 * message.Attempts });
                 else
@@ -44,16 +44,16 @@ public static class Worker
         }
     }
 
-    private static async Task EnqueueDueSensorsAsync(Env environment, DateTimeOffset scheduledTime)
+    private static async Task EnqueueDueSensorsAsync(Env environment, double scheduledTime)
     {
         var due = await environment.D1("DB")
             .Prepare("SELECT sensor_id AS sensorId FROM sensors WHERE next_read_at <= ? LIMIT 50")
-            .Bind(scheduledTime.ToUnixTimeMilliseconds())
+            .Bind(scheduledTime)
             .AllAsync<SensorRow>();
 
         var jobs = new List<SensorJob>();
         foreach (var sensor in due.Results)
-            jobs.Add(new SensorJob(sensor.SensorId, Guid.NewGuid().ToString()));
+            jobs.Add(new SensorJob(sensor.SensorId, Crypto.RandomUuid()));
         if (jobs.Count != 0)
             await environment.Queue("READINGS").SendJsonBatchAsync(jobs);
     }
@@ -65,13 +65,11 @@ public static class Worker
         if (lease is null || !lease.Allowed)
             throw new InvalidOperationException("Outbound API is busy");
 
-        using var cancellation = new CancellationTokenSource();
-        cancellation.CancelAfter(5000);
-        var token = cancellation.Token;
+        var options = new FetchOptions { Signal = AbortSignal.Timeout(5000) };
         var responses = await Task.WhenAll(
-            Http.FetchAsync($"https://sensors.example/v1/readings/{job.SensorId}", token),
-            Http.FetchAsync($"https://weather.example/v1/context/{job.SensorId}", token));
-        if (!responses[0].IsSuccessStatusCode || !responses[1].IsSuccessStatusCode)
+            Http.FetchAsync($"https://sensors.example/v1/readings/{job.SensorId}", options),
+            Http.FetchAsync($"https://weather.example/v1/context/{job.SensorId}", options));
+        if (!responses[0].Ok || !responses[1].Ok)
             throw new InvalidOperationException("Reading provider failed");
 
         var reading = await responses[0].JsonAsync<Reading>();
@@ -81,7 +79,7 @@ public static class Worker
 
         await environment.D1("DB").Prepare(
                 "INSERT OR REPLACE INTO readings (id, sensor_id, value, condition, processed_at) VALUES (?, ?, ?, ?, ?)")
-            .Bind(job.RequestId, job.SensorId, reading.Value, context.Condition, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+            .Bind(job.RequestId, job.SensorId, reading.Value, context.Condition, Date.Now())
             .RunAsync();
         await gate.InvokeVoidAsync("complete", [lease.Token]);
     }
@@ -100,10 +98,10 @@ public sealed class RateGate
         await _state.Storage.TransactionAsync(async storage =>
         {
             var expiresAt = await storage.GetAsync<long?>("expiresAt") ?? 0;
-            if (expiresAt > DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+            if (expiresAt > Date.Now())
                 return;
 
-            await storage.PutAsync("expiresAt", DateTimeOffset.UtcNow.AddSeconds(30).ToUnixTimeMilliseconds());
+            await storage.PutAsync("expiresAt", Date.Now() + 30000);
             await storage.PutAsync("owner", requestId);
             lease = new Lease(true, requestId);
         });

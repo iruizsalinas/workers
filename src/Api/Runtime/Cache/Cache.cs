@@ -10,19 +10,16 @@ public static class CacheStorage
     public static ICache Default => WorkerApi.NotExecutable<ICache>();
 
     public static Task<ICache> OpenAsync(
-        string name,
-        CancellationToken cancellationToken = default) =>
+        string name) =>
         WorkerApi.NotExecutable<Task<ICache>>();
 }
 
 public interface ICache
 {
-    Task PutAsync(string url, Response response, CancellationToken cancellationToken = default);
-    Task PutAsync(Request request, Response response, CancellationToken cancellationToken = default);
-    Task<Response?> MatchAsync(string url, CacheQueryOptions? options = null, CancellationToken cancellationToken = default);
-    Task<Response?> MatchAsync(Request request, CacheQueryOptions? options = null, CancellationToken cancellationToken = default);
-    Task<Response?> MatchAsync(string url, bool ignoreMethod, CancellationToken cancellationToken = default);
-    Task<Response?> MatchAsync(Request request, bool ignoreMethod, CancellationToken cancellationToken = default);
-    Task<bool> DeleteAsync(string url, CacheQueryOptions? options = null, CancellationToken cancellationToken = default);
-    Task<bool> DeleteAsync(Request request, CacheQueryOptions? options = null, CancellationToken cancellationToken = default);
+    Task PutAsync(string url, Response response);
+    Task PutAsync(Request request, Response response);
+    Task<Response?> MatchAsync(string url, CacheQueryOptions? options = null);
+    Task<Response?> MatchAsync(Request request, CacheQueryOptions? options = null);
+    Task<bool> DeleteAsync(string url, CacheQueryOptions? options = null);
+    Task<bool> DeleteAsync(Request request, CacheQueryOptions? options = null);
 }

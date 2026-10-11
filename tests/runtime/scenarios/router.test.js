@@ -22,10 +22,10 @@ describe("router semantics", () => {
     expect(await text("/users/ada")).toEqual([200, "p:name:ada"]);
   });
 
-  it("matches constraints exactly when int.Parse and Guid.Parse would succeed", async () => {
+  it("matches bounded integers and canonical UUIDs", async () => {
     expect(await text("/users/2147483648")).toEqual([200, "p:name:2147483648"]);
     expect(await text("/users/-7")).toEqual([200, "p:int:-6"]);
-    expect(await text("/items/{6F9619FF-8B86-D011-B42D-00C04FC964FF}"))
+    expect(await text("/items/6F9619FF-8B86-D011-B42D-00C04FC964FF"))
       .toEqual([200, "6f9619ff-8b86-d011-b42d-00c04fc964ff"]);
     expect(await text("/items/not-a-guid")).toEqual([404, "fallback:/items/not-a-guid"]);
   });
@@ -94,7 +94,7 @@ describe("routing example", () => {
     };
   }
 
-  it("stores, reads, and deletes notes through guid routes", async () => {
+  it("stores, reads, and deletes notes through UUID routes", async () => {
     const environment = notesEnvironment();
     const id = "6f9619ff-8b86-d011-b42d-00c04fc964ff";
     const saved = await invoke(routing, environment, `/notes/${id.toUpperCase()}`, {

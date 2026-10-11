@@ -7,11 +7,9 @@ internal enum BindingIntrinsicKind
     KvJsonGet,
     KvJsonPut,
     DurableObjectGet,
-    CacheQuery,
     CacheMatch,
     ServiceRpc,
     Property,
-    Identity,
     HeadersClone,
     Fluent,
     Dispose,
@@ -22,22 +20,10 @@ internal enum BindingIntrinsicKind
     CryptoDigest,
     CryptoDigestBody,
     CryptoDigestStream,
-    DigestWrite,
-    DigestWriteText,
-    DigestClose,
     DigestResult,
     ReadableFromEnumerable,
-    ReadableRead,
-    ReadableAll,
-    ReadableCancel,
-    WebSocketEvents,
-    SocketRead,
-    SocketWrite,
-    SocketWriteText,
-    SocketCloseWritable,
     WebSocketJson,
     WebSocketMessageText,
-    Bytes,
     CryptoVerifyHmac,
     BlobSliceBytes,
     QueryNames,
@@ -49,14 +35,14 @@ internal enum BindingIntrinsicKind
     QueueRequest,
     RequestWithUrl,
     Utf8Decode,
-    SqlPrepare,
     SqlCursorNext,
     SyncStorageGet,
     QueryAs,
-    DatabaseConnect,
-    SqlQuery,
-    MongoOperation,
-    MongoObjectId
+    DateResult,
+    IteratorArray,
+    ResponseRead,
+    WebSocketMessageBytes,
+    EventListener
 }
 
 internal sealed record BindingIntrinsic(string JavascriptName, BindingIntrinsicKind Kind = BindingIntrinsicKind.Direct);
@@ -77,8 +63,7 @@ internal static class BindingIntrinsicRegistry
         NetworkIntrinsics.Methods,
         DurableObjectIntrinsics.Methods,
         PlatformIntrinsics.Methods,
-        RuntimeIntrinsics.Methods,
-        DatabaseIntrinsics.Methods
+        RuntimeIntrinsics.Methods
     ];
 
     public static bool TryGet(IMethodSymbol method, out BindingIntrinsic intrinsic)
@@ -91,6 +76,9 @@ internal static class BindingIntrinsicRegistry
         intrinsic = null!;
         return false;
     }
+
+    internal static IEnumerable<KeyValuePair<(string Type, string Method), BindingIntrinsic>> Entries =>
+        MethodSets.SelectMany(methods => methods);
 
     public static bool IsStructuralType(INamedTypeSymbol type) => BindingClassification.IsStructural(TypeName(type.OriginalDefinition));
 

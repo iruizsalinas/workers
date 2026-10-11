@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 // Key identifies patterns that match exactly the same paths, whatever their parameter names.
 internal sealed partial record RoutePattern(string Text, IReadOnlyList<RouteSegment> Segments)
 {
-    public static readonly IReadOnlySet<string> Constraints = new HashSet<string>(StringComparer.Ordinal) { "int", "guid" };
+    public static readonly IReadOnlySet<string> Constraints = new HashSet<string>(StringComparer.Ordinal) { "int", "uuid" };
 
     public IEnumerable<string> ParameterNames => Segments.Select(segment => segment switch
     {

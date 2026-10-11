@@ -24,37 +24,29 @@ public sealed class ContainerExecOutput
 
 public sealed class DurableObjectContainer
 {
-    public Task<bool> GetRunningAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<bool>>();
-    public Task StartAsync(ContainerStartOptions? options = null, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task DestroyAsync(string? error = null, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task SignalAsync(int signal, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task MonitorAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task InterceptOutboundHttpAsync(
-        string target, IServiceBinding worker, CancellationToken cancellationToken = default) =>
-        WorkerApi.NotExecutable<Task>();
-    public Task InterceptAllOutboundHttpAsync(IServiceBinding worker, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task InterceptOutboundHttpsAsync(IServiceBinding worker, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
+    public bool Running => WorkerApi.NotExecutable<bool>();
+    public void Start(ContainerStartOptions? options = null) => WorkerApi.NotExecutable();
+    public Task DestroyAsync(string? error = null) => WorkerApi.NotExecutable<Task>();
+    public void Signal(int signal) => WorkerApi.NotExecutable();
+    public Task MonitorAsync() => WorkerApi.NotExecutable<Task>();
+    public Task InterceptOutboundHttpAsync(string target, IServiceBinding worker) => WorkerApi.NotExecutable<Task>();
+    public Task InterceptAllOutboundHttpAsync(IServiceBinding worker) => WorkerApi.NotExecutable<Task>();
+    public Task InterceptOutboundHttpsAsync(string target, IServiceBinding worker) => WorkerApi.NotExecutable<Task>();
     public ContainerTcpPort GetTcpPort(int port) => WorkerApi.NotExecutable<ContainerTcpPort>();
-    public Task<ContainerExecProcess> ExecAsync(
-        IEnumerable<string> command, ContainerExecOptions? options = null, CancellationToken cancellationToken = default) =>
+    public Task<ContainerExecProcess> ExecAsync(IEnumerable<string> command, ContainerExecOptions? options = null) =>
         WorkerApi.NotExecutable<Task<ContainerExecProcess>>();
 }
 
 public sealed class ContainerTcpPort
 {
-    public int Port => WorkerApi.NotExecutable<int>();
-
-    public Task<Response> FetchAsync(string url, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<Response>>();
-    public Task<TcpSocket> ConnectAsync(string address, CancellationToken cancellationToken = default) =>
-        WorkerApi.NotExecutable<Task<TcpSocket>>();
+    public Task<Response> FetchAsync(string url, FetchOptions? options = null) => WorkerApi.NotExecutable<Task<Response>>();
+    public TcpSocket Connect(string address) => WorkerApi.NotExecutable<TcpSocket>();
 }
 
-public sealed class ContainerExecProcess : IAsyncDisposable
+public sealed class ContainerExecProcess
 {
     public int Pid => WorkerApi.NotExecutable<int>();
-
-    public Task<int> GetExitCodeAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<int>>();
-    public Task<ContainerExecOutput> OutputAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<ContainerExecOutput>>();
-    public Task KillAsync(int? signal = null, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public ValueTask DisposeAsync() => WorkerApi.NotExecutable<ValueTask>();
+    public Task<int> ExitCode => WorkerApi.NotExecutable<Task<int>>();
+    public Task<ContainerExecOutput> OutputAsync() => WorkerApi.NotExecutable<Task<ContainerExecOutput>>();
+    public void Kill(int? signal = null) => WorkerApi.NotExecutable();
 }

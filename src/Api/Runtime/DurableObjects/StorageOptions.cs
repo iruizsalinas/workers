@@ -14,11 +14,11 @@ public sealed record DurableObjectStorageListOptions
 
 public sealed class DurableObjectTransaction
 {
-    public Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<T?>>();
-    public Task PutAsync<T>(string key, T value, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<bool>>();
+    public Task<T?> GetAsync<T>(string key) => WorkerApi.NotExecutable<Task<T?>>();
+    public Task PutAsync<T>(string key, T value) => WorkerApi.NotExecutable<Task>();
+    public Task<bool> DeleteAsync(string key) => WorkerApi.NotExecutable<Task<bool>>();
     public Task<IReadOnlyDictionary<string, T>> ListAsync<T>(
-        DurableObjectStorageListOptions? options = null, CancellationToken cancellationToken = default) =>
+        DurableObjectStorageListOptions? options = null) =>
         WorkerApi.NotExecutable<Task<IReadOnlyDictionary<string, T>>>();
     public void Rollback() => WorkerApi.NotExecutable();
 }

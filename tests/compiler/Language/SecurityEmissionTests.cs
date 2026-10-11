@@ -47,7 +47,7 @@ public sealed class SecurityEmissionTests
             }
             public sealed class Model
             {
-                [JsonPropertyName("__proto__")]
+                [JsonName("__proto__")]
                 public string Value { get; init; } = "unsafe";
             }
             """));

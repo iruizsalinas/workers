@@ -2,9 +2,9 @@ namespace Workers;
 
 public interface IWorkflowBinding : IBinding
 {
-    Task<WorkflowInstance> CreateAsync(WorkflowInstanceCreateOptions? options = null, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<WorkflowInstance>> CreateBatchAsync(IEnumerable<WorkflowInstanceCreateOptions> options, CancellationToken cancellationToken = default);
-    Task<WorkflowInstance> GetAsync(string id, CancellationToken cancellationToken = default);
+    Task<WorkflowInstance> CreateAsync(WorkflowInstanceCreateOptions? options = null);
+    Task<IReadOnlyList<WorkflowInstance>> CreateBatchAsync(IEnumerable<WorkflowInstanceCreateOptions> options);
+    Task<WorkflowInstance> GetAsync(string id);
 }
 
 public sealed class WorkflowInstanceCreateOptions
@@ -17,18 +17,18 @@ public sealed class WorkflowInstance
 {
     public string Id => WorkerApi.NotExecutable<string>();
 
-    public Task<WorkflowInstanceStatus> StatusAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<WorkflowInstanceStatus>>();
-    public Task PauseAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task ResumeAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task TerminateAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task RestartAsync(WorkflowInstanceRestartOptions? options = null, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task SendEventAsync(WorkflowInstanceEventOptions options, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
+    public Task<WorkflowInstanceStatus> StatusAsync() => WorkerApi.NotExecutable<Task<WorkflowInstanceStatus>>();
+    public Task PauseAsync() => WorkerApi.NotExecutable<Task>();
+    public Task ResumeAsync() => WorkerApi.NotExecutable<Task>();
+    public Task TerminateAsync() => WorkerApi.NotExecutable<Task>();
+    public Task RestartAsync(WorkflowInstanceRestartOptions? options = null) => WorkerApi.NotExecutable<Task>();
+    public Task SendEventAsync(WorkflowInstanceEventOptions options) => WorkerApi.NotExecutable<Task>();
 }
 
 public sealed class WorkflowInstanceStatus
 {
     public string Status { get; init; } = "unknown";
-    public JsonElement? Output { get; init; }
+    public JsonValue? Output { get; init; }
 }
 
 public sealed class WorkflowInstanceRestartOptions

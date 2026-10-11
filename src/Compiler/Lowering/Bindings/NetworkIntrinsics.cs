@@ -8,7 +8,7 @@ NetworkIntrinsics
         {
             [Key("Workers.ICache", "PutAsync")] = Direct("put"),
             [Key("Workers.ICache", "MatchAsync")] = new("match", BindingIntrinsicKind.CacheMatch),
-            [Key("Workers.ICache", "DeleteAsync")] = new("delete", BindingIntrinsicKind.CacheQuery),
+            [Key("Workers.ICache", "DeleteAsync")] = Direct("delete"),
 
             // Service/fetcher bindings
             [Key("Workers.IFetcherBinding", "FetchAsync")] = Direct("fetch"),

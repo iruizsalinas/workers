@@ -1,53 +1,23 @@
 namespace Workers;
 
+/// <summary>SQLite storage for a Durable Object. Queries run synchronously when <see cref="Exec{T}"/> is called.</summary>
 public sealed class DurableObjectSqlStorage
 {
-    public DurableObjectSqlStatement Prepare(string query) => WorkerApi.NotExecutable<DurableObjectSqlStatement>();
-    public long DatabaseSize => WorkerApi.NotExecutable<long>();
-    public DurableObjectSqlCursor<T> Exec<T>(string query, params object?[] values) =>
+    public double DatabaseSize => WorkerApi.NotExecutable<double>();
+
+    public DurableObjectSqlCursor<T> Exec<T>(string query, params object?[] bindings) =>
         WorkerApi.NotExecutable<DurableObjectSqlCursor<T>>();
 }
 
-public sealed class DurableObjectSqlStatement
-{
-    public DurableObjectSqlStatement Bind(params object?[] values) => WorkerApi.NotExecutable<DurableObjectSqlStatement>();
-    public Task<DurableObjectSqlResult<T>> AllAsync<T>(
-        CancellationToken cancellationToken = default) =>
-        WorkerApi.NotExecutable<Task<DurableObjectSqlResult<T>>>();
-    public Task<T> OneAsync<T>(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<T>>();
-    public Task<DurableObjectSqlRawResult> RawAsync(
-        CancellationToken cancellationToken = default) =>
-        WorkerApi.NotExecutable<Task<DurableObjectSqlRawResult>>();
-    public Task<DurableObjectSqlCursor<T>> OpenCursorAsync<T>(
-        CancellationToken cancellationToken = default) =>
-        WorkerApi.NotExecutable<Task<DurableObjectSqlCursor<T>>>();
-}
-
-public sealed class DurableObjectSqlResult<T>
-{
-    public IReadOnlyList<T> Rows { get; init; } = [];
-    public IReadOnlyList<string> ColumnNames { get; init; } = [];
-    public long RowsRead { get; init; }
-    public long RowsWritten { get; init; }
-}
-
-public sealed class DurableObjectSqlRawResult
-{
-    public IReadOnlyList<IReadOnlyList<JsonElement>> Rows { get; init; } = [];
-    public IReadOnlyList<string> ColumnNames { get; init; } = [];
-    public long RowsRead { get; init; }
-    public long RowsWritten { get; init; }
-}
-
-public sealed class DurableObjectSqlCursor<T> : IAsyncDisposable
+/// <summary>Rows returned by <c>sql.exec()</c>. Read them with <see cref="Next"/>, <see cref="One"/> or <see cref="ToArray"/>.</summary>
+public sealed class DurableObjectSqlCursor<T>
 {
     public IReadOnlyList<string> ColumnNames => WorkerApi.NotExecutable<IReadOnlyList<string>>();
-    public long RowsRead => WorkerApi.NotExecutable<long>();
-    public long RowsWritten => WorkerApi.NotExecutable<long>();
+    public double RowsRead => WorkerApi.NotExecutable<double>();
+    public double RowsWritten => WorkerApi.NotExecutable<double>();
 
-    public Task<T?> NextAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<T?>>();
-    public IAsyncEnumerable<T> ReadAllAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<IAsyncEnumerable<T>>();
+    public T? Next() => WorkerApi.NotExecutable<T?>();
     public T One() => WorkerApi.NotExecutable<T>();
     public IReadOnlyList<T> ToArray() => WorkerApi.NotExecutable<IReadOnlyList<T>>();
-    public ValueTask DisposeAsync() => WorkerApi.NotExecutable<ValueTask>();
+    public IReadOnlyList<IReadOnlyList<JsonValue>> Raw() => WorkerApi.NotExecutable<IReadOnlyList<IReadOnlyList<JsonValue>>>();
 }

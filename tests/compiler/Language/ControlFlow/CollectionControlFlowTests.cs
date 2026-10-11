@@ -71,7 +71,7 @@ public sealed class CollectionControlFlowTests
     }
 
     [Fact]
-    public void ValidatesTaskDelayAndPreservesInfiniteDelay()
+    public void UsesNativeSchedulerWaitWithoutClrDelayRules()
     {
         var module = Compile("""
             using Workers;
@@ -80,15 +80,14 @@ public sealed class CollectionControlFlowTests
                 [Fetch]
                 public static async Task<Response> Fetch(Request request, Env env, Context context)
                 {
-                    await Task.Delay(-1);
+                    await Timers.WaitAsync(-1);
                     return Response.Text("unreachable");
                 }
             }
             """);
 
-        Assert.Contains("if (milliseconds < -1 || milliseconds > 4294967294)", module);
-        Assert.Contains("if (milliseconds === -1) return new Promise(() => {})", module);
-        Assert.Contains("return scheduler.wait(milliseconds)", module);
+        Assert.Contains("scheduler.wait(-1)", module);
+        Assert.DoesNotContain("function $workers$delay", module);
     }
 
     [Fact]
@@ -112,9 +111,9 @@ public sealed class CollectionControlFlowTests
             }
             """);
 
-        Assert.Contains("await $workers$taskWhenAll([fetch(\"https://one.example\"), fetch(\"https://two.example\")], true)", module);
-        Assert.Contains("await $workers$taskWhenAll(pending, true)", module);
-        Assert.Contains("await $workers$taskWhenAll([fetch(\"https://four.example\")], true)", module);
+        Assert.Contains("await $workers$taskWhenAll([fetch(\"https://one.example\"), fetch(\"https://two.example\")])", module);
+        Assert.Contains("await $workers$taskWhenAll(pending)", module);
+        Assert.Contains("await $workers$taskWhenAll([fetch(\"https://four.example\")])", module);
     }
 
     [Fact]

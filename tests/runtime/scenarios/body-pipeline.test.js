@@ -7,7 +7,7 @@ const invoke = (path, init) => worker.fetch(new Request(`https://worker.test${pa
 describe("request body pipeline", () => {
   it("fingerprints empty and populated uploads without evaluating body factories twice", async () => {
     const digest = async text => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))),
-      byte => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+      byte => byte.toString(16).padStart(2, "0")).join("");
     const emptyDigest = await digest("");
     const generatedDigest = await digest("generated");
     for (const body of [undefined, "", "héllo"]) {
@@ -63,7 +63,7 @@ describe("request body pipeline", () => {
     const result = await response.json();
     expect(result).toMatchObject({
       fields: [{ name: "title", value: "example" }],
-      files: [{ field: "upload", name: "sample.bin", size: 4, type: "application/octet-stream", firstBytes: "000102FA" }],
+      files: [{ field: "upload", name: "sample.bin", size: 4, type: "application/octet-stream", firstBytes: "000102fa" }],
     });
     expect(result.files[0].lastModified).toBeGreaterThan(0);
   });

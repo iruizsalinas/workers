@@ -5,10 +5,7 @@ internal static class WorkerCompiler
 {
     public static int Run(string[] args) => CompilerCommand.Run(args);
 
-    internal static string Compile(IEnumerable<SyntaxTree> trees, IEnumerable<string>? additionalReferences = null) =>
-        CompileWorker(trees, additionalReferences).Source;
-
-    internal static EmittedWorker CompileWorker(IEnumerable<SyntaxTree> trees, IEnumerable<string>? additionalReferences = null)
+    internal static string Compile(IEnumerable<SyntaxTree> trees, IEnumerable<string>? additionalReferences = null)
     {
         var inputTrees = trees.ToArray();
         var parseOptions = inputTrees.OfType<CSharpSyntaxTree>().FirstOrDefault()?.Options
@@ -24,18 +21,15 @@ internal static class WorkerCompiler
             syntaxTrees,
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        compilation = GeneratedRegexImplementations.Add(compilation);
 
         CompilationGuard.ThrowIfInvalid(compilation);
-        return JavaScriptEmitter.EmitWorker(compilation);
+        return JavaScriptEmitter.Emit(compilation);
     }
 
     private const string GlobalUsings = """
         global using System;
         global using System.Collections.Generic;
-        global using System.IO;
         global using System.Linq;
-        global using System.Threading;
         global using System.Threading.Tasks;
         """;
 }

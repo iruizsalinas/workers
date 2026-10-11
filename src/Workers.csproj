@@ -3,7 +3,7 @@
     <PackageId>Workers</PackageId>
     <Version>$(WorkersVersion)</Version>
     <Authors>Iñigo Ruiz-Salinas</Authors>
-    <Description>Compile a focused C# profile directly to minimal Cloudflare Workers JavaScript.</Description>
+    <Description>Write Cloudflare Workers in C# with native JavaScript, Web, and Cloudflare APIs.</Description>
     <PackageProjectUrl>https://github.com/iruizsalinas/workers</PackageProjectUrl>
     <RepositoryUrl>https://github.com/iruizsalinas/workers</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -25,6 +25,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="" />
+    <None Include="..\PROFILE.md" Pack="true" PackagePath="" />
+    <None Include="..\MIGRATION.md" Pack="true" PackagePath="" />
     <None Include="Build\Workers.targets" Pack="true" PackagePath="buildTransitive" />
   </ItemGroup>
   <Target Name="IncludeCompilerHost">

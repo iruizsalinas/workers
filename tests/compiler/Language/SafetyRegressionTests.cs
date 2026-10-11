@@ -85,16 +85,12 @@ public sealed class SafetyRegressionTests
     }
 
     [Theory]
-    [InlineData("Regex.IsMatch(\"x\", \"x\", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1))")]
-    [InlineData("new Uri(\"relative\", UriKind.Relative)")]
     [InlineData("new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)")]
-    [InlineData("Convert.ToBase64String([1, 2, 3], 1, 2)")]
-    [InlineData("System.Text.Encoding.Unicode.GetBytes(\"text\")")]
-    public void RejectsOverloadsThatDoNotHaveEquivalentJavascriptSemantics(string expression)
+    [InlineData("new HashSet<string>(StringComparer.OrdinalIgnoreCase)")]
+    public void RejectsCollectionComparersWithoutAJavaScriptEquivalent(string expression)
     {
         var error = Assert.Throws<NotSupportedException>(() => Compile($$"""
             using Workers;
-            using System.Text.RegularExpressions;
             public static class Worker
             {
                 [Fetch]
@@ -107,21 +103,5 @@ public sealed class SafetyRegressionTests
             """));
 
         Assert.Contains("WRK105", error.Message);
-    }
-
-    [Fact]
-    public void RejectsInterpolationWhoseDotnetFormattingCannotBePreserved()
-    {
-        var error = Assert.Throws<NotSupportedException>(() => Compile("""
-            using Workers;
-            public static class Worker
-            {
-                [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
-                    Response.Text($"{DateTimeOffset.UtcNow}");
-            }
-            """));
-
-        Assert.Contains("WRK108", error.Message);
     }
 }

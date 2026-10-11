@@ -2,7 +2,7 @@ namespace Workers;
 
 public interface IVersionMetadataBinding : IBinding
 {
-    Task<VersionMetadata> GetAsync(CancellationToken cancellationToken = default);
+    string Id { get; }
+    string Tag { get; }
+    string Timestamp { get; }
 }
-
-public sealed record VersionMetadata(string Id, string? Tag, DateTimeOffset Timestamp);

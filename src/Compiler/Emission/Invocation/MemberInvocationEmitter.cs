@@ -12,10 +12,6 @@ internal sealed partial class JavaScriptEmitter
         string? receiverOverride = null)
     {
         var name = method?.Name ?? member.Name.Identifier.ValueText;
-        if (type == "System.IO.TextWriter" && name == "WriteLine"
-            && _model.GetSymbolInfo(member.Expression).Symbol is IPropertySymbol { ContainingType: { } consoleType, Name: "Error" }
-            && consoleType.ToDisplayString() == "System.Console")
-            return arguments.Length == 1 ? $"console.error({arguments[0]})" : throw UnsupportedSymbol(method, invocation);
         var receiver = receiverOverride ?? Expression(member.Expression);
         if (IsSynthesizedRecordToString(method))
             return RecordText(method!.ContainingType, receiver, invocation);
@@ -24,11 +20,10 @@ internal sealed partial class JavaScriptEmitter
                    && SymbolEqualityComparer.Default.Equals(other.Type.OriginalDefinition, method.ContainingType.OriginalDefinition)
                 ? RecordEquals(method.ContainingType, receiver, arguments[0], invocation)
                 : throw UnsupportedSymbol(method, invocation);
-        if (TryEmitFrameworkInvocation(invocation, method, receiver, name, arguments, out var framework)) return framework;
+        if (TryEmitFoundationInvocation(invocation, method, receiver, name, arguments, out var framework)) return framework;
         if (type == "Workers.Env" && EnvironmentBindings.Contains(name)) return $"{receiver}[{arguments[0]}]";
         if (type == "Workers.CacheStorage" && name == "OpenAsync") return $"caches.open({arguments[0]})";
-        if (type == "Workers.Http" && name == "FetchAsync")
-            return HttpFetch(invocation, method!, arguments);
+        if (type == "Workers.Http" && name == "FetchAsync") return $"fetch({string.Join(", ", arguments)})";
         if (type == "Workers.WebSocketPair" && name == "Create") return "new WebSocketPair()";
         if (type == "Workers.TcpSocket" && name == "Connect") return SocketConnect(method, arguments);
         if (type == "Workers.Router" && method is not null) return RouterInvocation(invocation, method, receiver, arguments);
@@ -46,23 +41,6 @@ internal sealed partial class JavaScriptEmitter
         throw UnsupportedSymbol(method, invocation);
     }
 
-    private string HttpFetch(InvocationExpressionSyntax source, IMethodSymbol method, string[] arguments)
-    {
-        var tokenIndex = method.Parameters.FirstOrDefault(IsCancellationToken)?.Ordinal ?? -1;
-        if (tokenIndex < 0) return $"fetch({string.Join(", ", arguments)})";
-        var token = arguments[tokenIndex];
-        var native = arguments.Where((_, index) => index != tokenIndex).ToArray();
-        return native.Length switch
-        {
-            1 => $"fetch({native[0]}, {{ signal: {token} ?? undefined }})",
-            2 => $"fetch({native[0]}, {{ ...{native[1]}, ...({token} == null ? {{}} : {{ signal: {token} }}) }})",
-            _ => throw UnsupportedSymbol(method, source)
-        };
-    }
-
-    private static bool IsCancellationToken(IParameterSymbol parameter) =>
-        parameter.Type.ToDisplayString() == "System.Threading.CancellationToken";
-
     private string ResponseInvocation(
         InvocationExpressionSyntax invocation,
         IMethodSymbol? method,
@@ -72,12 +50,12 @@ internal sealed partial class JavaScriptEmitter
     {
         "Text" => Response(arguments),
         "Html" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2, "{ \"content-type\": \"text/html; charset=utf-8\" }")})",
-        "Json" => $"Response.json({arguments[0]}{JsonResponseInit(arguments)})",
+        "Json" => $"Response.json({arguments[0]}{ResponseInit(arguments, 1, 2)})",
         "Empty" => $"new Response(null{ResponseInit(arguments, 0, 1)})",
         "Redirect" when arguments.Length > 2 => $"new Response(null{ResponseInit(arguments, 1, 2, $"{{ location: {arguments[0]} }}")})",
         // Response.redirect only accepts absolute URLs, while Location may be relative.
         "Redirect" => $"new Response(null, {{ status: {(arguments.Length > 1 ? arguments[1] : "302")}, headers: {{ location: {arguments[0]} }} }})",
-        "FromBody" => ResponseFromBody(invocation, arguments),
+        "FromBody" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})",
         "FromStream" when method?.Parameters.Length >= 2 && method.Parameters[1].Type.ToDisplayString() == "Workers.Headers" => $"new Response({arguments[0]}, {{ status: {(arguments.Length > 2 ? arguments[2] : "200")}, headers: {arguments[1]} }})",
         "FromStream" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})",
         "WebSocket" => $"new Response(null, {{ status: 101, webSocket: {arguments[0]} }})",
@@ -86,12 +64,6 @@ internal sealed partial class JavaScriptEmitter
         "WithoutHeader" => HeaderMutation(invocation, arguments, "delete", receiverOverride),
         _ => ""
     };
-
-    private string ResponseFromBody(InvocationExpressionSyntax invocation, string[] arguments)
-    {
-        var body = _names.Get($"response-body:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}", "body");
-        return $"(({body}) => new Response({body}?.body ?? {body}{ResponseInit(arguments, 1, 2)}))({arguments[0]})";
-    }
 
     private string HeaderMutation(
         InvocationExpressionSyntax invocation,

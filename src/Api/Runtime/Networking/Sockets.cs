@@ -15,7 +15,6 @@ public enum TcpSecureTransport
 }
 
 public sealed record TcpSocketInfo(string? RemoteAddress, string? LocalAddress);
-public sealed record TcpReadResult(bool Done, ReadOnlyMemory<byte> Bytes);
 public sealed class TcpSocket
 {
     public static TcpSocket Connect(string address, TcpSocketOptions? options = null) =>
@@ -25,12 +24,11 @@ public sealed class TcpSocket
     public static TcpSocket Connect(TcpSocketAddress address, TcpSocketOptions? options = null) =>
         WorkerApi.NotExecutable<TcpSocket>();
 
-    public Task<TcpSocketInfo> OpenedAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<TcpSocketInfo>>();
-    public Task ClosedAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task<TcpReadResult> ReadAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<TcpReadResult>>();
-    public Task WriteAsync(ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task WriteTextAsync(string value, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task CloseWritableAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task CloseAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task<TcpSocket> StartTlsAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<TcpSocket>>();
+    public Task<TcpSocketInfo> Opened => WorkerApi.NotExecutable<Task<TcpSocketInfo>>();
+    public Task Closed => WorkerApi.NotExecutable<Task>();
+    public ReadableStream Readable => WorkerApi.NotExecutable<ReadableStream>();
+    public WritableStream Writable => WorkerApi.NotExecutable<WritableStream>();
+    public bool Upgraded => WorkerApi.NotExecutable<bool>();
+    public Task CloseAsync() => WorkerApi.NotExecutable<Task>();
+    public TcpSocket StartTls() => WorkerApi.NotExecutable<TcpSocket>();
 }

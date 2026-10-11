@@ -2,7 +2,7 @@ namespace Workers;
 
 public interface IMediaBinding : IBinding
 {
-    MediaPipeline Input(Body media);
+    MediaPipeline Input(ReadableStream media);
 }
 
 public sealed class MediaPipeline
@@ -19,7 +19,7 @@ public sealed class MediaOutputOptions
 
 public sealed class MediaOutput
 {
-    public Task<Response> ResponseAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<Response>>();
-    public Task<Body> MediaAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<Body>>();
-    public Task<string> ContentTypeAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<string>>();
+    public Task<Response> ResponseAsync() => WorkerApi.NotExecutable<Task<Response>>();
+    public Task<ReadableStream> MediaAsync() => WorkerApi.NotExecutable<Task<ReadableStream>>();
+    public Task<string> ContentTypeAsync() => WorkerApi.NotExecutable<Task<string>>();
 }

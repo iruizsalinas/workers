@@ -1,4 +1,3 @@
-using System.Text;
 using Workers;
 
 namespace BodyPipeline;
@@ -37,7 +36,7 @@ public static class Worker
             if (file is not null)
             {
                 var preview = await file.SliceBytesAsync(0, 32);
-                files.Add(new FileInfo(entry.Key, file.FileName, file.Size, file.ContentType, file.LastModified, Convert.ToHexString(preview)));
+                files.Add(new FileInfo(entry.Key, file.FileName, file.Size, file.ContentType, file.LastModified, TextCodec.EncodeHex(preview)));
                 continue;
             }
             fields.Add(new FieldInfo(entry.Key, entry.Value.Text ?? ""));
@@ -58,7 +57,7 @@ public static class Worker
 
     private static async Task<Response> DecompressAsync(Request request)
     {
-        var body = request.BodyStream();
+        var body = request.Body;
         if (body is null)
             return Response.Text("Missing body", 400);
         return Response.Json(new { decompressed = await Response.FromStream(body.Decompress(CompressionFormat.Gzip)).TextAsync() });
@@ -66,17 +65,17 @@ public static class Worker
 
     private static async Task<Response> FingerprintAsync(Request request)
     {
-        var digest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, request.Body);
+        var digest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, Body.FromStream(request.Body!));
         var emptyDigest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, Body.Empty);
         var calls = new int[2];
         var generatedDigest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, CreateBody(calls));
         var byteDigest = await Crypto.DigestBytesAsync(DigestAlgorithm.Sha256, CreateBytes(calls));
         return Response.Json(new
         {
-            sha256 = Convert.ToHexString(digest),
-            emptySha256 = Convert.ToHexString(emptyDigest),
-            generatedSha256 = Convert.ToHexString(generatedDigest),
-            byteSha256 = Convert.ToHexString(byteDigest),
+            sha256 = TextCodec.EncodeHex(digest),
+            emptySha256 = TextCodec.EncodeHex(emptyDigest),
+            generatedSha256 = TextCodec.EncodeHex(generatedDigest),
+            byteSha256 = TextCodec.EncodeHex(byteDigest),
             factoryCalls = calls[0],
             byteFactoryCalls = calls[1]
         });
@@ -91,43 +90,51 @@ public static class Worker
     private static byte[] CreateBytes(int[] calls)
     {
         calls[1] = calls[1] + 1;
-        return Encoding.UTF8.GetBytes("generated");
+        return TextCodec.EncodeUtf8("generated");
     }
 
     private static async Task<Response> PreviewAsync(Request request)
     {
-        var stream = request.BodyStream();
+        var stream = request.Body;
         if (stream is null)
             return Response.Text("Missing body", 400);
-        var first = await stream.ReadAsync();
-        await stream.CancelAsync();
-        return Response.Json(new { first.Done, preview = TextCodec.DecodeUtf8(first.Bytes) });
+        var reader = stream.GetReader();
+        var first = await reader.ReadAsync();
+        await reader.CancelAsync("preview complete");
+        return Response.Json(new { first.Done, preview = TextCodec.DecodeUtf8(first.Value!) });
     }
 
     private static async Task<Response> RemainderAsync(Request request)
     {
-        var stream = request.BodyStream();
+        var stream = request.Body;
         if (stream is null)
             return Response.Text("Missing body", 400);
-        var first = await stream.ReadAsync();
-        var remainder = await stream.ReadAllBytesAsync();
-        return Response.Json(new { first = TextCodec.DecodeUtf8(first.Bytes), remainder = TextCodec.DecodeUtf8(remainder) });
+        var reader = stream.GetReader();
+        var first = await reader.ReadAsync();
+        var remainder = "";
+        while (!first.Done)
+        {
+            var next = await reader.ReadAsync();
+            if (next.Done) break;
+            remainder += TextCodec.DecodeUtf8(next.Value!);
+        }
+        return Response.Json(new { first = TextCodec.DecodeUtf8(first.Value!), remainder });
     }
 
     private static async Task<Response> VerifyAsync(Request request)
     {
         var payload = await request.BytesAsync();
-        var signature = Convert.FromHexString(request.Headers.Get("x-signature") ?? "");
+        var signature = TextCodec.DecodeHex(request.Headers.Get("x-signature") ?? "");
         var pending = Crypto.VerifyHmacSha256Async("body-signing-secret", signature, payload);
         signature = new byte[signature.Length];
-        payload = Encoding.UTF8.GetBytes("changed");
+        payload = TextCodec.EncodeUtf8("changed");
         return Response.Json(new { valid = await pending });
     }
 
     private static Response Stream(Request request)
     {
         var value = request.QueryParameters.Get("count") ?? "10";
-        var count = Math.Min(Math.Max(int.Parse(value), 1), 100);
+        var count = (int)Numbers.Min(Numbers.Max(int.Parse(value), 1), 100);
         var stream = ReadableStream.FromAsyncEnumerable(CreateLines(count));
         if ((request.Headers.Get("accept-encoding") ?? "").Contains("gzip"))
             return Response.FromStream(stream.Compress(CompressionFormat.Gzip))
@@ -143,8 +150,8 @@ public static class Worker
     {
         for (var index = 0; index < count; index++)
         {
-            yield return Encoding.UTF8.GetBytes($"{{\"index\":{index},\"id\":\"{Guid.NewGuid()}\",\"timestamp\":\"{DateTimeOffset.UtcNow:O}\"}}\n");
-            await Task.Delay(5);
+            yield return TextCodec.EncodeUtf8($"{{\"index\":{index},\"id\":\"{Crypto.RandomUuid()}\",\"timestamp\":\"{new Date().ToIsoString()}\"}}\n");
+            await Timers.WaitAsync(5);
         }
     }
 }

@@ -18,37 +18,37 @@ public sealed class DurableObjectState
     public void SetWebSocketAutoResponse(WebSocketAutoResponse? pair) => WorkerApi.NotExecutable();
     public WebSocketAutoResponse? GetWebSocketAutoResponse() =>
         WorkerApi.NotExecutable<WebSocketAutoResponse?>();
-    public DateTimeOffset? GetWebSocketAutoResponseTimestamp(WebSocket socket) =>
-        WorkerApi.NotExecutable<DateTimeOffset?>();
-    public void SetHibernatableWebSocketEventTimeout(TimeSpan? timeout = null) => WorkerApi.NotExecutable();
-    public TimeSpan? GetHibernatableWebSocketEventTimeout() => WorkerApi.NotExecutable<TimeSpan?>();
+    public Date? GetWebSocketAutoResponseTimestamp(WebSocket socket) =>
+        WorkerApi.NotExecutable<Date?>();
+    public void SetHibernatableWebSocketEventTimeout(double? milliseconds = null) => WorkerApi.NotExecutable();
+    public double? GetHibernatableWebSocketEventTimeout() => WorkerApi.NotExecutable<double?>();
 }
 
 public sealed class DurableObjectStorage
 {
     public DurableObjectKvStorage Kv => WorkerApi.NotExecutable<DurableObjectKvStorage>();
 
-    public Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<T?>>();
+    public Task<T?> GetAsync<T>(string key) => WorkerApi.NotExecutable<Task<T?>>();
     public Task<IReadOnlyDictionary<string, T?>> GetAsync<T>(
-        IEnumerable<string> keys, CancellationToken cancellationToken = default) =>
+        IEnumerable<string> keys) =>
         WorkerApi.NotExecutable<Task<IReadOnlyDictionary<string, T?>>>();
-    public Task PutAsync<T>(string key, T value, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task PutAsync<T>(IReadOnlyDictionary<string, T> values, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task<bool> DeleteAsync(string key, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<bool>>();
-    public Task DeleteAllAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task SyncAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
+    public Task PutAsync<T>(string key, T value) => WorkerApi.NotExecutable<Task>();
+    public Task PutAsync<T>(IReadOnlyDictionary<string, T> values) => WorkerApi.NotExecutable<Task>();
+    public Task<bool> DeleteAsync(string key) => WorkerApi.NotExecutable<Task<bool>>();
+    public Task DeleteAllAsync() => WorkerApi.NotExecutable<Task>();
+    public Task SyncAsync() => WorkerApi.NotExecutable<Task>();
     public Task<IReadOnlyDictionary<string, T>> ListAsync<T>(
-        DurableObjectStorageListOptions? options = null, CancellationToken cancellationToken = default) =>
+        DurableObjectStorageListOptions? options = null) =>
         WorkerApi.NotExecutable<Task<IReadOnlyDictionary<string, T>>>();
     public Task TransactionAsync(Func<DurableObjectTransaction, Task> callback) => WorkerApi.NotExecutable<Task>();
     public void TransactionSync(Action callback) => WorkerApi.NotExecutable();
-    public Task<DateTimeOffset?> GetAlarmAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<DateTimeOffset?>>();
-    public Task SetAlarmAsync(DateTimeOffset scheduledTime, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task DeleteAlarmAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
-    public Task<string?> GetCurrentBookmarkAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<string?>>();
+    public Task<Date?> GetAlarmAsync() => WorkerApi.NotExecutable<Task<Date?>>();
+    public Task SetAlarmAsync(Date scheduledTime) => WorkerApi.NotExecutable<Task>();
+    public Task DeleteAlarmAsync() => WorkerApi.NotExecutable<Task>();
+    public Task<string?> GetCurrentBookmarkAsync() => WorkerApi.NotExecutable<Task<string?>>();
     public Task<string?> GetBookmarkForTimeAsync(
-        DateTimeOffset time, CancellationToken cancellationToken = default) =>
+        Date time) =>
         WorkerApi.NotExecutable<Task<string?>>();
-    public Task OnNextSessionRestoreBookmarkAsync(string bookmark, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
+    public Task OnNextSessionRestoreBookmarkAsync(string bookmark) => WorkerApi.NotExecutable<Task>();
     public DurableObjectSqlStorage Sql => WorkerApi.NotExecutable<DurableObjectSqlStorage>();
 }

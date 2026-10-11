@@ -9,7 +9,7 @@ const invoke = (path, body) => worker.fetch(new Request(`https://worker.test${pa
 describe("independent upload and signature verification", () => {
   it.each([new Uint8Array(), new Uint8Array([0, 128, 255, 1])])("hashes arbitrary binary bodies like native Web Crypto", async bytes => {
     const expected = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
-      byte => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+      byte => byte.toString(16).padStart(2, "0")).join("");
     const result = await (await invoke("/fingerprint", bytes)).json();
     expect(result.sha256).toBe(expected);
     expect(result.factoryCalls).toBe(1);

@@ -44,7 +44,7 @@ public static class Worker
 
         if (request.Path == "/metadata")
         {
-            var metadata = await environment.Version("VERSION").GetAsync();
+            var metadata = environment.Version("VERSION");
             return Response.Json(new { id = metadata.Id, tag = metadata.Tag });
         }
 
@@ -64,14 +64,14 @@ public static class Worker
 
         if (request.Path == "/images")
         {
-            var info = await environment.Images("IMAGES").InfoAsync(request.Body);
+            var info = await environment.Images("IMAGES").InfoAsync(request.Body!);
             return Response.Json(new { format = info.Format, width = info.Width, height = info.Height });
         }
 
         if (request.Path == "/media")
         {
             var output = environment.Media("MEDIA")
-                .Input(request.Body)
+                .Input(request.Body!)
                 .Transform(new { width = 320 })
                 .Output(new MediaOutputOptions { Mode = "video", Format = "mp4" });
             return Response.Text(await output.ContentTypeAsync());
@@ -93,7 +93,7 @@ public static class Worker
 
         if (request.Path == "/hyperdrive")
         {
-            var connection = await environment.Hyperdrive("HYPERDRIVE").GetConnectionInfoAsync();
+            var connection = environment.Hyperdrive("HYPERDRIVE");
             return Response.Json(new { host = connection.Host, port = connection.Port, database = connection.Database });
         }
 

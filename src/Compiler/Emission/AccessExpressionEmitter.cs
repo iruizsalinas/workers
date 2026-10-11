@@ -59,13 +59,6 @@ internal sealed partial class JavaScriptEmitter
         string receiver)
     {
         var arguments = element.ArgumentList.Arguments;
-        if (IsJsonNodeType(_model.GetTypeInfo(access.Expression).Type))
-            return SpeculativeConditionalAccess(access, receiver);
-        if (IsRegexType(_model.GetTypeInfo(access.Expression).Type, "GroupCollection"))
-        {
-            var groups = _names.Get($"conditional-groups:{access.SyntaxTree.FilePath}:{access.SpanStart}", "groups");
-            return $"(({groups}) => {groups} == null ? null : {RegexGroup(groups, Expression(arguments.Single().Expression))})({receiver})";
-        }
         if (!IsSequenceType(_model.GetTypeInfo(access.Expression).Type))
         {
             if (!IsDictionary(_model.GetTypeInfo(access.Expression).Type))
@@ -84,13 +77,9 @@ internal sealed partial class JavaScriptEmitter
     {
         var symbol = _model.GetSymbolInfo(member).Symbol;
         var receiverType = _model.GetTypeInfo(access.Expression).Type;
-        if (IsDateOrTimeOnly(symbol?.ContainingType) || IsJsonNodeType(symbol?.ContainingType) || IsJsonNodeType(receiverType))
-            return SpeculativeConditionalAccess(access, receiver);
         if (symbol?.Name == "Length"
             && (receiverType?.SpecialType == SpecialType.System_String || receiverType is IArrayTypeSymbol))
             return $"({receiver}?.length ?? null)";
-        if (RegexCaptureField(symbol) is { } regexField)
-            return $"({receiver}?.{regexField} ?? null)";
         if (symbol?.ContainingType is { } userType && IsUserInstanceType(userType) && RequiresUserClass(userType)
             && symbol is IFieldSymbol or IPropertySymbol)
         {
@@ -100,35 +89,18 @@ internal sealed partial class JavaScriptEmitter
                 ? $"({receiver}?.{name} ?? null)"
                 : $"({receiver}?.[{System.Text.Json.JsonSerializer.Serialize(name)}] ?? null)";
         }
-        ThrowIfUnsupportedFrameworkMember(symbol, member);
+        ThrowIfUnsupportedFoundationMember(symbol, member);
         return $"({receiver}?.{LowerFirst(symbol?.Name ?? member.Name.Identifier.ValueText)} ?? null)";
     }
 
     private string ElementAccess(ElementAccessExpressionSyntax value)
     {
-        if (IsJsonNodeType(_model.GetTypeInfo(value.Expression).Type))
-            return JsonNodeElementAccess(value);
         var receiver = Expression(value.Expression);
-        if (_model.GetTypeInfo(value.Expression).Type?.ToDisplayString() == "System.Text.Json.JsonElement")
-        {
-            var index = value.ArgumentList.Arguments.Single();
-            if (_model.GetTypeInfo(index.Expression).Type?.SpecialType != SpecialType.System_Int32)
-                throw Unsupported("WRK108", value);
-            var position = Expression(index.Expression);
-            return HelperInvocation(JavaScriptHelper.JsonElementGetIndex, [receiver, position]);
-        }
         if (_model.GetTypeInfo(value.Expression).Type is INamedTypeSymbol lookup
             && lookup.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>")
             return $"{receiver}.get({string.Join(", ", value.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))})";
         if (BindingIntrinsicRegistry.IsQueueMessageBatch(_model.GetTypeInfo(value.Expression).Type))
             receiver += ".messages";
-        if (IsRegexType(_model.GetTypeInfo(value.Expression).Type, "GroupCollection"))
-            return RegexGroup(receiver, Expression(value.ArgumentList.Arguments.Single().Expression));
-        if (_model.GetTypeInfo(value.Expression).Type?.ToDisplayString() == "System.Text.StringBuilder")
-        {
-            _helpers.Require(JavaScriptHelper.StringBuilder);
-            return $"{_helpers.Name("stringBuilderCharAt")}({receiver}, {Expression(value.ArgumentList.Arguments.Single().Expression)})";
-        }
         if (IsSequenceType(_model.GetTypeInfo(value.Expression).Type))
         {
             var index = value.ArgumentList.Arguments.Single();

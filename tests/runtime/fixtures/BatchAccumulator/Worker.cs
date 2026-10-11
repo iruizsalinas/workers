@@ -35,14 +35,14 @@ public sealed class Accumulator
             var input = await request.JsonAsync<AddInput>();
             if (input is null || input.Amount == 0)
                 return Response.Json(new { error = "amount must be a non-zero integer" }, 400);
-            var id = Guid.NewGuid().ToString();
+            var id = Crypto.RandomUuid();
             _state.Storage.TransactionSync(() =>
             {
-                _sql.Exec<object>("INSERT INTO pending (id, amount, created_at) VALUES (?, ?, ?)", id, input.Amount, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-                _state.Storage.Kv.Put($"meta:{id}", new PendingMetadata(input.Amount, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+                _sql.Exec<object>("INSERT INTO pending (id, amount, created_at) VALUES (?, ?, ?)", id, input.Amount, Date.Now());
+                _state.Storage.Kv.Put($"meta:{id}", new PendingMetadata(input.Amount, Date.Now()));
             });
             if (await _state.Storage.GetAlarmAsync() is null)
-                await _state.Storage.SetAlarmAsync(DateTimeOffset.UtcNow.AddSeconds(1));
+                await _state.Storage.SetAlarmAsync(new Date(Date.Now() + 1000));
             return Response.Json(new { id, queued = true }, 202);
         }
 
@@ -90,7 +90,7 @@ public sealed class Accumulator
         {
             _sql.Exec<object>("UPDATE totals SET total = total + ?, batches = batches + 1 WHERE id = 1", delta);
             _sql.Exec<object>("DELETE FROM pending");
-            _state.Storage.Kv.Put("lastBatch", new BatchMetadata(rows.Count, delta, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+            _state.Storage.Kv.Put("lastBatch", new BatchMetadata(rows.Count, delta, Date.Now()));
         });
         foreach (var row in rows)
             _state.Storage.Kv.Delete($"meta:{row.Id}");
@@ -100,6 +100,6 @@ public sealed class Accumulator
 
 public sealed record AddInput(int Amount);
 public sealed record TotalsRow(int Total, int Batches);
-public sealed record PendingRow(string Id, int Amount, long CreatedAt);
-public sealed record PendingMetadata(int Amount, long CreatedAt);
-public sealed record BatchMetadata(int Count, int Delta, long ProcessedAt);
+public sealed record PendingRow(string Id, int Amount, double CreatedAt);
+public sealed record PendingMetadata(int Amount, double CreatedAt);
+public sealed record BatchMetadata(int Count, int Delta, double ProcessedAt);

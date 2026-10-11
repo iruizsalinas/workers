@@ -3,160 +3,51 @@ namespace Workers.Compiler.Tests;
 public sealed class DatabaseTests
 {
     [Fact]
-    public void MapsPostgresClientToNodePostgres()
+    public void ReadsD1RowsWithTheJsonNamesAndSqliteBooleans()
     {
         var module = Compile("""
             using Workers;
             using System.Threading.Tasks;
-            public sealed record User(int Id, string Name);
+            public sealed record Row(long Total, bool Active, [property: JsonName("created_at")] Date? CreatedAt);
             public static class Worker
             {
                 [Fetch]
                 public static async Task<Response> Fetch(Request request, Env env, Context context)
                 {
-                    await using var db = await PostgresClient.ConnectAsync(env.Hyperdrive("HYPERDRIVE"));
-                    var users = await db.QueryAsync<User>("select id, name from users where id = $1", [7]);
-                    var result = await db.QueryAsync("delete from users");
-                    return Response.Json(new { users, deleted = result.RowCount, result.Command });
+                    var rows = await env.D1("DB").Prepare("select total, active, created_at from rows").AllAsync<Row>();
+                    return Response.Json(rows.Results);
                 }
             }
             """);
 
-        Assert.Contains("import { Client as $workers$PostgresClient } from \"pg\";", module);
-        Assert.Contains("const db = await (client => (client.on(\"error\", () => { }), client.connect().then(() => client)))"
-            + "(new $workers$PostgresClient({ connectionString: env[\"HYPERDRIVE\"].connectionString }));", module);
-        Assert.Contains("await db.query(\"select id, name from users where id = $1\", $workers$sqlParameters([7])).then(value => value.rows)"
-            + ".then(value => value.map(", module);
-        Assert.Contains("$workers$User.$fromJSON(", module);
-        Assert.Contains("let result = await db.query(\"delete from users\");", module);
-        Assert.Contains("deleted: result.rowCount, command: result.command", module);
-        Assert.Contains("} finally {\n    if (db != null) await db.end();\n  }", module.ReplaceLineEndings("\n"));
-    }
-
-    [Fact]
-    public void MapsMySqlClientToMySql2WithoutEval()
-    {
-        var module = Compile("""
-            using Workers;
-            using System.Threading.Tasks;
-            public sealed record User(int Id, string Name);
-            public static class Worker
-            {
-                [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
-                {
-                    await using var db = await MySqlClient.ConnectAsync(env.Secret("MYSQL_URL"));
-                    var users = await db.QueryAsync<User>("select id, name from users");
-                    var inserted = await db.QueryAsync("insert into users (name) values (?)", ["Ada"]);
-                    return Response.Json(new { users, inserted.InsertId, inserted.AffectedRows });
-                }
-            }
-            """);
-
-        Assert.Contains("import { createConnection as $workers$createMySqlConnection } from \"mysql2/promise\";", module);
-        Assert.Contains("await $workers$createMySqlConnection({ uri: env[\"MYSQL_URL\"], disableEval: true })", module);
-        Assert.Contains("await db.query(\"select id, name from users\").then(([value]) => value).then(value => value.map(", module);
-        Assert.Contains("await db.query(\"insert into users (name) values (?)\", $workers$sqlParameters([\"Ada\"])).then(([value]) => value)", module);
-        Assert.Contains("insertId: inserted.insertId, affectedRows: inserted.affectedRows", module);
-    }
-
-    [Fact]
-    public void MapsMySqlHyperdriveBindingToConnectionFields()
-    {
-        var module = Compile("""
-            using Workers;
-            using System.Threading.Tasks;
-            public static class Worker
-            {
-                [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
-                {
-                    await using var db = await MySqlClient.ConnectAsync(env.Hyperdrive("MYSQL"));
-                    return Response.Text("ok");
-                }
-            }
-            """);
-
-        Assert.Contains("binding => ({ host: binding.host, port: binding.port, user: binding.user, password: binding.password, "
-            + "database: binding.database, disableEval: true }))(env[\"MYSQL\"])", module);
-    }
-
-    [Fact]
-    public void MapsMongoCollectionsToTheOfficialDriver()
-    {
-        var module = Compile("""
-            using System.Collections.Generic;
-            using System.Text.Json.Serialization;
-            using Workers;
-            using System.Threading.Tasks;
-            public sealed record Person([property: JsonPropertyName("_id")] string? Id, string Name, int Age);
-            public static class Worker
-            {
-                [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
-                {
-                    await using var client = await MongoClient.ConnectAsync(env.Secret("MONGODB_URL"));
-                    var people = client.Database("app").Collection<Person>("people");
-                    var inserted = await people.InsertOneAsync(new Person(null, "Ada", 36));
-                    var person = await people.FindOneAsync(new Dictionary<string, object?> { ["_id"] = MongoClient.ObjectId(inserted.InsertedId) });
-                    var adults = await people.FindAsync(new { age = 36 }, new MongoFindOptions { Sort = new { name = 1 }, Limit = 10 });
-                    var updated = await people.UpdateOneAsync(new { name = "Ada" }, new Dictionary<string, object?> { ["$inc"] = new { age = 1 } });
-                    var count = await people.CountDocumentsAsync();
-                    return Response.Json(new { person, adults, updated.ModifiedCount, count });
-                }
-            }
-            """);
-
-        Assert.Contains("import { MongoClient as $workers$MongoClient } from \"mongodb\";", module);
-        Assert.Contains("import { ObjectId as $workers$ObjectId } from \"mongodb\";", module);
-        Assert.Contains("const client = await new $workers$MongoClient(env[\"MONGODB_URL\"]).connect();", module);
-        Assert.Contains("let people = client.db(\"app\").collection(\"people\");", module);
-        Assert.Contains("await people.insertOne($workers$mongoDocument(new $workers$Person(null, \"Ada\", 36), true)).then($workers$mongoValue)", module);
-        Assert.Contains("people.findOne($workers$mongoDocument(Object.assign(Object.create(null), { [\"_id\"]: new $workers$ObjectId(inserted.insertedId) })) ?? {})"
-            + ".then($workers$mongoValue).then(", module);
-        Assert.Contains("people.find($workers$mongoDocument({ age: 36 }) ?? {}, $workers$mongoDocument({ sort: { name: 1 }, limit: 10 }) ?? undefined)"
-            + ".toArray().then(documents => documents.map($workers$mongoValue)).then(value => value.map(", module);
-        Assert.Contains("await people.countDocuments({})", module);
-        Assert.Contains("if (client != null) await client.close();", module);
-    }
-
-    [Fact]
-    public void ConvertsDriverRowValuesInRowMode()
-    {
-        var module = Compile("""
-            using Workers;
-            using System.Threading.Tasks;
-            public sealed record Row(long Total, byte[] Payload);
-            public static class Worker
-            {
-                [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
-                {
-                    await using var db = await PostgresClient.ConnectAsync("postgres://localhost/app");
-                    return Response.Json(await db.QueryAsync<Row>("select total, payload from rows"));
-                }
-            }
-            """);
-
-        Assert.Contains("if (mode === 2 && kind >= 2 && kind <= 4 && (typeof value === \"bigint\" || typeof value === \"string\"", module);
-        Assert.Contains("if (mode === 2 && kind === 6 && (ArrayBuffer.isView(value) || value instanceof ArrayBuffer))", module);
+        Assert.Contains("value.results.map(value => value == null ? value : $workers$Row.$fromRow(value))", module);
+        Assert.Contains("$workers$Row.$fromRow = function (source) {", module);
+        Assert.Contains("Object.hasOwn(source, \"total\") ? source[\"total\"] : 0", module);
+        Assert.Contains("Object.hasOwn(source, \"active\") ? (value => value == null ? value : Boolean(value))(source[\"active\"]) : false", module);
+        Assert.Contains("Object.hasOwn(source, \"created_at\") ? (value => value == null ? value : new Date(value))(source[\"created_at\"]) : null", module);
+        Assert.DoesNotContain("mode", module);
     }
 
     [Fact]
     public void DisposesUsingStatementResourcesAfterTheirBody()
     {
         var module = Compile("""
+            using System;
             using Workers;
             using System.Threading.Tasks;
+            public sealed class Lease : IAsyncDisposable
+            {
+                public async ValueTask DisposeAsync() => await Timers.WaitAsync(0);
+            }
             public static class Worker
             {
                 [Fetch]
                 public static async Task<Response> Fetch(Request request, Env env, Context context)
                 {
-                    await using (var first = await PostgresClient.ConnectAsync("postgres://one"))
-                    await using (var second = await MySqlClient.ConnectAsync("mysql://two"))
+                    await using (var first = new Lease())
+                    await using (var second = new Lease())
                     {
-                        await first.QueryAsync("select 1");
+                        Log.Info("working");
                     }
                     return Response.Text("done");
                 }
@@ -164,24 +55,19 @@ public sealed class DatabaseTests
             """).ReplaceLineEndings("\n");
 
         Assert.Contains("""
-              {
-                const first = await (client =>
-            """.ReplaceLineEndings("\n"), module);
-        Assert.Contains("""
+                const first = new $workers$Lease();
                 try {
                   {
-                    const second = await $workers$createMySqlConnection({ uri: "mysql://two", disableEval: true });
+                    const second = new $workers$Lease();
                     try {
-                      await first.query("select 1");
+                      console.info("working");
                     } finally {
-                      if (second != null) await second.end();
+                      if (second != null) await second.$workers$cs$Lease$dispose();
                     }
                   }
                 } finally {
-                  if (first != null) await first.end();
+                  if (first != null) await first.$workers$cs$Lease$dispose();
                 }
-              }
-              return new Response("done"
             """.ReplaceLineEndings("\n"), module);
     }
 
@@ -193,7 +79,7 @@ public sealed class DatabaseTests
             using Workers;
             public sealed class Lease : IDisposable
             {
-                public void Dispose() => Console.WriteLine("released");
+                public void Dispose() => Log.Info("released");
             }
             public static class Worker
             {
@@ -201,7 +87,7 @@ public sealed class DatabaseTests
                 public static Response Fetch(Request request, Env env, Context context)
                 {
                     using var lease = new Lease();
-                    Console.WriteLine("working");
+                    Log.Info("working");
                     return Response.Text("ok");
                 }
             }
@@ -210,7 +96,7 @@ public sealed class DatabaseTests
         Assert.Contains("""
               const lease = new $workers$Lease();
               try {
-                console.log("working");
+                console.info("working");
                 return new Response("ok"
             """.ReplaceLineEndings("\n"), module);
         Assert.Contains("if (lease != null) lease.", module);
@@ -243,54 +129,6 @@ public sealed class DatabaseTests
     }
 
     [Fact]
-    public void DefaultsMissingDateAndTimeSpanMembers()
-    {
-        var module = Compile("""
-            using System;
-            using Workers;
-            using System.Threading.Tasks;
-            public sealed record Event(DateTimeOffset At, TimeSpan Duration);
-            public static class Worker
-            {
-                [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context) =>
-                    Response.Json(await request.JsonAsync<Event>());
-            }
-            """);
-
-        Assert.Contains(": new Date(-62135596800000)", module);
-    }
-
-    [Fact]
-    public void PassesCancellationToMongoReadsAndChecksItBeforeWrites()
-    {
-        var module = Compile("""
-            using System.Threading;
-            using Workers;
-            using System.Threading.Tasks;
-            public sealed record Person(string Name);
-            public static class Worker
-            {
-                [Fetch]
-                public static async Task<Response> Fetch(Request request, Env env, Context context)
-                {
-                    using var source = new CancellationTokenSource();
-                    await using var client = await MongoClient.ConnectAsync("mongodb://localhost");
-                    var people = client.Database("app").Collection<Person>("people");
-                    var found = await people.FindOneAsync(new { name = "Ada" }, source.Token);
-                    await people.InsertOneAsync(new Person("Grace"), source.Token);
-                    return Response.Json(found);
-                }
-            }
-            """);
-
-        Assert.Contains(".findOne($workers$mongoDocument($workers$arg1) ?? {}, { signal: $workers$arg2 ?? undefined })", module);
-        Assert.Contains("($workers$cancellationCheck($workers$arg2$2), $workers$receiver$2.insertOne(", module);
-        Assert.DoesNotContain("insertOne($workers$mongoDocument($workers$arg1$2, true), { signal", module);
-        Assert.Contains("if (source != null) $workers$cancellationCancelAfter(source, -1);", module);
-    }
-
-    [Fact]
     public void ReadsD1MetadataAndMaterializesBatchRows()
     {
         var module = Compile("""
@@ -317,7 +155,7 @@ public sealed class DatabaseTests
     }
 
     [Fact]
-    public void ExposesHyperdriveSocketAndAddress()
+    public void ExposesHyperdriveFieldsAndSocket()
     {
         var module = Compile("""
             using Workers;
@@ -328,15 +166,14 @@ public sealed class DatabaseTests
                 public static async Task<Response> Fetch(Request request, Env env, Context context)
                 {
                     var hyperdrive = env.Hyperdrive("HYPERDRIVE");
-                    var info = await hyperdrive.GetConnectionInfoAsync();
                     var socket = hyperdrive.Connect();
                     await socket.CloseAsync();
-                    return Response.Text(info.Ip);
+                    return Response.Text($"{hyperdrive.Host}:{hyperdrive.Port}/{hyperdrive.Database}");
                 }
             }
             """);
 
         Assert.Contains("let socket = hyperdrive.connect();", module);
-        Assert.Contains("new Response(info.ip", module);
+        Assert.Contains("`${(hyperdrive.host) ?? \"\"}:${hyperdrive.port}/${(hyperdrive.database) ?? \"\"}`", module);
     }
 }

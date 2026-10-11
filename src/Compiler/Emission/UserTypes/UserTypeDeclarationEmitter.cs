@@ -9,7 +9,7 @@ internal sealed partial class JavaScriptEmitter
     {
         while (_pendingUserMethods.Count != 0 || _pendingUserTypes.Count != 0
                || _pendingStaticHolders.Count != 0 || _pendingStaticGetters.Count != 0
-               || _pendingClrJsonProjections.Count != 0 || _pendingRecordTextFunctions.Count != 0
+               || _pendingRecordTextFunctions.Count != 0
                || _pendingRecordEqualityFunctions.Count != 0 || _pendingEnumTextFunctions.Count != 0)
         {
             EmitPendingEnumTextFunctions();
@@ -17,7 +17,6 @@ internal sealed partial class JavaScriptEmitter
             EmitPendingRecordTextFunctions();
             EmitUserMethods();
             EmitPendingStaticState();
-            EmitPendingClrJsonProjections();
             while (_pendingUserTypes.Count != 0)
             {
                 var type = _pendingUserTypes.Dequeue();
@@ -46,8 +45,6 @@ internal sealed partial class JavaScriptEmitter
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>().Where(method =>
                      _model.GetDeclaredSymbol(method)?.IsStatic == false))
             EmitUserInstanceMethod(method);
-        if (_jsonMaterializedUserTypes.Contains(type))
-            EmitUserJsonMaterializer(type, declaration);
         EmitUserJsonProjection(type, declaration);
         _output.AppendLine("}").AppendLine();
     }
@@ -56,7 +53,7 @@ internal sealed partial class JavaScriptEmitter
     // contract (camelCase unless JsonPropertyName is present), matching plain records.
     private void EmitUserJsonProjection(INamedTypeSymbol type, TypeDeclarationSyntax declaration)
     {
-        var members = JsonProjectionProperties(type, declaration)
+        var members = JsonContractProperties(type)
             .Select(property => (Property: property, Name: JsonPropertyName(property) ?? LowerFirst(property.Name)))
             .ToList();
         _output.AppendLine("  toJSON() {");

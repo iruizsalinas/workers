@@ -14,7 +14,7 @@ public sealed class HttpBodyTests
                 {
                     var form = await request.FormDataAsync();
                     var response = Response.FromBody(Body.FromFormData(form));
-                    var streamResponse = Response.FromBody(Body.FromStream(request.BodyStream()!));
+                    var streamResponse = Response.FromBody(Body.FromStream(request.Body!));
                     var queryResponse = Response.FromBody(Body.FromQueryParameters(request.QueryParameters));
                     var used = response.BodyUsed;
                     var parsed = await response.FormDataAsync();
@@ -23,7 +23,9 @@ public sealed class HttpBodyTests
             }
             """);
 
-        Assert.Contains("new Response($workers$body?.body ?? $workers$body)", module);
+        Assert.Contains("let response = new Response(form);", module);
+        Assert.Contains("new Response(request.body)", module);
+        Assert.Contains("new Response(new URL(request.url).searchParams)", module);
         Assert.Contains("response.bodyUsed", module);
         Assert.Contains("await response.formData()", module);
         Assert.DoesNotContain("fromFormData", module);

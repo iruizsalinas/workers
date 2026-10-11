@@ -82,13 +82,12 @@ internal sealed partial class JavaScriptEmitter
         if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
             return $"(item => item == null ? \"\" : {RecordMemberText(nullable.TypeArguments[0], "item", source)})({value})";
         if (type.SpecialType is SpecialType.System_Single or SpecialType.System_Double)
-            return $"{_helpers.Require(JavaScriptHelper.NumberText)}({value}{(type.SpecialType == SpecialType.System_Single ? ", true" : "")})";
+            return $"String({value})";
         if (type.SpecialType == SpecialType.System_Boolean)
             return $"({value} ? \"True\" : \"False\")";
         if (type.SpecialType is SpecialType.System_String)
             return $"({value} ?? \"\")";
-        if (type.SpecialType is SpecialType.System_Char or >= SpecialType.System_SByte and <= SpecialType.System_UInt64
-            || type.ToDisplayString() == "System.Guid")
+        if (type.SpecialType is SpecialType.System_Char or >= SpecialType.System_SByte and <= SpecialType.System_UInt64)
             return value;
         if (type is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record))
             return $"(item => item == null ? \"\" : {RecordText(record, "item", source)})({value})";

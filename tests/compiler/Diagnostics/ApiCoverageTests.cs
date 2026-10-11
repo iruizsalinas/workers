@@ -24,6 +24,23 @@ public sealed class ApiCoverageTests
         Assert.True(missing.Length == 0, "Unclassified public API methods:\n" + string.Join("\n", missing));
     }
 
+    [Fact]
+    public void EveryClassificationNamesAnExistingPublicApi()
+    {
+        var types = typeof(global::Workers.Response).Assembly.GetExportedTypes().ToDictionary(ApiTypeName);
+        var stale = global::BindingIntrinsicRegistry.Entries.Select(entry => entry.Key)
+            .Concat(global::BindingClassification.ClassifiedMethods)
+            .Where(key => !types.TryGetValue(key.Type, out var type)
+                || type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                    .All(method => method.Name != key.Method))
+            .Select(key => $"{key.Type}.{key.Method}")
+            .Concat(global::BindingClassification.ClassifiedTypes.Where(type => !types.ContainsKey(type)))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(stale.Length == 0, "Classified APIs that no longer exist:\n" + string.Join("\n", stale));
+    }
+
     private static string MethodSignature(MethodInfo method) =>
         $"{ApiTypeName(method.DeclaringType!)}.{method.Name}(" +
         string.Join(", ", method.GetParameters().Select(parameter => ApiTypeName(parameter.ParameterType))) + ")";

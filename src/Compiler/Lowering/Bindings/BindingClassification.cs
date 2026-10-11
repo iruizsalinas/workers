@@ -16,8 +16,7 @@ internal static class BindingClassification
         "Workers.ImagesOutputOptions", "Workers.MediaOutputOptions", "Workers.VectorizeVector",
         "Workers.VectorizeQueryOptions",
         "Workers.DurableObjectStorageListOptions", "Workers.DurableObjectKvListOptions", "Workers.ContainerStartOptions",
-        "Workers.ContainerExecOptions", "Workers.TcpSocketAddress", "Workers.TcpSocketOptions",
-        "Workers.MongoFindOptions", "Workers.MongoUpdateOptions"
+        "Workers.ContainerExecOptions", "Workers.TcpSocketAddress", "Workers.TcpSocketOptions"
     ];
 
     private static readonly HashSet<(string Type, string Method)> SpecialMethods =
@@ -47,23 +46,104 @@ internal static class BindingClassification
         Key("Workers.Router", "Get"), Key("Workers.Router", "Post"), Key("Workers.Router", "Put"),
         Key("Workers.Router", "Patch"), Key("Workers.Router", "Delete"), Key("Workers.Router", "Options"),
         Key("Workers.Router", "Any"), Key("Workers.Router", "Fallback"), Key("Workers.Router", "HandleAsync"),
-        Key("Workers.RouteContext", "Parameter")
+        Key("Workers.RouteContext", "Parameter"),
+        Key("Workers.Numbers", "From"),
+        Key("Workers.Numbers", "ParseInt"),
+        Key("Workers.Numbers", "ParseFloat"),
+        Key("Workers.Numbers", "IsNaN"),
+        Key("Workers.Numbers", "IsFinite"),
+        Key("Workers.Numbers", "IsInteger"),
+        Key("Workers.Numbers", "IsSafeInteger"),
+        Key("Workers.Numbers", "ToFixed"),
+        Key("Workers.Numbers", "ToPrecision"),
+        Key("Workers.Numbers", "ToRadixString"),
+        Key("Workers.Numbers", "Abs"),
+        Key("Workers.Numbers", "Round"),
+        Key("Workers.Numbers", "Floor"),
+        Key("Workers.Numbers", "Ceil"),
+        Key("Workers.Numbers", "Trunc"),
+        Key("Workers.Numbers", "Min"),
+        Key("Workers.Numbers", "Max"),
+        Key("Workers.Numbers", "Pow"),
+        Key("Workers.Numbers", "Sqrt"),
+        Key("Workers.Numbers", "Log"),
+        Key("Workers.Numbers", "Exp"),
+        Key("Workers.Numbers", "Sin"),
+        Key("Workers.Numbers", "Cos"),
+        Key("Workers.Numbers", "Tan"),
+        Key("Workers.Numbers", "Sign"),
+        Key("Workers.Numbers", "Random"),
+        Key("Workers.Url", "EncodeComponent"), Key("Workers.Url", "DecodeComponent"), Key("Workers.Timers", "WaitAsync"),
+        Key("Workers.Json", "Parse"),
+        Key("Workers.Json", "Stringify"),
+        Key("Workers.JsonValue", "AsString"),
+        Key("Workers.JsonValue", "AsNumber"),
+        Key("Workers.JsonValue", "AsBoolean"),
+        Key("Workers.JsonValue", "Has"),
+        Key("Workers.JsonValue", "Values"),
+        Key("Workers.JsonValue", "As"),
+        Key("Workers.Date", "Now"),
+        Key("Workers.Date", "Parse"),
+        Key("Workers.Date", "Utc"),
+        Key("Workers.Date", "GetTime"),
+        Key("Workers.Date", "GetUtcFullYear"),
+        Key("Workers.Date", "GetUtcMonth"),
+        Key("Workers.Date", "GetUtcDate"),
+        Key("Workers.Date", "GetUtcDay"),
+        Key("Workers.Date", "GetUtcHours"),
+        Key("Workers.Date", "GetUtcMinutes"),
+        Key("Workers.Date", "GetUtcSeconds"),
+        Key("Workers.Date", "GetUtcMilliseconds"),
+        Key("Workers.Date", "SetTime"),
+        Key("Workers.Date", "SetUtcFullYear"),
+        Key("Workers.Date", "SetUtcMonth"),
+        Key("Workers.Date", "SetUtcDate"),
+        Key("Workers.Date", "SetUtcHours"),
+        Key("Workers.Date", "SetUtcMinutes"),
+        Key("Workers.Date", "SetUtcSeconds"),
+        Key("Workers.Date", "SetUtcMilliseconds"),
+        Key("Workers.Date", "ToIsoString"), Key("Workers.Date", "ToJson"),
+        Key("Workers.Date", "ToUtcString"),
+        Key("Workers.AbortController", "Abort"),
+        Key("Workers.AbortSignal", "Abort"),
+        Key("Workers.AbortSignal", "Timeout"),
+        Key("Workers.AbortSignal", "Any"),
+        Key("Workers.AbortSignal", "ThrowIfAborted"),
+        Key("Workers.RegExp", "Test"),
+        Key("Workers.RegExp", "Exec"),
+        Key("Workers.RegExp", "Replace"),
+        Key("Workers.RegExp", "Split"),
+        Key("Workers.Log", "Info"),
+        Key("Workers.Log", "Debug"),
+        Key("Workers.Log", "Warn"),
+        Key("Workers.Log", "Error"),
+        Key("Workers.Crypto", "RandomUuid"),
+        Key("Workers.TextCodec", "EncodeUtf8"),
+        Key("Workers.TextCodec", "EncodeBase64"),
+        Key("Workers.TextCodec", "DecodeBase64"),
+        Key("Workers.TextCodec", "EncodeHex"),
+        Key("Workers.TextCodec", "DecodeHex")
     ];
 
-    private static readonly HashSet<(string Type, string Method)> UnsupportedMethods =
+    // Enumerators are not called directly: foreach lowers these collections to their native iteration.
+    private static readonly HashSet<(string Type, string Method)> ForeachEnumerators =
     [
         Key("Workers.QueueMessageBatch<T>", "GetEnumerator"), Key("Workers.TailEvent", "GetEnumerator"),
         Key("Workers.Headers", "GetEnumerator"), Key("Workers.QueryParameters", "GetEnumerator"),
         Key("Workers.FormData", "GetEnumerator")
     ];
 
-    private static readonly HashSet<string> UnsupportedTypes =
+    // Handler base classes are subclassed by Workers code and emitted as JavaScript classes.
+    private static readonly HashSet<string> HandlerBaseTypes =
     [
-        "Workers.HtmlElementHandler", "Workers.HtmlDocumentHandler", "Workers.QueueSendRequest", "Workers.RpcClient"
+        "Workers.HtmlElementHandler", "Workers.HtmlDocumentHandler"
     ];
 
     public static bool IsStructural(string type) => StructuralTypes.Contains(type);
 
+    internal static IEnumerable<(string Type, string Method)> ClassifiedMethods => SpecialMethods.Concat(ForeachEnumerators);
+    internal static IEnumerable<string> ClassifiedTypes => StructuralTypes.Concat(HandlerBaseTypes);
+
     public static bool IsClassified((string Type, string Method) key, bool hasIntrinsic) =>
-        hasIntrinsic || SpecialMethods.Contains(key) || UnsupportedMethods.Contains(key) || UnsupportedTypes.Contains(key.Type);
+        hasIntrinsic || SpecialMethods.Contains(key) || ForeachEnumerators.Contains(key) || HandlerBaseTypes.Contains(key.Type);
 }

@@ -18,7 +18,7 @@ public static class Worker
 
         if (request.Path == "/kv-lifecycle")
         {
-            var key = Guid.NewGuid().ToString();
+            var key = Crypto.RandomUuid();
             var kv = environment.Kv("KV");
             await kv.PutTextAsync(key, "stored", new KvPutOptions
             {
@@ -39,7 +39,7 @@ public static class Worker
 
         if (request.Path == "/r2-lifecycle")
         {
-            var key = $"object-{Guid.NewGuid()}.txt";
+            var key = $"object-{Crypto.RandomUuid()}.txt";
             var bucket = environment.R2("BUCKET");
             await bucket.PutAsync(key, Body.Text("r2-value"), new R2PutOptions
             {
@@ -69,7 +69,7 @@ public static class Worker
             var raw = await advancedDatabase.Prepare("SELECT value FROM numbers ORDER BY value").RawAsync();
             var session = advancedDatabase.WithSession(D1SessionMode.FirstPrimary);
             await session.Prepare("SELECT value FROM numbers LIMIT 1").FirstAsync<int>("value");
-            var bookmark = await session.GetBookmarkAsync();
+            var bookmark = session.GetBookmark();
             return Response.Json(new
             {
                 firstSuccess = batch[0].Success,
@@ -83,9 +83,10 @@ public static class Worker
         if (request.Path == "/d1-rows")
         {
             var filesDatabase = environment.D1("DB");
-            await filesDatabase.ExecAsync("CREATE TABLE IF NOT EXISTS files (id INTEGER PRIMARY KEY, name TEXT NOT NULL, data BLOB NOT NULL); DELETE FROM files;");
-            var inserted = await filesDatabase.Prepare("INSERT INTO files (name, data) VALUES (?, ?)").Bind("a.bin", new byte[] { 1, 2, 3 }).RunAsync();
-            var batch = await filesDatabase.BatchAsync<StoredFile>([filesDatabase.Prepare("SELECT id, name, data FROM files")]);
+            await filesDatabase.ExecAsync("DROP TABLE IF EXISTS files; CREATE TABLE files (id INTEGER PRIMARY KEY, name TEXT NOT NULL, data BLOB NOT NULL, public INTEGER NOT NULL, created_at TEXT);");
+            var inserted = await filesDatabase.Prepare("INSERT INTO files (name, data, public, created_at) VALUES (?, ?, ?, ?)")
+                .Bind("a.bin", new byte[] { 1, 2, 3 }, true, "2026-10-11T12:00:00.000Z").RunAsync();
+            var batch = await filesDatabase.BatchAsync<StoredFile>([filesDatabase.Prepare("SELECT id, name, data, public, created_at FROM files")]);
             return Response.Json(new
             {
                 lastRowId = inserted.Meta.LastRowId,
@@ -169,7 +170,7 @@ public sealed class EchoObject
 
 public sealed record StoredValue(int Value);
 
-public sealed record StoredFile(int Id, string Name, byte[] Data)
+public sealed record StoredFile(int Id, string Name, byte[] Data, bool Public, [property: JsonName("created_at")] Date? CreatedAt)
 {
-    public string Describe() => $"{Id}:{Name}:{Convert.ToBase64String(Data)}";
+    public string Describe() => $"{Id}:{Name}:{TextCodec.EncodeBase64(Data)}:{Public}:{CreatedAt?.GetUtcFullYear()}";
 }

@@ -24,7 +24,7 @@ public sealed class HttpRuntimeTests
                         url.Password,
                         url.Fragment,
                         request.Redirect,
-                        hasSignal = request.CancellationToken.CanBeCanceled
+                        hasSignal = request.Signal != null
                     });
                 }
             }
@@ -98,8 +98,7 @@ public sealed class HttpRuntimeTests
             }
             """);
 
-        Assert.Contains("new Response($workers$body?.body ?? $workers$body, { status: 404, statusText: \"Not Found\" ?? undefined })", module);
-        Assert.Contains(")(\"missing\")", module);
+        Assert.Contains("new Response(\"missing\", { status: 404, statusText: \"Not Found\" ?? undefined })", module);
     }
 
     [Fact]
@@ -111,11 +110,11 @@ public sealed class HttpRuntimeTests
             {
                 [Tail]
                 public static void Tail(TailEvent tail, Env env, Context context) =>
-                    Console.WriteLine(tail.Count.ToString());
+                    Log.Info(tail.Count.ToString());
             }
             """);
 
-        Assert.Contains("console.log(String(tail.length))", module);
+        Assert.Contains("console.info(String(tail.length))", module);
         Assert.DoesNotContain("tail.events", module);
     }
 
@@ -128,11 +127,11 @@ public sealed class HttpRuntimeTests
             {
                 [Tail]
                 public static void Tail(TailEvent tail) =>
-                    Console.WriteLine(tail[0].Event!.Request!.Headers.Get("content-type"));
+                    Log.Info(tail[0].Event!.Request!.Headers.Get("content-type"));
 
                 [Scheduled]
                 public static void Scheduled(ScheduledEvent scheduled) =>
-                    Console.WriteLine(scheduled.ScheduledTime.ToUnixTimeMilliseconds().ToString());
+                    Log.Info(scheduled.ScheduledTime.ToString());
             }
             """);
 
@@ -142,7 +141,7 @@ public sealed class HttpRuntimeTests
     }
 
     [Fact]
-    public void PreservesJsonResponseOptionsAndStatusText()
+    public void PassesJsonResponseStatusAndStatusTextToResponseJson()
     {
         var module = Compile("""
             using Workers;
@@ -150,12 +149,11 @@ public sealed class HttpRuntimeTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context) =>
-                    Response.Json(new { ok = true }, 201, new { headers = new { location = "/items/1" } }, "Created");
+                    Response.Json(new { ok = true }, 201, "Created");
             }
             """);
 
-        Assert.Contains("...({ headers: { location: \"/items/1\" } } ?? {})", module);
-        Assert.Contains("status: 201, statusText: \"Created\" ?? undefined", module);
+        Assert.Contains("Response.json({ ok: true }, { status: 201, statusText: \"Created\" ?? undefined })", module);
     }
 
     [Fact]

@@ -2,11 +2,11 @@ namespace Workers;
 
 public interface IHyperdriveBinding : IBinding
 {
-    Task<HyperdriveConnectionInfo> GetConnectionInfoAsync(CancellationToken cancellationToken = default);
+    string ConnectionString { get; }
+    string Host { get; }
+    int Port { get; }
+    string User { get; }
+    string Password { get; }
+    string Database { get; }
     TcpSocket Connect();
-}
-
-public sealed record HyperdriveConnectionInfo(string ConnectionString, string Host, int Port, string User, string Password, string Database)
-{
-    public string Ip { get; init; } = "";
 }

@@ -42,7 +42,7 @@ public sealed class PlatformRuntimeTests
     }
 
     [Fact]
-    public void LowersNativeRuntimeIntrinsicsAndIncludesOnlyRequiredHelpers()
+    public void StreamsSocketsWebSocketsAndDigestsMapToRuntimeObjectsWithoutHelpers()
     {
         var module = Compile("""
             using Workers;
@@ -52,34 +52,47 @@ public sealed class PlatformRuntimeTests
                 [Fetch]
                 public static async Task<Response> Fetch(Request request, Env env, Context ctx)
                 {
-                    using var cancellation = new CancellationTokenSource();
-                    cancellation.Cancel();
                     var random = Crypto.RandomBytes(8);
-                    var digest = await Crypto.DigestTextAsync(DigestAlgorithm.Sha256, "value");
-                    var stream = request.BodyStream();
-                    var read = await stream.ReadAsync();
-                    var all = await stream.ReadAllBytesAsync();
+                    var stream = request.Body!;
+                    var reader = stream.GetReader();
+                    var chunk = await reader.ReadAsync();
+                    reader.ReleaseLock();
+                    var size = chunk.Done ? 0 : chunk.Value!.Length;
+                    var all = await stream.BytesAsync();
                     var pair = WebSocketPair.Create();
                     pair.Server.Accept();
-                    var events = pair.Server.Events();
+                    pair.Server.OnMessage(message => pair.Server.SendText(message.IsText ? message.AsText() : "binary"));
+                    pair.Server.OnClose(close => Log.Info(close.Code));
                     var socket = TcpSocket.Connect(new TcpSocketAddress("example.com", 443), new TcpSocketOptions());
-                    await socket.WriteTextAsync("hello");
-                    return Response.FromBody(Body.Text("ok"));
+                    var writer = socket.Writable.GetWriter();
+                    await writer.WriteAsync(TextCodec.EncodeUtf8("hello"));
+                    var info = await socket.Opened;
+                    var digest = Crypto.CreateDigestStream(DigestAlgorithm.Sha256);
+                    await stream.PipeToAsync(digest);
+                    var hash = TextCodec.EncodeHex(await digest.DigestAsync());
+                    return Response.FromBody(Body.Text(hash));
                 }
             }
             """);
 
         Assert.Contains("import { connect as $workers$connectSocket } from \"cloudflare:sockets\";", module);
-        Assert.Contains("new AbortController()", module);
         Assert.Contains("globalThis.crypto.getRandomValues(new Uint8Array(8))", module);
-        Assert.Contains("globalThis.crypto.subtle.digest(\"SHA-256\", new TextEncoder().encode(\"value\"))", module);
-        Assert.Contains("let stream = request.body", module);
-        Assert.Contains("$workers$streamRead(stream)", module);
-        Assert.Contains("$workers$streamAll(stream)", module);
-        Assert.Contains("pair[1].accept()", module);
-        Assert.Contains("$workers$webSocketEvents(pair[1])", module);
+        Assert.Contains("let reader = stream.getReader();", module);
+        Assert.Contains("let chunk = await reader.read();", module);
+        Assert.Contains("reader.releaseLock();", module);
+        Assert.Contains("chunk.done ? 0 : chunk.value.length", module);
+        Assert.Contains("await new Response(stream).bytes()", module);
+        Assert.Contains("pair[1].addEventListener(\"message\", event => (message => ", module);
+        Assert.Contains("(event.data)", module);
+        Assert.Contains("pair[1].addEventListener(\"close\", close => console.info(close.code))", module);
         Assert.Contains("$workers$connectSocket({ hostname: \"example.com\", port: 443 }, {  })", module);
-        Assert.Contains("$workers$socketWriter(socket).write(new TextEncoder().encode(\"hello\"))", module);
+        Assert.Contains("let writer = socket.writable.getWriter();", module);
+        Assert.Contains("await writer.write(new TextEncoder().encode(\"hello\"))", module);
+        Assert.Contains("await socket.opened", module);
+        Assert.Contains("new globalThis.crypto.DigestStream(\"SHA-256\")", module);
+        Assert.Contains("await stream.pipeTo(digest)", module);
+        Assert.Contains(".toHex()", module);
+        Assert.Equal(["$workers$fetch"], System.Text.RegularExpressions.Regex.Matches(module, @"function (\$workers\$\w+)").Select(match => match.Groups[1].Value));
     }
 
     [Theory]

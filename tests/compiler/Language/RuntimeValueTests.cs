@@ -60,7 +60,7 @@ public sealed class RuntimeValueTests
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context)
                 {
-                    DateTimeOffset? value = DateTimeOffset.UtcNow;
+                    DateTimeOffset? value = null;
                     return Response.Json(new { offset = value?.Offset });
                 }
             }
@@ -90,7 +90,7 @@ public sealed class RuntimeValueTests
     }
 
     [Fact]
-    public void LowersExplicitConsoleGuidAndRandomBclIntrinsics()
+    public void UsesNativeLoggingUuidAndRandomOperations()
     {
         var module = Compile("""
             using Workers;
@@ -100,43 +100,20 @@ public sealed class RuntimeValueTests
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context ctx)
                 {
-                    Console.WriteLine("hello");
-                    Console.Error.WriteLine("failure");
-                    var id = Guid.NewGuid().ToString();
-                    var whole = Random.Shared.Next(2, 8);
-                    var fraction = Random.Shared.NextDouble();
+                    Log.Info("hello");
+                    Log.Error("failure");
+                    var id = Crypto.RandomUuid();
+                    var whole = (int)Numbers.Floor(Numbers.Random() * 6) + 2;
+                    var fraction = Numbers.Random();
                     return Response.Json(new { id, whole, fraction });
                 }
             }
             """);
 
-        Assert.Contains("console.log(\"hello\")", module);
+        Assert.Contains("console.info(\"hello\")", module);
         Assert.Contains("console.error(\"failure\")", module);
         Assert.Contains("globalThis.crypto.randomUUID()", module);
-        Assert.Contains("$workers$randomNext(2, 8)", module);
-        Assert.Contains("function $workers$randomNext(minimum, maximum)", module);
+        Assert.Contains("Math.floor(Math.random() * 6)", module);
         Assert.Contains("Math.random()", module);
     }
-
-    [Fact]
-    public void RejectsConsoleCompositeFormatOverloads()
-    {
-        var error = Assert.Throws<NotSupportedException>(() => Compile("""
-            using Workers;
-            using System;
-            public static class Worker
-            {
-                [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx)
-                {
-                    Console.WriteLine("value={0}", 42);
-                    return Response.Text("ok");
-                }
-            }
-            """));
-
-        Assert.StartsWith("WRK105:", error.Message);
-        Assert.Contains("System.Console.WriteLine", error.Message);
-    }
-
 }

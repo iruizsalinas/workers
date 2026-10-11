@@ -37,7 +37,7 @@ public static class Worker
         }
         catch (Exception exception)
         {
-            Console.Error.WriteLine(exception.Message);
+            Log.Error(exception.Message);
             return Error("Internal server error", 500);
         }
     }
@@ -68,10 +68,10 @@ public static class Worker
             return Error("Invalid name or email", 400);
 
         var user = new User(
-            Guid.NewGuid().ToString(),
+            Crypto.RandomUuid(),
             input.Name.Trim(),
             input.Email.Trim().ToLowerInvariant(),
-            DateTimeOffset.UtcNow.ToString("O"));
+            new Date().ToIsoString());
 
         await environment.D1("DB")
             .Prepare("INSERT INTO users (id, name, email, created_at) VALUES (?, ?, ?, ?)")

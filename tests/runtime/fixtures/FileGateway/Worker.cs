@@ -17,7 +17,7 @@ public static class Worker
         if (!request.Path.StartsWith("/files/"))
             return Response.Text("Not found", 404);
 
-        var key = Uri.UnescapeDataString(request.Path.Substring("/files/".Length));
+        var key = Url.DecodeComponent(request.Path.Substring("/files/".Length));
         switch (request.Method)
         {
             case "PUT":
@@ -37,13 +37,13 @@ public static class Worker
 
     private static async Task<Response> UploadAsync(Request request, IR2Bucket bucket, string key)
     {
-        var body = request.BodyStream();
+        var body = request.Body;
         if (body is null)
             return Response.Text("Missing body", 400);
 
         var streams = body.Tee();
         var digestTask = DigestAsync(streams[1]);
-        var uploadTask = bucket.PutObjectAsync(key, streams[0], new R2PutOptions
+        var uploadTask = bucket.PutAsync(key, Body.FromStream(streams[0]), new R2PutOptions
         {
             HttpMetadata = new R2HttpMetadata(
                 ContentType: request.Headers.Get("content-type") ?? "application/octet-stream"),
@@ -63,12 +63,12 @@ public static class Worker
         var digestStream = Crypto.CreateDigestStream(DigestAlgorithm.Sha256);
         await body.PipeToAsync(digestStream);
         var digest = await digestStream.DigestAsync();
-        return Convert.ToHexString(digest).ToLowerInvariant();
+        return TextCodec.EncodeHex(digest).ToLowerInvariant();
     }
 
     private static async Task<Response> DownloadAsync(IR2Bucket bucket, string key)
     {
-        var item = await bucket.GetObjectAsync(key);
+        var item = await bucket.GetAsync(key);
         if (item is null)
             return Response.Text("Not found", 404);
 
@@ -77,7 +77,7 @@ public static class Worker
         var response = Response.FromStream(item.Body, headers)
             .WithHeader("etag", item.HttpEtag)
             .WithHeader("x-r2-key", item.Key)
-            .WithHeader("x-uploaded-at", item.Uploaded.ToString("O"));
+            .WithHeader("x-uploaded-at", item.Uploaded.ToIsoString());
         var uploadedBy = item.CustomMetadata["uploadedBy"];
         return response.WithHeader("x-uploaded-by", uploadedBy);
     }
@@ -111,7 +111,7 @@ public static class Worker
                     item.Key,
                     item.Size,
                     item.Etag,
-                    item.Uploaded.ToString("O"),
+                    item.Uploaded.ToIsoString(),
                     item.CustomMetadata));
             cursor = page.Truncated ? page.Cursor : null;
         }

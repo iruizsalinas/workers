@@ -16,8 +16,8 @@ internal sealed partial class JavaScriptEmitter
     private readonly Dictionary<INamedTypeSymbol, string> _userTypes = new(SymbolEqualityComparer.Default);
     private readonly Queue<INamedTypeSymbol> _pendingUserTypes = new();
     private readonly HashSet<INamedTypeSymbol> _emittedUserTypes = new(SymbolEqualityComparer.Default);
-    private readonly HashSet<INamedTypeSymbol> _jsonMaterializedUserTypes = new(SymbolEqualityComparer.Default);
-    private readonly HashSet<INamedTypeSymbol> _jsonStrictUserTypes = new(SymbolEqualityComparer.Default);
+    private readonly HashSet<(INamedTypeSymbol Type, int Mode)> _jsonReaders = [];
+    private readonly Queue<(INamedTypeSymbol Type, int Mode)> _pendingJsonReaders = new();
     private readonly Dictionary<IMethodSymbol, string> _userInstanceMethods = new(SymbolEqualityComparer.Default);
     private readonly Dictionary<ISymbol, string> _userMemberNames = new(SymbolEqualityComparer.Default);
     private readonly HashSet<INamedTypeSymbol> _preparedUserMemberNames = new(SymbolEqualityComparer.Default);
@@ -32,15 +32,12 @@ internal sealed partial class JavaScriptEmitter
         _imports = new ImportRegistry(_names);
     }
 
-    public static string Emit(CSharpCompilation compilation) => EmitWorker(compilation).Source;
-
-    public static EmittedWorker EmitWorker(CSharpCompilation compilation)
+    public static string Emit(CSharpCompilation compilation)
     {
         var emitter = new JavaScriptEmitter(compilation);
         try
         {
-            var source = emitter.EmitModule(compilation);
-            return new EmittedWorker(source, emitter._imports.Modules);
+            return emitter.EmitModule(compilation);
         }
         catch (NotSupportedException exception)
         {
@@ -62,10 +59,13 @@ internal sealed partial class JavaScriptEmitter
             emitter.EmitWorkerEntrypoint(workerEntrypoint);
         foreach (var handler in program.Events)
             emitter.EmitHandler(handler.Name, handler.Method);
-        emitter.EmitUserCode();
+        do
+        {
+            emitter.EmitUserCode();
+            emitter.EmitPendingJsonReaders();
+        } while (emitter._pendingUserTypes.Count != 0 || emitter._pendingUserMethods.Count != 0);
 
         emitter._output.Append(emitter._helpers.Emit());
-        emitter._output.Append(emitter._regexDeclarations);
         emitter._output.Append(emitter._routeDeclarations);
 
         if (program.Events.Count != 0)
@@ -76,5 +76,3 @@ internal sealed partial class JavaScriptEmitter
     }
 
 }
-
-internal sealed record EmittedWorker(string Source, IReadOnlyList<string> ImportedModules);

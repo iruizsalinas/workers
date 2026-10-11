@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.Operations;
 internal sealed partial class JavaScriptEmitter
 {
     private string Expression(ExpressionSyntax expression) =>
-        ImplicitJsonNodeConversion(expression, ExpressionCore(expression));
+        ExpressionCore(expression);
 
     private string ExpressionCore(ExpressionSyntax expression) => expression switch
     {
@@ -70,7 +70,7 @@ internal sealed partial class JavaScriptEmitter
     }
 
     private string DefaultValue(ExpressionSyntax expression) =>
-        _model.GetTypeInfo(expression).ConvertedType?.ToDisplayString() == "System.Threading.CancellationToken"
+        _model.GetTypeInfo(expression).ConvertedType is { IsReferenceType: true } or { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T }
             ? "null"
             : throw Unsupported("WRK108", expression);
 
@@ -78,19 +78,6 @@ internal sealed partial class JavaScriptEmitter
     {
         if (_model.GetOperation(value) is ISimpleAssignmentOperation { Target: IDiscardOperation })
             return $"({Expression(value.Right)})";
-        if (value.Left is MemberAccessExpressionSyntax member
-            && _model.GetSymbolInfo(member).Symbol is IPropertySymbol property and
-            {
-                Name: "Length",
-                ContainingType: { } containingType
-            }
-            && containingType.ToDisplayString() == "System.Text.StringBuilder")
-        {
-            _helpers.Require(JavaScriptHelper.StringBuilder);
-            return $"{_helpers.Name("stringBuilderLength")}({Expression(member.Expression)}, {Expression(value.Right)})";
-        }
-        if (value.Left is ElementAccessExpressionSyntax node && IsJsonNodeType(_model.GetTypeInfo(node.Expression).Type))
-            return JsonNodeElementAccess(node, Expression(value.Right));
         if (value.Left is ElementAccessExpressionSyntax element && IsSequenceType(_model.GetTypeInfo(element.Expression).Type))
         {
             var index = element.ArgumentList.Arguments.Single();
@@ -109,8 +96,6 @@ internal sealed partial class JavaScriptEmitter
     private string UnaryNumeric(PrefixUnaryExpressionSyntax value, string operation)
     {
         var unary = _model.GetOperation(value) as IUnaryOperation;
-        if (unary?.Type?.ToDisplayString() == "System.TimeSpan" && operation == "-")
-            return TimeSpanNegate(Expression(value.Operand));
         if (unary?.OperatorMethod is not null)
             throw UnsupportedSymbol(unary.OperatorMethod, value);
         var type = unary?.Type?.SpecialType ?? SpecialType.None;
@@ -143,12 +128,6 @@ internal sealed partial class JavaScriptEmitter
             throw Unsupported("WRK108", value);
         var type = _model.GetTypeInfo(value).Type?.SpecialType ?? SpecialType.None;
         var target = Expression(value.Left);
-        if (IsDateValue(_model.GetTypeInfo(value.Left).Type)
-            && IsTimeSpan(_model.GetTypeInfo(value.Right).Type))
-            return $"({target} = {DateTimeAddMilliseconds(target,
-                operation == "+" ? Expression(value.Right) : $"-({Expression(value.Right)})")})";
-        if (_model.GetTypeInfo(value).Type?.ToDisplayString() == "System.TimeSpan")
-            return $"({target} = {TimeSpanArithmetic(target, Expression(value.Right), operation)})";
         if (type == SpecialType.System_String && operation == "+")
             return $"({target} = ({target} ?? \"\") + {StringConcatOperand(value.Right, Expression(value.Right), value)})";
         return $"({target} = {NumericResult($"{target} {operation} {Expression(value.Right)}", type, value)})";
@@ -268,8 +247,6 @@ internal sealed partial class JavaScriptEmitter
     private string Collection(CollectionExpressionSyntax value)
     {
         var items = "[" + string.Join(", ", value.Elements.Select(Element)) + "]";
-        if (JsonNodeKind(_model.GetTypeInfo(value).ConvertedType) == JsonNodeArray)
-            return JsonNodeHelper("jsonArrayFrom", items);
         return _model.GetTypeInfo(value).ConvertedType is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
             ? $"Uint8Array.from({items})"
             : items;

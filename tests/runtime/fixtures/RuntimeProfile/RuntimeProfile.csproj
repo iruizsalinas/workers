@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../src/Workers.csproj" />
+  </ItemGroup>
+  <Import Project="../../../../src/Build/Workers.targets" />
+</Project>

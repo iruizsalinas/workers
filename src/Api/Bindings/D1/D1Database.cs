@@ -5,22 +5,20 @@ public interface ID1Database : IBinding
     D1PreparedStatement Prepare(string query);
     D1DatabaseSession WithSession(D1SessionMode mode = D1SessionMode.FirstUnconstrained);
     D1DatabaseSession WithSession(string bookmark);
-    Task<D1ExecResult> ExecAsync(string query, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<D1Result<T>>> BatchAsync<T>(IEnumerable<D1PreparedStatement> statements, CancellationToken cancellationToken = default);
-    Task<Body> DumpAsync(CancellationToken cancellationToken = default);
+    Task<D1ExecResult> ExecAsync(string query);
+    Task<IReadOnlyList<D1Result<T>>> BatchAsync<T>(IEnumerable<D1PreparedStatement> statements);
 }
 
 public sealed class D1PreparedStatement
 {
-    public string Query => WorkerApi.NotExecutable<string>();
 
     public D1PreparedStatement Bind(params object?[] values) => WorkerApi.NotExecutable<D1PreparedStatement>();
-    public Task<D1Result> RunAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<D1Result>>();
-    public Task<D1Result<T>> AllAsync<T>(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<D1Result<T>>>();
-    public Task<IReadOnlyList<IReadOnlyList<JsonElement>>> RawAsync(
-        D1RawOptions? options = null, CancellationToken cancellationToken = default) =>
-        WorkerApi.NotExecutable<Task<IReadOnlyList<IReadOnlyList<JsonElement>>>>();
-    public Task<T?> FirstAsync<T>(string? columnName = null, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<T?>>();
+    public Task<D1Result> RunAsync() => WorkerApi.NotExecutable<Task<D1Result>>();
+    public Task<D1Result<T>> AllAsync<T>() => WorkerApi.NotExecutable<Task<D1Result<T>>>();
+    public Task<IReadOnlyList<IReadOnlyList<JsonValue>>> RawAsync(
+        D1RawOptions? options = null) =>
+        WorkerApi.NotExecutable<Task<IReadOnlyList<IReadOnlyList<JsonValue>>>>();
+    public Task<T?> FirstAsync<T>(string? columnName = null) => WorkerApi.NotExecutable<Task<T?>>();
 }
 
 public sealed class D1Result
@@ -59,9 +57,9 @@ public sealed class D1DatabaseSession
 {
     public D1PreparedStatement Prepare(string query) => WorkerApi.NotExecutable<D1PreparedStatement>();
     public Task<IReadOnlyList<D1Result<T>>> BatchAsync<T>(
-        IEnumerable<D1PreparedStatement> statements, CancellationToken cancellationToken = default) =>
+        IEnumerable<D1PreparedStatement> statements) =>
         WorkerApi.NotExecutable<Task<IReadOnlyList<D1Result<T>>>>();
-    public Task<string?> GetBookmarkAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<string?>>();
+    public string? GetBookmark() => WorkerApi.NotExecutable<string?>();
 }
 
 public sealed class D1ResultMetadata

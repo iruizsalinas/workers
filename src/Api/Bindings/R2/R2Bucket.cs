@@ -2,18 +2,14 @@ namespace Workers;
 
 public interface IR2Bucket : IBinding
 {
-    Task<R2Object?> HeadAsync(string key, CancellationToken cancellationToken = default);
-    Task<Body?> GetAsync(string key, CancellationToken cancellationToken = default);
-    Task<Body?> GetAsync(string key, R2GetOptions? options, CancellationToken cancellationToken = default);
-    Task<R2ObjectBody?> GetObjectAsync(string key, R2GetOptions? options = null, CancellationToken cancellationToken = default);
-    Task PutAsync(string key, Body body, R2PutOptions? options = null, CancellationToken cancellationToken = default);
-    Task<R2Object?> PutObjectAsync(string key, Body body, R2PutOptions? options = null, CancellationToken cancellationToken = default);
-    Task<R2Object?> PutObjectAsync(string key, ReadableStream body, R2PutOptions? options = null, CancellationToken cancellationToken = default);
-    Task<R2MultipartUpload> CreateMultipartUploadAsync(string key, R2MultipartUploadOptions? options = null, CancellationToken cancellationToken = default);
+    Task<R2Object?> HeadAsync(string key);
+    Task<R2ObjectBody?> GetAsync(string key, R2GetOptions? options = null);
+    Task<R2Object?> PutAsync(string key, Body body, R2PutOptions? options = null);
+    Task<R2MultipartUpload> CreateMultipartUploadAsync(string key, R2MultipartUploadOptions? options = null);
     R2MultipartUpload ResumeMultipartUpload(string key, string uploadId);
-    Task DeleteAsync(string key, CancellationToken cancellationToken = default);
-    Task DeleteAsync(IEnumerable<string> keys, CancellationToken cancellationToken = default);
-    Task<R2Objects> ListAsync(R2ListOptions? options = null, CancellationToken cancellationToken = default);
+    Task DeleteAsync(string key);
+    Task DeleteAsync(IEnumerable<string> keys);
+    Task<R2Objects> ListAsync(R2ListOptions? options = null);
 }
 
 public sealed class R2GetOptions
@@ -39,7 +35,7 @@ public sealed class R2ListOptions
     public IReadOnlyList<string>? Include { get; init; }
 }
 
-public sealed record R2Conditional(DateTimeOffset? UploadedBefore = null, DateTimeOffset? UploadedAfter = null, string? EtagMatches = null, string? EtagDoesNotMatch = null);
+public sealed record R2Conditional(Date? UploadedBefore = null, Date? UploadedAfter = null, string? EtagMatches = null, string? EtagDoesNotMatch = null);
 public sealed record R2Range(ulong? Offset, ulong? Length, ulong? Suffix);
 public sealed record R2HttpMetadata(
     string? ContentType = null,
@@ -47,14 +43,14 @@ public sealed record R2HttpMetadata(
     string? ContentDisposition = null,
     string? ContentEncoding = null,
     string? CacheControl = null,
-    DateTimeOffset? CacheExpiry = null);
+    Date? CacheExpiry = null);
 public sealed record R2Object(
     string Key,
     string Version,
     ulong Size,
     string Etag,
     string HttpEtag,
-    DateTimeOffset Uploaded,
+    Date Uploaded,
     R2HttpMetadata HttpMetadata,
     IReadOnlyDictionary<string, string> CustomMetadata,
     R2Range? Range);
@@ -65,13 +61,17 @@ public sealed record R2ObjectBody(
     ulong Size,
     string Etag,
     string HttpEtag,
-    DateTimeOffset Uploaded,
+    Date Uploaded,
     R2HttpMetadata HttpMetadata,
     IReadOnlyDictionary<string, string> CustomMetadata,
     R2Range? Range,
     ReadableStream Body)
 {
+    public bool BodyUsed => WorkerApi.NotExecutable<bool>();
     public void WriteHttpMetadata(Headers headers) => WorkerApi.NotExecutable();
+    public Task<string> TextAsync() => WorkerApi.NotExecutable<Task<string>>();
+    public Task<byte[]> BytesAsync() => WorkerApi.NotExecutable<Task<byte[]>>();
+    public Task<T?> JsonAsync<T>() => WorkerApi.NotExecutable<Task<T?>>();
 }
 public sealed class R2MultipartUploadOptions
 {
@@ -86,10 +86,10 @@ public sealed class R2MultipartUpload
     public string UploadId => WorkerApi.NotExecutable<string>();
 
     public Task<R2UploadedPart> UploadPartAsync(
-        int partNumber, Body body, CancellationToken cancellationToken = default) =>
+        int partNumber, Body body) =>
         WorkerApi.NotExecutable<Task<R2UploadedPart>>();
     public Task<R2Object> CompleteAsync(
-        IEnumerable<R2UploadedPart> parts, CancellationToken cancellationToken = default) =>
+        IEnumerable<R2UploadedPart> parts) =>
         WorkerApi.NotExecutable<Task<R2Object>>();
-    public Task AbortAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
+    public Task AbortAsync() => WorkerApi.NotExecutable<Task>();
 }

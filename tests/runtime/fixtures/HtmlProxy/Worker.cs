@@ -27,7 +27,7 @@ public static class Worker
             .On("body", new BannerHandler(environment.Kv("CONTENT")))
             .Transform(originResponse);
 
-        var response = Response.FromStream(transformed.BodyStream()!)
+        var response = Response.FromStream(transformed.Body!)
             .WithHeader("cache-control", "public, max-age=60")
             .WithHeader("x-edge-cache", "MISS");
         context.WaitUntil(cache.PutAsync(cacheKey, response.Clone()));

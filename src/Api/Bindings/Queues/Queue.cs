@@ -7,14 +7,14 @@ public sealed record QueueSendOptions
 
 public interface IQueueProducer : IBinding
 {
-    Task SendJsonAsync<T>(T message, QueueSendOptions? options = null, CancellationToken cancellationToken = default);
-    Task SendTextAsync(string message, QueueSendOptions? options = null, CancellationToken cancellationToken = default);
-    Task SendBytesAsync(ReadOnlyMemory<byte> message, QueueSendOptions? options = null, CancellationToken cancellationToken = default);
-    Task SendJsonBatchAsync<T>(IEnumerable<T> messages, QueueSendOptions? options = null, CancellationToken cancellationToken = default);
-    Task SendTextBatchAsync(IEnumerable<string> messages, QueueSendOptions? options = null, CancellationToken cancellationToken = default);
-    Task SendBytesBatchAsync(IEnumerable<ReadOnlyMemory<byte>> messages, QueueSendOptions? options = null, CancellationToken cancellationToken = default);
-    Task SendBatchAsync(IEnumerable<QueueSendRequest> messages, QueueSendOptions? options = null, CancellationToken cancellationToken = default);
-    Task<QueueMetrics> MetricsAsync(CancellationToken cancellationToken = default);
+    Task SendJsonAsync<T>(T message, QueueSendOptions? options = null);
+    Task SendTextAsync(string message, QueueSendOptions? options = null);
+    Task SendBytesAsync(ReadOnlyMemory<byte> message, QueueSendOptions? options = null);
+    Task SendJsonBatchAsync<T>(IEnumerable<T> messages, QueueSendOptions? options = null);
+    Task SendTextBatchAsync(IEnumerable<string> messages, QueueSendOptions? options = null);
+    Task SendBytesBatchAsync(IEnumerable<ReadOnlyMemory<byte>> messages, QueueSendOptions? options = null);
+    Task SendBatchAsync(IEnumerable<QueueSendRequest> messages, QueueSendOptions? options = null);
+    Task<QueueMetrics> MetricsAsync();
 }
 
 public sealed class QueueSendRequest
@@ -24,4 +24,4 @@ public sealed class QueueSendRequest
     public static QueueSendRequest Bytes(ReadOnlyMemory<byte> body, int? delaySeconds = null) => WorkerApi.NotExecutable<QueueSendRequest>();
 }
 
-public sealed record QueueMetrics(int BacklogCount, int BacklogBytes, DateTimeOffset? OldestMessageTimestamp);
+public sealed record QueueMetrics(int BacklogCount, int BacklogBytes, Date? OldestMessageTimestamp);

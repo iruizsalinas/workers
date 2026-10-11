@@ -5,13 +5,10 @@ internal static partial class HelperSource
         function {{name("linqOrderCompare")}}(left, right, kind) {
           if (left == null || right == null)
             return left == null ? (right == null ? 0 : -1) : 1;
-          if (kind === 2) {
-            left = new Date(left).getTime();
-            right = new Date(right).getTime();
-          } else if (kind === 1) {
+          if (kind === 1) {
             left = left.charCodeAt(0);
             right = right.charCodeAt(0);
-          } else if (kind === 4) {
+          } else if (kind === 3) {
             const upper = text => Array.from(text, character => {
               const mapped = character.toUpperCase();
               return mapped.length === character.length ? mapped : character;

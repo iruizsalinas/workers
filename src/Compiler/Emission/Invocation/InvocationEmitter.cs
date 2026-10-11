@@ -6,27 +6,17 @@ internal sealed partial class JavaScriptEmitter
     private string Invocation(InvocationExpressionSyntax invocation)
     {
         var method = _model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
-        if (method is { IsPartialDefinition: true } && GeneratedRegex(method, invocation) is { } generatedRegex)
-            return generatedRegex;
         if (method is not null && method.DeclaringSyntaxReferences.Length == 0
             && TryEmitOutInvocation(invocation, method, out var outInvocation))
             return outInvocation;
-        if (method is { IsStatic: true, Name: "Invariant" } && method.ContainingType.ToDisplayString() == "System.FormattableString"
-            && invocation.ArgumentList.Arguments is [{ Expression: InterpolatedStringExpressionSyntax invariant }])
-            return InvariantInterpolation(invariant);
-        if (method is { IsStatic: true, Name: "Create", ContainingType.SpecialType: SpecialType.System_String }
-            && invocation.ArgumentList.Arguments is [{ } provider, { Expression: InterpolatedStringExpressionSyntax created }]
-            && IsInvariantCulture(provider.Expression))
-            return InvariantInterpolation(created);
-        if (method?.Name == "Parse" && method.ContainingType.SpecialType is
-            SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal)
+        if (method?.Name is "Parse" or "TryParse" && method.ContainingType.SpecialType is
+            SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal or SpecialType.System_Single)
             throw UnsupportedSymbol(method, invocation);
         var arguments = invocation.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)).ToArray();
         var member = invocation.Expression as MemberAccessExpressionSyntax;
         var isBindingIntrinsic = method is not null && BindingIntrinsicRegistry.TryGet(method, out _);
         if (method is not null
-            && (invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
-                || method.Parameters.Any(IsCancellationToken))
+            && invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
             && !isBindingIntrinsic)
         {
             var receiver = member is null || method.IsStatic ? null : Expression(member.Expression);
@@ -44,6 +34,7 @@ internal sealed partial class JavaScriptEmitter
         MemberAccessExpressionSyntax? member,
         string? receiverOverride = null)
     {
+        if (method is not null && TryEmitNativeInvocation(invocation, method, arguments, member, receiverOverride, out var native)) return native;
         var containingType = method?.ContainingType.ToDisplayString();
         var methodName = method?.Name;
         if (IsEnumerableMethod(method))
@@ -56,16 +47,6 @@ internal sealed partial class JavaScriptEmitter
             return $"Promise.resolve({arguments[0]})";
         if (containingType == "System.Threading.Tasks.Task" && methodName == "WhenAll")
             return TaskWhenAll(invocation, method!, arguments);
-        if (containingType == "System.Threading.Tasks.Task" && methodName == "Delay")
-        {
-            return arguments.Length switch
-            {
-                1 => HelperInvocation(JavaScriptHelper.Delay, arguments),
-                2 when IsCancellationToken(method!.Parameters[1]) =>
-                    HelperInvocation(JavaScriptHelper.CancellationDelay, arguments),
-                _ => throw UnsupportedSymbol(method, invocation)
-            };
-        }
         if (TryEmitStaticInvocation(invocation, method, containingType, methodName, arguments, receiverOverride, out var result)) return result;
         if (member is not null)
             return MemberInvocation(invocation, member, method, containingType, arguments, receiverOverride);

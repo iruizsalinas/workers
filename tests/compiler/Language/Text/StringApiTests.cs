@@ -1,11 +1,13 @@
+using System.Text.Json;
+
 namespace Workers.Compiler.Tests;
 
 public sealed class StringApiTests
 {
     [Fact]
-    public void EmitsInvariantStringQueriesAndTransformations()
+    public void StringMembersBehaveLikeTheirJavaScriptEquivalents()
     {
-        var module = Compile("""
+        var result = JavaScriptRunner.FetchJson("""
             using Workers;
             public static class Worker
             {
@@ -15,13 +17,10 @@ public sealed class StringApiTests
                     List<string> values = ["one", "two"];
                     var text = "  Alpha-Beta  ";
                     return Response.Json(new {
-                        empty = string.Empty, nullOrEmpty = string.IsNullOrEmpty(null),
-                        white = string.IsNullOrWhiteSpace(" \t"),
+                        nullOrEmpty = string.IsNullOrEmpty(null), white = string.IsNullOrWhiteSpace(" \t"),
                         joined = string.Join(",", values), concatenated = string.Concat(values),
-                        joinedParams = string.Join("-", "a", "b"),
-                        concatenatedValues = string.Concat("a", null, "b"),
+                        joinedParams = string.Join("-", "a", "b"), concatenatedValues = string.Concat("a", null, "b"),
                         equal = string.Equals("Alpha", "alpha", StringComparison.OrdinalIgnoreCase),
-                        supplementary = string.Equals("𐐨", "𐐀", StringComparison.OrdinalIgnoreCase),
                         contains = text.Contains("alpha", StringComparison.OrdinalIgnoreCase),
                         starts = text.StartsWith("  alpha", StringComparison.OrdinalIgnoreCase),
                         ends = text.EndsWith("  ", StringComparison.Ordinal),
@@ -29,30 +28,44 @@ public sealed class StringApiTests
                         last = text.LastIndexOf("a", StringComparison.OrdinalIgnoreCase),
                         removed = text.Remove(0, 2), inserted = text.Insert(2, "new"),
                         left = "x".PadLeft(3, '0'), right = "x".PadRight(3),
-                        characters = "😀".ToCharArray(),
-                        slice = text.ToCharArray(2, 5),
+                        characters = "ab".ToCharArray(), substring = "hello".Substring(1, 3),
+                        trimmed = "\t x \n".Trim(), upper = "straße".ToUpperInvariant(),
+                        replaced = "a-b-c".Replace("-", "+"),
                         pieces = " one , , two ".Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     });
                 }
             }
             """);
 
-        Assert.Contains("$workers$stringIsNullOrEmpty(null)", module);
-        Assert.Contains("$workers$stringIsNullOrWhiteSpace(", module);
-        Assert.Contains("$workers$stringJoin(\",\", values)", module);
-        Assert.Contains("$workers$stringOrdinal(", module);
-        Assert.Contains("for (const character of value)", module);
-        Assert.Contains("$workers$stringRemove(", module);
-        Assert.Contains("$workers$stringInsert(", module);
-        Assert.Contains("$workers$stringPad(", module);
-        Assert.Contains("$workers$stringToCharArray(", module);
-        Assert.Contains("$workers$stringSplit(", module);
+        Assert.True(result.GetProperty("nullOrEmpty").GetBoolean());
+        Assert.True(result.GetProperty("white").GetBoolean());
+        Assert.Equal("one,two", result.GetProperty("joined").GetString());
+        Assert.Equal("onetwo", result.GetProperty("concatenated").GetString());
+        Assert.Equal("a-b", result.GetProperty("joinedParams").GetString());
+        Assert.Equal("ab", result.GetProperty("concatenatedValues").GetString());
+        Assert.True(result.GetProperty("equal").GetBoolean());
+        Assert.True(result.GetProperty("contains").GetBoolean());
+        Assert.True(result.GetProperty("starts").GetBoolean());
+        Assert.True(result.GetProperty("ends").GetBoolean());
+        Assert.Equal(8, result.GetProperty("index").GetInt32());
+        Assert.Equal(11, result.GetProperty("last").GetInt32());
+        Assert.Equal("Alpha-Beta  ", result.GetProperty("removed").GetString());
+        Assert.Equal("  newAlpha-Beta  ", result.GetProperty("inserted").GetString());
+        Assert.Equal("00x", result.GetProperty("left").GetString());
+        Assert.Equal("x  ", result.GetProperty("right").GetString());
+        Assert.Equal(["a", "b"], Strings(result.GetProperty("characters")));
+        Assert.Equal("ell", result.GetProperty("substring").GetString());
+        Assert.Equal("x", result.GetProperty("trimmed").GetString());
+        // JavaScript casing applies full mappings.
+        Assert.Equal("STRASSE", result.GetProperty("upper").GetString());
+        Assert.Equal("a+b+c", result.GetProperty("replaced").GetString());
+        Assert.Equal(["one", "two"], Strings(result.GetProperty("pieces")));
     }
 
     [Fact]
-    public void KeepsStaticStringEqualsNullSafeButRejectsNullInstanceReceivers()
+    public void StringEqualityTreatsNullLikeCSharp()
     {
-        var module = Compile("""
+        var result = JavaScriptRunner.FetchJson("""
             #nullable enable
             using Workers;
             public static class Worker
@@ -63,24 +76,25 @@ public sealed class StringApiTests
                     string? missing = null;
                     return Response.Json(new
                     {
-                        staticResult = string.Equals(missing, null),
-                        instanceResult = missing!.Equals(null),
-                        ordinalResult = missing!.Equals(null, StringComparison.Ordinal)
+                        bothNull = string.Equals(missing, null),
+                        oneNull = string.Equals(missing, "a", StringComparison.OrdinalIgnoreCase),
+                        instance = "a".Equals(missing)
                     });
                 }
             }
             """);
 
-        Assert.Contains("stringOrdinal(missing, null, false, 0", module);
-        Assert.Equal(2, module.Split("stringOrdinal(missing, null, false, 6", StringSplitOptions.None).Length - 1);
-        Assert.Contains("if (source == null) throw new TypeError", module);
-        Assert.Contains("if (value == null) return false", module);
+        Assert.True(result.GetProperty("bothNull").GetBoolean());
+        Assert.False(result.GetProperty("oneNull").GetBoolean());
+        Assert.False(result.GetProperty("instance").GetBoolean());
     }
 
     [Theory]
     [InlineData("value.Equals(\"a\", StringComparison.CurrentCulture)")]
     [InlineData("value.Contains(\"a\", StringComparison.InvariantCultureIgnoreCase)")]
     [InlineData("value.Replace(\"a\", \"b\", StringComparison.OrdinalIgnoreCase)")]
+    [InlineData("value.Split(',', 2)")]
+    [InlineData("float.Parse(value)")]
     public void RejectsCultureSensitiveOrBroadStringOverloads(string operation)
     {
         var error = Assert.Throws<NotSupportedException>(() => Compile($$"""
@@ -99,4 +113,5 @@ public sealed class StringApiTests
         Assert.StartsWith("WRK105:", error.Message);
     }
 
+    private static string[] Strings(JsonElement array) => array.EnumerateArray().Select(item => item.GetString()!).ToArray();
 }

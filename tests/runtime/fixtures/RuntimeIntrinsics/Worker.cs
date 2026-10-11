@@ -1,4 +1,3 @@
-using System.Text;
 using Workers;
 
 namespace RuntimeIntrinsics;
@@ -73,16 +72,16 @@ public static class Worker
                 url.Query,
                 url.Fragment,
                 request.Redirect,
-                hasSignal = request.CancellationToken.CanBeCanceled
+                hasSignal = request.Signal != null
             });
         }
 
         if (request.Path == "/text-codec")
         {
-            var bytes = Encoding.UTF8.GetBytes("hello + edge");
-            var encoded = Convert.ToBase64String(bytes);
-            var decoded = TextCodec.DecodeUtf8(Convert.FromBase64String(encoded), fatal: true);
-            var escaped = Uri.EscapeDataString(decoded.Replace("+", " "));
+            var bytes = TextCodec.EncodeUtf8("hello + edge");
+            var encoded = TextCodec.EncodeBase64(bytes);
+            var decoded = TextCodec.DecodeUtf8(TextCodec.DecodeBase64(encoded), fatal: true);
+            var escaped = Url.EncodeComponent(decoded.Replace("+", " "));
             var forwarded = request.WithUrl(new Url("/accepted?source=codec", request.Url.Origin));
             return Response.Json(new
             {
@@ -96,7 +95,7 @@ public static class Worker
         if (request.Path == "/cache-lifecycle")
         {
             var cache = await CacheStorage.OpenAsync("runtime-intrinsics");
-            var key = $"https://cache.test/{Guid.NewGuid()}";
+            var key = $"https://cache.test/{Crypto.RandomUuid()}";
             var cacheable = Response.Text("cached")
                 .WithHeader("cache-control", "public, max-age=60");
             await cache.PutAsync(key, cacheable);
@@ -127,32 +126,33 @@ public static class Worker
         }
 
         if (request.Path == "/body-stream")
-            return Response.FromBody(Body.FromStream(request.BodyStream()!));
+            return Response.FromBody(Body.FromStream(request.Body!));
 
         if (request.Path == "/body-query")
             return Response.FromBody(Body.FromQueryParameters(request.QueryParameters));
 
         if (request.Path == "/stream")
         {
-            var bytes = await request.BodyStream()!.ReadAllBytesAsync();
+            var bytes = await request.Body!.BytesAsync();
             return Response.Json(new { length = bytes.Length });
         }
 
         if (request.Path == "/crypto")
         {
-            var uuid = Guid.NewGuid();
+            var uuid = Crypto.RandomUuid();
             var random = Crypto.RandomBytes(16);
             var digest = await Crypto.DigestTextAsync(DigestAlgorithm.Sha256, "hello");
             var digestStream = Crypto.CreateDigestStream(DigestAlgorithm.Sha256);
-            await digestStream.WriteTextAsync("hel");
-            await digestStream.WriteTextAsync("lo");
-            await digestStream.CloseAsync();
+            var writer = digestStream.GetWriter();
+            await writer.WriteAsync(TextCodec.EncodeUtf8("hel"));
+            await writer.WriteAsync(TextCodec.EncodeUtf8("lo"));
+            await writer.CloseAsync();
             var streamedDigest = await digestStream.DigestAsync();
             var equal = Crypto.TimingSafeEqual(random, random);
             var streamEqual = Crypto.TimingSafeEqual(digest, streamedDigest);
             return Response.Json(new
             {
-                uuid = uuid.ToString(),
+                uuid = uuid,
                 randomLength = random.Length,
                 digestLength = digest.Length,
                 equal,
@@ -162,35 +162,23 @@ public static class Worker
 
         if (request.Path == "/timer")
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(1));
+            await Timers.WaitAsync(1);
             return Response.Text("delayed");
         }
 
         if (request.Path == "/request-cancellation")
         {
-            var token = request.CancellationToken;
+            var signal = request.Signal;
             var threw = false;
             try
             {
-                token.ThrowIfCancellationRequested();
+                signal.ThrowIfAborted();
             }
             catch (Exception)
             {
                 threw = true;
             }
-            return Response.Json(new
-            {
-                canBeCanceled = token.CanBeCanceled,
-                isCancellationRequested = token.IsCancellationRequested,
-                threw
-            });
-        }
-
-        if (request.Path == "/abort")
-        {
-            using var cancellation = new CancellationTokenSource();
-            cancellation.Cancel();
-            return Response.Text("aborted");
+            return Response.Json(new { aborted = signal.Aborted, threw });
         }
 
         if (request.Path == "/websocket")
@@ -205,7 +193,12 @@ public static class Worker
         {
             var pair = WebSocketPair.Create();
             pair.Server.Accept();
-            context.WaitUntil(EchoAsync(pair.Server));
+            var server = pair.Server;
+            server.OnMessage(message =>
+            {
+                server.SendText(message.IsText ? message.AsText() : "binary");
+                server.Close(1000, "done");
+            });
             return Response.WebSocket(pair.Client);
         }
 
@@ -213,7 +206,13 @@ public static class Worker
         {
             var pair = WebSocketPair.Create();
             pair.Server.Accept();
-            context.WaitUntil(CaptureCloseAsync(pair.Server, environment, request.QueryParameters.Get("key")!));
+            var key = request.QueryParameters.Get("key")!;
+            pair.Server.OnClose(close => context.WaitUntil(environment.Kv("KV").PutJsonAsync(key, new
+            {
+                code = close.Code,
+                reason = close.Reason,
+                clean = close.WasClean
+            })));
             return Response.WebSocket(pair.Client);
         }
 
@@ -234,42 +233,17 @@ public static class Worker
 
         if (request.Path == "/helpers")
         {
-            Console.WriteLine("generated-console");
-            Console.Error.WriteLine("generated-error");
+            Log.Info("generated-console");
+            Log.Error("generated-error");
             return Response.Json(new
             {
                 message = Helpers.ReachableMessage("cross-file"),
-                guid = Guid.NewGuid().ToString(),
-                next = Random.Shared.Next(),
-                bounded = Random.Shared.Next(10),
-                ranged = Random.Shared.Next(5, 10),
-                fraction = Random.Shared.NextDouble()
+                uuid = Crypto.RandomUuid(),
+                fraction = Numbers.Random()
             });
         }
 
         return Response.Text("Not found", status: 404);
-    }
-
-    private static async Task EchoAsync(WebSocket socket)
-    {
-        var message = await socket.Events().NextAsync();
-        if (message is not null)
-            socket.SendText(message.Text ?? "");
-        socket.Close(1000, "done");
-    }
-
-    private static async Task CaptureCloseAsync(WebSocket socket, Env environment, string key)
-    {
-        var message = await socket.Events().NextAsync();
-        if (message is not null)
-            await environment.Kv("KV").PutJsonAsync(key, new
-            {
-                kind = message.Kind,
-                code = message.CloseCode,
-                reason = message.CloseReason,
-                clean = message.WasClean
-            });
-        socket.Close(1000, "done");
     }
 }
 

@@ -10,26 +10,12 @@ internal sealed partial class JavaScriptEmitter
         var type = constructor?.ContainingType;
         var arguments = value.ArgumentList?.Arguments.ToArray() ?? [];
         var typeName = type?.ToDisplayString();
-        if (typeName == "System.TimeSpan")
-            return CreateTimeSpan(value, constructor, arguments);
-        if (typeName == "System.DateTimeOffset")
-            return CreateDateTimeOffset(value, constructor, arguments);
-        if (IsJsonNodeType(type))
-            return CreateJsonNode(value, constructor, arguments);
+        if (typeName is "Workers.Date" or "Workers.RegExp" or "Workers.AbortController")
+            return PositionalObjectCreation(value, constructor, arguments, values => $"new {type!.Name}({string.Join(", ", values)})");
         // KeyValuePair values are [key, value] arrays, the shape Object.entries and Map iteration produce.
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>"
             && constructor?.Parameters.Length == 2 && value.Initializer is null)
             return PositionalObjectCreation(value, constructor, arguments, values => $"[{values[0]}, {values[1]}]");
-        if (typeName is "System.DateOnly" or "System.TimeOnly")
-            return constructor is { Parameters.Length: 0 } && arguments.Length == 0 && value.Initializer is null
-                ? DefaultFieldValue(type!, value)
-                : CreateDateOrTimeOnly(value, constructor, arguments);
-        if (typeName == "System.Threading.CancellationTokenSource" && arguments.Length == 0)
-            return "new AbortController()";
-        if (typeName == "System.Text.StringBuilder")
-            return CreateStringBuilder(value, constructor, arguments);
-        if (typeName == "System.Text.RegularExpressions.Regex")
-            return CreateRegex(value, constructor, arguments);
         if (typeName is "Workers.Request" or "Workers.Response")
             return PositionalObjectCreation(value, constructor, arguments,
                 values => $"new {type!.Name}({string.Join(", ", values)})");
@@ -113,10 +99,6 @@ internal sealed partial class JavaScriptEmitter
         };
         if (Argument("paramName") is { } parameter)
             message = $"((message, parameter) => parameter == null ? message : `${{message}} (Parameter '${{parameter}}')`)({message}, {Expression(parameter)})";
-        if (type.ToDisplayString() is "System.OperationCanceledException" or "System.Threading.Tasks.TaskCanceledException")
-            return Argument("innerException") is { } cancellationInner
-                ? $"Object.assign(new DOMException({message}, \"AbortError\"), {{ cause: {Expression(cancellationInner)} }})"
-                : $"new DOMException({message}, \"AbortError\")";
         return Argument("innerException") is { } inner
             ? $"new Error({message}, {{ cause: {Expression(inner)} }})"
             : $"new Error({message})";

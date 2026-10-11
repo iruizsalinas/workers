@@ -20,8 +20,9 @@ public sealed class DurableObjectBindingTests
                     await stub.InvokeVoidAsync("reset");
                     await state.Storage.PutAsync("count", 1);
                     var count = await state.Storage.GetAsync<int>("count");
-                    var rows = await state.Storage.Sql.Prepare("SELECT 1").AllAsync<object>();
-                    await state.Container.SignalAsync(15);
+                    var rows = state.Storage.Sql.Exec<object>("SELECT ? AS value", 1).ToArray();
+                    if (!state.Container.Running) state.Container.Start();
+                    state.Container.Signal(15);
                 }
             }
             """);
@@ -32,8 +33,10 @@ public sealed class DurableObjectBindingTests
         Assert.Contains("stub[\"reset\"]()", module);
         Assert.Contains("state.storage.put(\"count\", 1)", module);
         Assert.Contains("state.storage.get(\"count\")", module);
-        Assert.Contains("$workers$sqlStatement(state.storage.sql, \"SELECT 1\").all()", module);
-        Assert.Contains("state.container.signal(15)", module);
+        Assert.Contains("let rows = state.storage.sql.exec(\"SELECT ? AS value\", 1).toArray();", module);
+        Assert.Contains("if (!(state.container.running)) {", module);
+        Assert.Contains("state.container.start();", module);
+        Assert.Contains("state.container.signal(15);", module);
     }
 
     [Fact]

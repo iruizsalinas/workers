@@ -14,9 +14,6 @@ internal sealed class ImportRegistry(GeneratedNameAllocator names)
         return alias;
     }
 
-    public IReadOnlyList<string> Modules =>
-        _imports.Keys.Select(item => item.Module).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-
     public string Emit()
     {
         var output = new StringBuilder();

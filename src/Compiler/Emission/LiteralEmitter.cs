@@ -47,50 +47,18 @@ internal sealed partial class JavaScriptEmitter
         _ => throw Unsupported("WRK108", value)
     };
 
-    // Nonzero while emitting FormattableString.Invariant or string.Create(CultureInfo.InvariantCulture, ...),
-    // where culture-sensitive format specifiers produce invariant output.
-    private int _invariantFormatting;
-
     private string InterpolationText(InterpolationSyntax item)
     {
-        var text = item.FormatClause is { } clause ? FormattedInterpolation(item, clause.FormatStringToken.ValueText) : InterpolationValue(item);
+        if (item.FormatClause is { } clause)
+            throw new NotSupportedException($"WRK108: The format '{clause.FormatStringToken.ValueText}' is outside the Workers profile; "
+                + "format numbers with Numbers.ToFixed or Numbers.ToPrecision and dates with Date.ToIsoString.");
+        var text = InterpolationValue(item);
         if (item.AlignmentClause is null) return text;
         if (_model.GetConstantValue(item.AlignmentClause.Value) is not { HasValue: true, Value: int width })
             throw Unsupported("WRK108", item.AlignmentClause);
         return width >= 0 ? $"String({text}).padStart({width})" : $"String({text}).padEnd({-width})";
     }
 
-    private string FormattedInterpolation(InterpolationSyntax item, string format)
-    {
-        var type = _model.GetTypeInfo(item.Expression).Type;
-        if (type is null) throw Unsupported("WRK108", item);
-        var nullable = type.IsReferenceType || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
-        var parameter = nullable ? "$workers$value" : Expression(item.Expression);
-        var formatted = DateFormatExpression(type, format, parameter) is { } date
-                        && (_invariantFormatting > 0 || IsCultureInvariantDateFormat(format))
-            ? date
-            : _invariantFormatting > 0 ? NumericFormatExpression(type, format, parameter) : null;
-        if (formatted is null)
-            throw new NotSupportedException(_invariantFormatting > 0
-                ? $"WRK108: The format '{format}' is not supported for '{type.ToDisplayString()}'."
-                : $"WRK108: The format '{format}' depends on the current culture; use FormattableString.Invariant($\"...\") or string.Create(CultureInfo.InvariantCulture, $\"...\").");
-        return nullable
-            ? $"(({parameter}) => {parameter} == null ? \"\" : {formatted})({Expression(item.Expression)})"
-            : formatted;
-    }
-
-    private string InvariantInterpolation(ExpressionSyntax interpolation)
-    {
-        _invariantFormatting++;
-        try
-        {
-            return Expression(interpolation);
-        }
-        finally
-        {
-            _invariantFormatting--;
-        }
-    }
 
     private string InterpolationValue(InterpolationSyntax item)
     {
@@ -104,40 +72,8 @@ internal sealed partial class JavaScriptEmitter
             return mayBeNull
                 ? $"(($workers$value) => $workers$value == null ? \"\" : ($workers$value ? \"True\" : \"False\"))({expression})"
                 : $"({expression} ? \"True\" : \"False\")";
-        if (underlying?.SpecialType is SpecialType.System_Single or SpecialType.System_Double)
-        {
-            var single = underlying.SpecialType == SpecialType.System_Single ? ", true" : "";
-            var helper = _helpers.Require(JavaScriptHelper.NumberText);
-            return mayBeNull
-                ? $"(($workers$value) => $workers$value == null ? \"\" : {helper}($workers$value{single}))({expression})"
-                : $"{helper}({expression}{single})";
-        }
-        if (underlying?.ToDisplayString() == "System.Text.StringBuilder")
-        {
-            _helpers.Require(JavaScriptHelper.StringBuilder);
-            return $"(($workers$value) => $workers$value == null ? \"\" : {_helpers.Name("stringBuilderText")}($workers$value))({expression})";
-        }
-        if (IsRegexCapture(underlying) || IsRegexType(underlying, "Regex"))
-            return $"(($workers$value) => $workers$value == null ? \"\" : $workers$value.{(IsRegexCapture(underlying) ? "value" : "source")})({expression})";
-        if (IsTextEnum(underlying))
-            return mayBeNull
-                ? $"(($workers$value) => $workers$value == null ? \"\" : {EnumText(underlying!, "$workers$value")})({expression})"
-                : EnumText(underlying!, expression);
-        if (underlying is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record))
-            return $"(($workers$value) => $workers$value == null ? \"\" : {RecordText(record, "$workers$value", item)})({expression})";
-        if (IsJsonNodeType(underlying))
-            return $"(($workers$value) => $workers$value == null ? \"\" : {JsonNodeHelper("jsonNodeToString", "$workers$value")})({expression})";
-        if (IsDateOrTimeOnly(underlying))
-        {
-            if (_invariantFormatting == 0) throw CultureSensitiveFormat(underlying!);
-            var formatted = DateFormatExpression(underlying!, IsDateOnly(underlying) ? "d" : "t", "$workers$value")!;
-            return mayBeNull
-                ? $"(($workers$value) => $workers$value == null ? \"\" : {formatted})({expression})"
-                : $"(($workers$value) => {formatted})({expression})";
-        }
         if (underlying?.SpecialType is SpecialType.System_String or SpecialType.System_Char
-            or >= SpecialType.System_SByte and <= SpecialType.System_Double
-            || underlying?.ToDisplayString() == "System.Guid")
+            or >= SpecialType.System_SByte and <= SpecialType.System_Double)
             return mayBeNull ? $"({expression}) ?? \"\"" : expression;
         throw Unsupported("WRK108", item);
     }
@@ -145,10 +81,6 @@ internal sealed partial class JavaScriptEmitter
     private static string EscapeTemplateText(string value) => value.Replace("{{", "{", StringComparison.Ordinal)
         .Replace("}}", "}", StringComparison.Ordinal).Replace("\\", "\\\\", StringComparison.Ordinal)
         .Replace("`", "\\`", StringComparison.Ordinal).Replace("${", "\\${", StringComparison.Ordinal);
-
-    private static string DateTimeRoundTrip(string value, bool includeOffset = true) => includeOffset
-        ? $"new Date({value}).toISOString().replace(/(\\.\\d{{3}})Z$/, \"$1\" + \"0000+00:00\")"
-        : $"new Date({value}).toISOString().replace(/(\\.\\d{{3}})Z$/, \"$1\" + \"0000\")";
 
     private string Element(CollectionElementSyntax value) => value switch
     {

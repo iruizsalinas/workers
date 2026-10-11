@@ -50,34 +50,6 @@ public sealed class PackageTests
         Assert.False(File.Exists(module), "Cleaning the consumer must remove its generated Worker artifact.");
     }
 
-    [Fact]
-    public void Package_installs_the_npm_driver_a_consumer_imports()
-    {
-        using var workspace = TemporaryDirectory.Create();
-        var repository = FindRepository();
-
-        RunDotNet(repository, "pack", "src/Workers.csproj", "-c", "Release", "-o", workspace.Path);
-
-        var package = Directory.GetFiles(workspace.Path, "Workers.*.nupkg").Single();
-        var consumer = Directory.CreateDirectory(Path.Combine(workspace.Path, "consumer")).FullName;
-        File.WriteAllText(Path.Combine(consumer, "Consumer.csproj"), Project(package, workspace.Path));
-        File.WriteAllText(Path.Combine(consumer, "Worker.cs"), DatabaseSource);
-
-        RunDotNet(consumer, "build", "-c", "Release", "--packages", Path.Combine(workspace.Path, "packages"));
-
-        var module = Path.Combine(consumer, "dist", "worker.js");
-        Assert.Contains("from \"pg\"", File.ReadAllText(module), StringComparison.Ordinal);
-        Assert.Contains("\"pg\"", File.ReadAllText(Path.Combine(consumer, "package.json")), StringComparison.Ordinal);
-        // Resolve the import from the Worker's directory, as the bundler does. Node reports real paths
-        // (macOS temp folders sit behind a symlink), so the result is compared relative to the consumer.
-        var (exitCode, output) = Execute("node", consumer,
-            "-e", "const { realpathSync } = require('node:fs'); const { relative } = require('node:path'); "
-                + "console.log(relative(realpathSync(process.argv[2]), require.resolve('pg', { paths: [process.argv[1]] })))",
-            Path.GetDirectoryName(module)!, consumer);
-        Assert.True(exitCode == 0, $"pg did not resolve from the Worker:{Environment.NewLine}{output}");
-        Assert.StartsWith(Path.Combine("node_modules", "pg") + Path.DirectorySeparatorChar, output.Trim(), StringComparison.Ordinal);
-    }
-
     private static string Project(string package, string source) => $$"""
         <Project Sdk="Microsoft.NET.Sdk">
           <PropertyGroup>
@@ -101,22 +73,6 @@ public sealed class PackageTests
             public static Task<Response> FetchAsync(Request request, Env environment, Context context) =>
                 Task.FromResult(Response.Text("Hello from package"));
         }
-        """;
-
-    private const string DatabaseSource = """
-        using Workers;
-
-        public static class Worker
-        {
-            [Fetch]
-            public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
-            {
-                await using var db = await PostgresClient.ConnectAsync(environment.Hyperdrive("HYPERDRIVE"));
-                return Response.Json(await db.QueryAsync<Row>("select 1 as value"));
-            }
-        }
-
-        public sealed record Row(int Value);
         """;
 
     private static string FindRepository()

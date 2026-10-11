@@ -11,7 +11,7 @@ public sealed class CompilationSemanticsTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context) =>
-                    Response.Text(Pair(b: Math.Max(val1: 1, val2: 2), a: 3));
+                    Response.Text(Pair(b: (int)Numbers.Max(left: 1, right: 2), a: 3));
 
                 private static string Pair(int a = 10, int b = 20) => $"{a}:{b}";
             }

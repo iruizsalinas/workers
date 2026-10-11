@@ -15,7 +15,7 @@ public static class Worker
         if (cached is not null)
             return cached.WithHeader("x-cache", "hit");
 
-        var response = Response.Text(DateTimeOffset.UtcNow.ToString("O"))
+        var response = Response.Text(new Date().ToIsoString())
             .WithHeader("cache-control", "public, max-age=60")
             .WithHeader("x-cache", "miss");
 

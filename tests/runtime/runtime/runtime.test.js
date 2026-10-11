@@ -74,32 +74,24 @@ describe("runtime intrinsics", () => {
     });
   });
 
-  it("uses native timers and C# cancellation", async () => {
+  it("waits with the native scheduler", async () => {
     expect(await (await invoke("/timer")).text()).toBe("delayed");
-    expect(await (await invoke("/abort")).text()).toBe("aborted");
   });
 
-  it("exposes incoming request cancellation through CancellationToken", async () => {
-    expect(await (await invoke("/request-cancellation")).json()).toEqual({
-      canBeCanceled: true,
-      isCancellationRequested: false,
-      threw: false,
-    });
+  it("exposes the incoming request signal", async () => {
+    expect(await (await invoke("/request-cancellation")).json()).toEqual({ aborted: false, threw: false });
 
     const controller = new AbortController();
     controller.abort();
-    expect(await (await invoke("/request-cancellation", { signal: controller.signal })).json()).toEqual({
-      canBeCanceled: true,
-      isCancellationRequested: true,
-      threw: true,
-    });
+    expect(await (await invoke("/request-cancellation", { signal: controller.signal })).json())
+      .toEqual({ aborted: true, threw: true });
   });
 
   it("creates and uses a native WebSocketPair", async () => {
     expect(await (await invoke("/websocket")).text()).toBe("websocket-sent");
   });
 
-  it("receives WebSocket messages through the event stream", async () => {
+  it("receives WebSocket messages through a message listener", async () => {
     const response = await invoke("/websocket-events");
     expect(response.status).toBe(101);
     const socket = response.webSocket;
@@ -110,7 +102,7 @@ describe("runtime intrinsics", () => {
     socket.close(1000, "done");
   });
 
-  it("preserves close metadata in the WebSocket event stream", async () => {
+  it("passes close metadata to a close listener", async () => {
     const runtime = await import("../fixtures/RuntimeIntrinsics/dist/worker.js");
     const context = createExecutionContext();
     const key = `socket-close-${crypto.randomUUID()}`;
@@ -120,10 +112,11 @@ describe("runtime intrinsics", () => {
     const socket = response.webSocket;
     socket.accept();
     socket.close(1000, "completed");
+    // The listener runs when the close event arrives, which can be after this test reaches here.
+    await vi.waitFor(async () => expect(await env.KV.get(key, "json")).toEqual({
+      code: 1000, reason: "completed", clean: true,
+    }));
     await waitOnExecutionContext(context);
-    expect(await env.KV.get(key, "json")).toEqual({
-      kind: 1, code: 1000, reason: "completed", clean: true,
-    });
     await env.KV.delete(key);
   });
 
@@ -132,19 +125,13 @@ describe("runtime intrinsics", () => {
     expect(await response.text()).toBe('<main><p data-generated="csharp">hello</p></main>');
   });
 
-  it("invokes a reachable cross-file helper and native Console, Guid, and Random shapes", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  it("invokes a reachable cross-file helper and native logging, UUID and random APIs", async () => {
+    const log = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const result = await (await invoke("/helpers")).json();
 
     expect(result.message).toBe("helper:cross-file");
-    expect(result.guid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
-    expect(Number.isInteger(result.next)).toBe(true);
-    expect(result.next).toBeGreaterThanOrEqual(0);
-    expect(result.bounded).toBeGreaterThanOrEqual(0);
-    expect(result.bounded).toBeLessThan(10);
-    expect(result.ranged).toBeGreaterThanOrEqual(5);
-    expect(result.ranged).toBeLessThan(10);
+    expect(result.uuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(result.fraction).toBeGreaterThanOrEqual(0);
     expect(result.fraction).toBeLessThan(1);
     expect(log).toHaveBeenCalledWith("generated-console");

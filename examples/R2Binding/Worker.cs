@@ -11,10 +11,12 @@ public static class Worker
         Context context)
     {
         var key = request.QueryParameters.Get("key") ?? "hello.txt";
-        var body = await environment.R2("BUCKET").GetAsync(key);
+        var item = await environment.R2("BUCKET").GetAsync(key);
+        if (item is null)
+            return Response.Text("Object not found", status: 404);
 
-        return body is null
-            ? Response.Text("Object not found", status: 404)
-            : Response.FromBody(body);
+        var headers = new Headers();
+        item.WriteHttpMetadata(headers);
+        return Response.FromStream(item.Body, headers.Set("etag", item.HttpEtag));
     }
 }

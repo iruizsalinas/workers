@@ -6,9 +6,9 @@ public static class Worker
 {
     private static readonly Router Routes = new Router()
         .Get("/", (request, route) => Response.Text("Notes API"))
-        .Get("/notes/{id:guid}", GetNoteAsync)
-        .Put("/notes/{id:guid}", SaveNoteAsync)
-        .Delete("/notes/{id:guid}", DeleteNoteAsync)
+        .Get("/notes/{id:uuid}", GetNoteAsync)
+        .Put("/notes/{id:uuid}", SaveNoteAsync)
+        .Delete("/notes/{id:uuid}", DeleteNoteAsync)
         .Get("/files/{*path}", (request, route) => Response.Text($"File: {route.Parameter("path")}"))
         .Fallback((request, route) => Response.Json(new { error = "Not found" }, status: 404));
 
@@ -33,7 +33,7 @@ public static class Worker
         if (input is null || string.IsNullOrWhiteSpace(input.Text))
             return Response.Json(new { error = "Text is required" }, status: 400);
 
-        var note = new Note(Guid.Parse(route.Parameter("id")), input.Text.Trim());
+        var note = new Note(route.Parameter("id").ToLowerInvariant(), input.Text.Trim());
         await route.Env.Kv("NOTES").PutJsonAsync(NoteKey(route), note);
         return Response.Json(note);
     }
@@ -44,10 +44,10 @@ public static class Worker
         return Response.Empty(204);
     }
 
-    // The guid constraint accepts any format Guid.Parse does, so keys use its canonical form.
-    private static string NoteKey(RouteContext route) => "note:" + Guid.Parse(route.Parameter("id"));
+    // UUID paths use the canonical hyphenated format; keys normalize their case.
+    private static string NoteKey(RouteContext route) => "note:" + route.Parameter("id").ToLowerInvariant();
 }
 
-public sealed record Note(Guid Id, string Text);
+public sealed record Note(string Id, string Text);
 
 public sealed record NoteInput(string Text);

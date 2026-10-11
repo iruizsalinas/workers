@@ -7,47 +7,13 @@ internal sealed partial class JavaScriptEmitter
 {
     private string Binary(BinaryExpressionSyntax expression)
     {
-        if (expression.Kind() is SyntaxKind.AsExpression or SyntaxKind.IsExpression
-            && JsonNodeKind(_model.GetTypeInfo(expression.Right).Type) is var nodeKind and >= 0)
-        {
-            var test = nodeKind == JsonNodeAny ? "node != null" : $"node != null && {JsonNodeHelper("jsonNodeIs", "node", nodeKind.ToString())}";
-            return expression.IsKind(SyntaxKind.IsExpression)
-                ? $"((node) => {test})({Expression(expression.Left)})"
-                : $"((node) => {test} ? node : null)({Expression(expression.Left)})";
-        }
         var operation = _model.GetOperation(expression) as IBinaryOperation;
-        if (operation is { } timeOperation
-            && (IsTimeSpan(timeOperation.LeftOperand.Type) || IsTimeSpan(timeOperation.RightOperand.Type)))
-            return TimeSpanBinary(expression, timeOperation);
-        if (operation is { } dateDifference
-            && IsDateValue(dateDifference.LeftOperand.Type) && IsDateValue(dateDifference.RightOperand.Type)
-            && expression.IsKind(SyntaxKind.SubtractExpression))
-            return $"new Date({Expression(expression.Left)}).getTime() - new Date({Expression(expression.Right)}).getTime()";
-        if (operation is { } dateOperation
-            && IsDateValue(dateOperation.LeftOperand.Type) && IsDateValue(dateOperation.RightOperand.Type)
-            && SymbolEqualityComparer.Default.Equals(dateOperation.LeftOperand.Type, dateOperation.RightOperand.Type)
-            && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression
-                or SyntaxKind.LessThanExpression or SyntaxKind.LessThanOrEqualExpression
-                or SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression)
-            return DateTimeOffsetComparison(expression);
-        if (operation is { } guidOperation
-            && guidOperation.LeftOperand.Type?.ToDisplayString() == "System.Guid"
-            && guidOperation.RightOperand.Type?.ToDisplayString() == "System.Guid"
-            && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
-            return $"{Expression(expression.Left)} {BinaryOperator(expression.Kind())} {Expression(expression.Right)}";
-        if (operation is { } cancellationOperation
-            && cancellationOperation.LeftOperand.Type?.ToDisplayString() == "System.Threading.CancellationToken"
-            && cancellationOperation.RightOperand.Type?.ToDisplayString() == "System.Threading.CancellationToken"
-            && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
-            return $"{Expression(expression.Left)} {BinaryOperator(expression.Kind())} {Expression(expression.Right)}";
         if (operation?.OperatorMethod is { } recordOperator && IsSynthesizedRecordMember(recordOperator)
             && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
         {
             var equals = RecordEquals(recordOperator.ContainingType, Expression(expression.Left), Expression(expression.Right), expression, referenceComparison: true);
             return expression.IsKind(SyntaxKind.EqualsExpression) ? equals : $"!{equals}";
         }
-        if (operation?.OperatorMethod is { ContainingType: var operatorType } && IsDateOrTimeOnly(operatorType))
-            return DateOrTimeOnlyBinary(expression, operation);
         if (operation?.OperatorMethod is not null)
             throw UnsupportedSymbol(operation.OperatorMethod, expression);
         if (operation is { IsLifted: true }
@@ -143,15 +109,9 @@ internal sealed partial class JavaScriptEmitter
             SpecialType.System_Char or SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16
                 or SpecialType.System_UInt16 or SpecialType.System_Int32 or SpecialType.System_UInt32 => $"String({item})",
             SpecialType.System_Boolean => $"({item} ? \"True\" : \"False\")",
-            SpecialType.System_Single => $"{_helpers.Require(JavaScriptHelper.NumberText)}({item}, true)",
-            SpecialType.System_Double => $"{_helpers.Require(JavaScriptHelper.NumberText)}({item})",
-            _ when underlying.ToDisplayString() == "System.Guid" => item,
+            SpecialType.System_Single => $"String({item})",
+            SpecialType.System_Double => $"String({item})",
             _ when IsTextEnum(underlying) => EnumText(underlying, item),
-            _ when underlying.ToDisplayString() == "System.Text.StringBuilder" =>
-                $"{RequireHelperName(JavaScriptHelper.StringBuilder, "stringBuilderText")}({item})",
-            _ when IsRegexCapture(underlying) => $"{item}.value",
-            _ when IsRegexType(underlying, "Regex") => $"{item}.source",
-            _ when IsJsonNodeType(underlying) => JsonNodeHelper("jsonNodeToString", item),
             _ when underlying is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record) =>
                 RecordText(record, item, source),
             _ => throw Unsupported("WRK108", source)
@@ -232,47 +192,6 @@ internal sealed partial class JavaScriptEmitter
         type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
             ? nullable.TypeArguments[0].SpecialType
             : SpecialType.None;
-
-    private string DateTimeOffsetComparison(BinaryExpressionSyntax expression)
-    {
-        var key = $"date-time-comparison:{expression.SyntaxTree.FilePath}:{expression.SpanStart}";
-        var left = _names.Get($"{key}:left", "left");
-        var right = _names.Get($"{key}:right", "right");
-        return $"(({left}, {right}) => new Date({left}).getTime() {BinaryOperator(expression.Kind())} " +
-               $"new Date({right}).getTime())({Expression(expression.Left)}, {Expression(expression.Right)})";
-    }
-
-    private static bool IsDateValue(ITypeSymbol? type) =>
-        type?.ToDisplayString() is "System.DateTimeOffset" or "System.DateTime";
-
-    private static bool IsTimeSpan(ITypeSymbol? type) => type?.ToDisplayString() == "System.TimeSpan";
-
-    private string TimeSpanBinary(BinaryExpressionSyntax expression, IBinaryOperation operation)
-    {
-        var left = Expression(expression.Left);
-        var right = Expression(expression.Right);
-        if (IsDateValue(operation.LeftOperand.Type))
-            return expression.Kind() switch
-            {
-                SyntaxKind.AddExpression => DateTimeAddMilliseconds(left, right),
-                SyntaxKind.SubtractExpression => DateTimeAddMilliseconds(left, $"-({right})"),
-                _ => throw UnsupportedSymbol(operation.OperatorMethod, expression)
-            };
-        if (!IsTimeSpan(operation.LeftOperand.Type) || !IsTimeSpan(operation.RightOperand.Type))
-            throw UnsupportedSymbol(operation.OperatorMethod, expression);
-        return expression.Kind() switch
-        {
-            SyntaxKind.AddExpression => TimeSpanArithmetic(left, right, "+"),
-            SyntaxKind.SubtractExpression => TimeSpanArithmetic(left, right, "-"),
-            SyntaxKind.EqualsExpression => $"{left} === {right}",
-            SyntaxKind.NotEqualsExpression => $"{left} !== {right}",
-            SyntaxKind.LessThanExpression => $"{left} < {right}",
-            SyntaxKind.LessThanOrEqualExpression => $"{left} <= {right}",
-            SyntaxKind.GreaterThanExpression => $"{left} > {right}",
-            SyntaxKind.GreaterThanOrEqualExpression => $"{left} >= {right}",
-            _ => throw UnsupportedSymbol(operation.OperatorMethod, expression)
-        };
-    }
 
     private string BinaryOperand(ExpressionSyntax operand, bool numeric)
     {

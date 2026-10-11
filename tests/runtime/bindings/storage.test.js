@@ -61,7 +61,7 @@ describe("native storage bindings", () => {
     });
   });
 
-  it("reads D1 metadata and materializes typed batch rows with blobs", async () => {
+  it("reads D1 metadata and typed rows with blobs, SQLite booleans and dates", async () => {
     const response = await invokeNative("/d1-rows");
 
     await expect(response.json()).resolves.toEqual({
@@ -70,7 +70,7 @@ describe("native storage bindings", () => {
       changedDb: true,
       rowsWritten: 1,
       rowsRead: 1,
-      file: "1:a.bin:AQID",
+      file: "1:a.bin:AQID:True:2026",
     });
   });
   it("reads text from the local KV simulator and handles misses", async () => {

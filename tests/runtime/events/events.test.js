@@ -6,7 +6,7 @@ import scheduledTask from "../../../examples/ScheduledTask/dist/worker.js";
 
 describe("event workers", () => {
   it("acknowledges queue messages through a native MessageBatch", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const batch = createMessageBatch("jobs", [
       {
         id: "message-1",
@@ -27,7 +27,7 @@ describe("event workers", () => {
   });
 
   it("receives native scheduled controller values", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const log = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const controller = createScheduledController({
       cron: "*/5 * * * *",
       scheduledTime: new Date("2026-08-15T12:00:00.000Z"),
@@ -35,7 +35,7 @@ describe("event workers", () => {
 
     await scheduledTask.scheduled(controller, env, createExecutionContext());
 
-    expect(log).toHaveBeenCalledWith("Ran */5 * * * * at 2026-08-15T12:00:00.0000000+00:00");
+    expect(log).toHaveBeenCalledWith("Ran */5 * * * * at 2026-08-15T12:00:00.000Z");
   });
 
   it("forwards a faithfully shaped email event mock", async () => {

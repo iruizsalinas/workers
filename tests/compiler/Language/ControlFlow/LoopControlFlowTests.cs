@@ -62,11 +62,14 @@ public sealed class LoopControlFlowTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
-                    Response.Json(new { present = !request.Body.IsEmpty });
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var body = Body.Text(request.Method);
+                    return Response.Json(new { present = !body.IsEmpty });
+                }
             }
             """);
 
-        Assert.Contains("!(request.body === null)", module);
+        Assert.Contains("!(body === null)", module);
     }
 }

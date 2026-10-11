@@ -7,6 +7,7 @@ public sealed class FetchOptions
     public Body? Body { get; init; }
     public object? Cf { get; init; }
     public RedirectMode? Redirect { get; init; }
+    public AbortSignal? Signal { get; init; }
 }
 
 public enum RedirectMode

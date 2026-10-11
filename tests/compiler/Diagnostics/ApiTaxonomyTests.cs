@@ -54,7 +54,7 @@ public sealed class ApiTaxonomyTests
         var assembly = typeof(global::Workers.Env).Assembly;
 
         Assert.Null(assembly.GetType("Workers.WorkerRuntime"));
-        Assert.Null(assembly.GetType("Workers.Log"));
+        Assert.NotNull(assembly.GetType("Workers.Log"));
         Assert.Null(assembly.GetType("Workers.Socket"));
         Assert.NotNull(assembly.GetType("Workers.Http"));
         Assert.NotNull(assembly.GetType("Workers.TcpSocket"));

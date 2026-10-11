@@ -12,59 +12,12 @@ internal sealed partial class JavaScriptEmitter
         if (symbol is IPropertySymbol { IsStatic: true, Name: "Ordinal" or "OrdinalIgnoreCase", ContainingType: { } comparerType }
             && comparerType.ToDisplayString() == "System.StringComparer")
             return $"\"{symbol.Name}\"";
-        if (GeneratedRegex(symbol, member) is { } generatedRegex)
-            return generatedRegex;
-        if (symbol is IPropertySymbol or IFieldSymbol { HasConstantValue: false } && IsRegexType(symbol.ContainingType))
-            return RegexMember(member, symbol);
         if (IsUserStaticState(symbol))
             return StaticMemberAccess(symbol!, member.Name);
         if (symbol is IMethodSymbol method && IsMethodGroup(member))
             return MethodGroup(member, method, method.IsStatic ? null : member.Expression);
         var property = symbol as IPropertySymbol;
-        if (property is not null && (IsJsonNodeType(property.ContainingType) || IsJsonNodeType(_model.GetTypeInfo(member.Expression).Type)))
-            return JsonNodeMember(member, property);
-        if (property is { IsStatic: true, Name: "UtcNow" }
-            && property.ContainingType.ToDisplayString() == "System.DateTimeOffset") return "new Date()";
-        if (symbol is { IsStatic: true, Name: "UnixEpoch", ContainingType: { } epochType }
-            && epochType.ToDisplayString() == "System.DateTimeOffset") return "new Date(0)";
-        if (symbol is { IsStatic: true, ContainingType: { } timeSpanType }
-            && timeSpanType.ToDisplayString() == "System.TimeSpan")
-            return TimeSpanStaticMember(member, symbol.Name);
-        if (property is { IsStatic: false, ContainingType: { } durationType }
-            && durationType.ToDisplayString() == "System.TimeSpan")
-            return TimeSpanMember(member, property.Name);
-        if (property is { ContainingType: { } dateOnlyType } && IsDateOrTimeOnly(dateOnlyType))
-            return DateOrTimeOnlyMember(member, property);
-        if (property is { IsStatic: false, ContainingType: { } dateTimeType }
-            && dateTimeType.ToDisplayString() is "System.DateTimeOffset" or "System.DateTime")
-            return DateTimeMember(member, property);
-        if (property is { IsStatic: false, Name: "ValueKind", ContainingType: { } jsonElementType }
-            && jsonElementType.ToDisplayString() == "System.Text.Json.JsonElement")
-            return HelperInvocation(JavaScriptHelper.JsonElementValueKind, [Expression(member.Expression)]);
-        if (property is { ContainingType: { } cancellationType }
-            && cancellationType.ToDisplayString() == "System.Threading.CancellationToken")
-        {
-            var token = property.IsStatic ? "null" : Expression(member.Expression);
-            return property.Name switch
-            {
-                "None" => "null",
-                "CanBeCanceled" => $"{token} != null",
-                "IsCancellationRequested" => $"{token}?.aborted === true",
-                _ => throw UnsupportedSymbol(property, member)
-            };
-        }
-        if (property is { IsStatic: false, ContainingType: { } sourceType }
-            && sourceType.ToDisplayString() == "System.Threading.CancellationTokenSource")
-        {
-            var source = Expression(member.Expression);
-            return property.Name switch
-            {
-                "Token" => $"{source}.signal",
-                "IsCancellationRequested" => $"{source}.signal.aborted",
-                _ => throw UnsupportedSymbol(property, member)
-            };
-        }
-        if (property?.ContainingType.ToDisplayString() == "System.Random" && property.Name == "Shared") return "Math";
+        if (property is not null && NativeMember(member, property) is { } native) return native;
         if (property?.ContainingType.ToDisplayString() == "Workers.CacheStorage" && property.Name == "Default")
             return "caches.default";
         if (symbol is IFieldSymbol { ContainingType: { } comparisonType, Name: "Ordinal" }
@@ -75,19 +28,6 @@ internal sealed partial class JavaScriptEmitter
             return "\"ordinalIgnoreCase\"";
         if (symbol is IFieldSymbol { IsStatic: true, Name: "Empty", ContainingType.SpecialType: SpecialType.System_String })
             return "\"\"";
-        if (symbol is IFieldSymbol { IsStatic: true, Name: "Empty", ContainingType: { } guidType }
-            && guidType.ToDisplayString() == "System.Guid")
-            return "\"00000000-0000-0000-0000-000000000000\"";
-        if (property is { IsStatic: true, Name: "InvariantCulture" }
-            && property.ContainingType.ToDisplayString() == "System.Globalization.CultureInfo")
-            return "\"invariant\"";
-        if (symbol is IFieldSymbol { IsStatic: true, Name: var mathName, ContainingType: { } mathType }
-            && mathType.ToDisplayString() is "System.Math" or "System.MathF"
-            && mathName is "E" or "PI" or "Tau")
-        {
-            var value = mathName switch { "E" => "Math.E", "PI" => "Math.PI", _ => "Math.PI * 2" };
-            return mathType.ToDisplayString() == "System.MathF" ? $"Math.fround({value})" : value;
-        }
         if (symbol is IFieldSymbol { IsStatic: true, Name: var floatingName, ContainingType: { } floatingType }
             && floatingType.SpecialType is SpecialType.System_Single or SpecialType.System_Double
             && floatingName is "NaN" or "PositiveInfinity" or "NegativeInfinity")
@@ -152,7 +92,7 @@ internal sealed partial class JavaScriptEmitter
             return $"{Expression(member.Expression)} === null";
         if (property?.ContainingType.ToDisplayString() == "Workers.TailRequest" && property.Name == "Headers")
             return $"new Headers({Expression(member.Expression)}.headers)";
-        if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "CancellationToken")
+        if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Signal")
             return $"{Expression(member.Expression)}.signal";
         if (property?.ContainingType.ToDisplayString() == "Workers.FormEntry")
             return FormEntryMember(member, property);
@@ -196,8 +136,14 @@ internal sealed partial class JavaScriptEmitter
         if (property is { Name: "Count" }
             && property.ContainingType.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>")
             return $"{Expression(member.Expression)}.count";
-        if (property?.ContainingType.ToDisplayString() == "Workers.Response" && property.Name == "IsSuccessStatusCode")
-            return $"{Expression(member.Expression)}.ok";
+        if (property?.ContainingType.ToDisplayString() == "Workers.HtmlElement" && property.Name == "NamespaceUri")
+            return $"{Expression(member.Expression)}.namespaceURI";
+        if (property?.ContainingType.ToDisplayString() == "Workers.WebSocketMessage" && property.Name == "IsText")
+            return $"(typeof {Expression(member.Expression)} === \"string\")";
+        // The runtime reports these instants as millisecond numbers; the API exposes them as dates.
+        if (property is { Name: "ScheduledTime" or "EventTimestamp" or "Timestamp" }
+            && property.ContainingType.ToDisplayString() is "Workers.ScheduledEvent" or "Workers.TailItem" or "Workers.TailLog" or "Workers.TailException")
+            return $"(value => value == null ? null : new Date(value))({Expression(member.Expression)}.{LowerFirst(property.Name)})";
         if (property?.ContainingType.ToDisplayString() == "Workers.WorkerEntrypoint")
             return $"{Expression(member.Expression)}.{(property.Name == "Environment" ? "env" : "ctx")}";
         if (property?.ContainingType.ToDisplayString() == "Workers.KvListResult" && property.Name == "ListComplete")
@@ -208,8 +154,6 @@ internal sealed partial class JavaScriptEmitter
             return $"{Expression(member.Expression)}.kv";
         if (property?.ContainingType.ToDisplayString() == "System.Exception" && property.Name == "Message")
             return $"{Expression(member.Expression)}.message";
-        if (property?.ContainingType.ToDisplayString() == "System.Text.StringBuilder" && property.Name == "Length")
-            return $"{Expression(member.Expression)}.length";
         if (property is { Name: "Count", ContainingType: { } queueBatch }
             && BindingIntrinsicRegistry.IsQueueMessageBatch(queueBatch))
             return $"{Expression(member.Expression)}.messages.length";
@@ -229,7 +173,7 @@ internal sealed partial class JavaScriptEmitter
             if (symbol is IFieldSymbol or IPropertySymbol)
                 return UserMemberAccess(Expression(member.Expression), symbol);
         }
-        ThrowIfUnsupportedFrameworkMember(symbol, member);
+        ThrowIfUnsupportedFoundationMember(symbol, member);
         return $"{Expression(member.Expression)}.{LowerFirst(symbol?.Name ?? member.Name.Identifier.ValueText)}";
     }
 

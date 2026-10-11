@@ -15,8 +15,8 @@ internal sealed partial class JavaScriptEmitter
     {
         if (!type.IsRecord) return true;
         if (type.GetMembers().OfType<IPropertySymbol>().Any(property =>
-                HasAttribute(property, "System.Text.Json.Serialization.JsonIgnoreAttribute")
-                || HasAttribute(property, "System.Text.Json.Serialization.JsonPropertyNameAttribute")))
+                HasAttribute(property, "Workers.JsonIgnoreAttribute")
+                || HasAttribute(property, "Workers.JsonNameAttribute")))
             return true;
         return type.DeclaringSyntaxReferences.Any(reference =>
             reference.GetSyntax() is RecordDeclarationSyntax record
@@ -81,7 +81,7 @@ internal sealed partial class JavaScriptEmitter
 
     private static string? JsonPropertyName(ISymbol symbol) => symbol.GetAttributes()
         .SingleOrDefault(attribute => attribute.AttributeClass?.ToDisplayString()
-            == "System.Text.Json.Serialization.JsonPropertyNameAttribute")
+            == "Workers.JsonNameAttribute")
         ?.ConstructorArguments.SingleOrDefault().Value as string;
 
     private void PrepareUserMemberNames(INamedTypeSymbol type)

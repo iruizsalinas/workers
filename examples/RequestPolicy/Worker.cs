@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Workers;
 
 namespace RequestPolicy;
@@ -40,10 +39,8 @@ public static class Worker
         headers.Delete("authorization");
         headers.Delete("cookie");
         headers.Set("content-type", "application/json");
-        headers.Set("x-request-id", Guid.NewGuid().ToString());
+        headers.Set("x-request-id", Crypto.RandomUuid());
 
-        using var cancellation = new CancellationTokenSource();
-        cancellation.CancelAfter(3000);
         try
         {
             var response = await Http.FetchAsync(upstream.ToString(), new FetchOptions
@@ -51,15 +48,16 @@ public static class Worker
                 Method = "POST",
                 Headers = headers,
                 Body = Body.Json(input),
-                Redirect = RedirectMode.Manual
-            }, cancellation.Token);
+                Redirect = RedirectMode.Manual,
+                Signal = AbortSignal.Timeout(3000)
+            });
             return response.Clone()
                 .WithHeader("x-policy", "validated")
                 .WithHeader("x-upstream-host", upstream.Hostname);
         }
         catch (Exception exception)
         {
-            Console.Error.WriteLine(exception.Message);
+            Log.Error(exception.Message);
             return Error("Upstream unavailable", 502);
         }
     }
@@ -70,14 +68,14 @@ public static class Worker
         var contentLength = request.Headers.Get("content-length");
         if (contentType is null || !contentType.StartsWith("application/json") || contentLength is null)
             return false;
-        if (!Regex.IsMatch(contentLength, "^[1-9][0-9]{0,3}$"))
+        if (!new RegExp("^[1-9][0-9]{0,3}$").Test(contentLength))
             return false;
-        return int.Parse(contentLength) <= MaxBodyBytes && request.BodyStream() is not null && !request.BodyUsed;
+        return int.Parse(contentLength) <= MaxBodyBytes && request.Body is not null && !request.BodyUsed;
     }
 
     private static bool IsValid(ReadingInput? input)
     {
-        if (input is null || !Regex.IsMatch(input.DeviceId, "^[a-z0-9-]{3,32}$"))
+        if (input is null || !new RegExp("^[a-z0-9-]{3,32}$").Test(input.DeviceId))
             return false;
         if (input.Value < -100 || input.Value > 1000 || input.Tags.Count > 8)
             return false;
@@ -90,7 +88,7 @@ public static class Worker
     }
 
     private static Response Error(string message, int status) =>
-        Response.Json(new { error = message, requestId = Guid.NewGuid() }, status);
+        Response.Json(new { error = message, requestId = Crypto.RandomUuid() }, status);
 }
 
 public sealed record ReadingInput(string DeviceId, double Value, IReadOnlyList<string> Tags);

@@ -1,4 +1,3 @@
-using System.Text;
 using Workers;
 
 namespace SignedGateway;
@@ -21,7 +20,7 @@ public static class Worker
         }
         catch (Exception exception)
         {
-            Console.Error.WriteLine(exception.Message);
+            Log.Error(exception.Message);
             return Cors(Response.Json(new { error = "Bad gateway" }, 502), origin);
         }
     }
@@ -51,10 +50,10 @@ public static class Worker
         try
         {
             var url = Canonicalize(request.Url);
-            var prefix = Encoding.UTF8.GetBytes($"{request.Method}\n{url.Path}{url.Query}\n");
+            var prefix = TextCodec.EncodeUtf8($"{request.Method}\n{url.Path}{url.Query}\n");
             var body = request.Method == "GET" || request.Method == "HEAD" ? [] : await request.Clone().BytesAsync();
             byte[] payload = [.. prefix, .. body];
-            return await Crypto.VerifyHmacSha256Async(secret, Convert.FromHexString(value), payload);
+            return await Crypto.VerifyHmacSha256Async(secret, TextCodec.DecodeHex(value), payload);
         }
         catch (Exception)
         {
@@ -72,7 +71,7 @@ public static class Worker
         var headers = request.Headers.Clone();
         headers.Delete("host");
         headers.Delete("x-signature");
-        headers.Set("x-request-id", Guid.NewGuid().ToString());
+        headers.Set("x-request-id", Crypto.RandomUuid());
         headers.Set("x-original-host", canonical.Host);
 
         var cacheKey = new Request(canonical.ToString(), new FetchOptions { Method = "GET" });
@@ -83,23 +82,19 @@ public static class Worker
                 return hit.Clone().WithHeader("x-edge-cache", "HIT");
         }
 
-        Response response;
-        using (var cancellation = new CancellationTokenSource())
+        var response = await Http.FetchAsync(upstream.ToString(), new FetchOptions
         {
-            cancellation.CancelAfter(3000);
-            response = await Http.FetchAsync(upstream.ToString(), new FetchOptions
-            {
-                Method = request.Method,
-                Headers = headers,
-                Body = request.Method == "GET" || request.Method == "HEAD" ? null : request.Body,
-                Redirect = RedirectMode.Manual
-            }, cancellation.Token);
-        }
+            Method = request.Method,
+            Headers = headers,
+            Body = request.Method == "GET" || request.Method == "HEAD" ? null : Body.FromStream(request.Body!),
+            Redirect = RedirectMode.Manual,
+            Signal = AbortSignal.Timeout(3000)
+        });
 
-        if (!response.Headers.Contains("etag") && !response.Body.IsEmpty)
+        if (!response.Headers.Contains("etag") && response.Body is not null)
         {
-            var digest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, response.Clone().Body);
-            response = response.WithHeader("etag", $"\"{Convert.ToHexString(digest)}\"");
+            var digest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, Body.FromStream(response.Clone().Body!));
+            response = response.WithHeader("etag", $"\"{TextCodec.EncodeHex(digest)}\"");
         }
         var etag = response.Headers.Get("etag");
         if (etag is not null && request.Headers.Get("if-none-match") == etag)

@@ -13,7 +13,7 @@ public sealed class TailItem
 {
     public string? ScriptName { get; init; }
     public string? Outcome { get; init; }
-    public DateTimeOffset EventTimestamp { get; init; }
+    public Date? EventTimestamp { get; init; }
     public TailFetchEventInfo? Event { get; init; }
     public IReadOnlyList<TailLog> Logs { get; init; } = [];
     public IReadOnlyList<TailException> Exceptions { get; init; } = [];
@@ -41,12 +41,12 @@ public sealed class TailLog
 {
     public string? Level { get; init; }
     public string? Message { get; init; }
-    public DateTimeOffset Timestamp { get; init; }
+    public Date Timestamp { get; init; } = null!;
 }
 
 public sealed class TailException
 {
     public string? Name { get; init; }
     public string? Message { get; init; }
-    public DateTimeOffset Timestamp { get; init; }
+    public Date Timestamp { get; init; } = null!;
 }

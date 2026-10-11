@@ -9,6 +9,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 // the decoded path parameters.
 internal sealed partial class JavaScriptEmitter
 {
+    private static ExpressionSyntax? NamedArgument(IMethodSymbol method, IEnumerable<ArgumentSyntax> arguments, string name) =>
+        arguments.Where((argument, index) => ArgumentParameter(method, argument, index).Name == name)
+            .Select(argument => argument.Expression).FirstOrDefault();
     private readonly Dictionary<string, (string Name, RoutePattern Pattern)> _routes = new(StringComparer.Ordinal);
     private readonly StringBuilder _routeDeclarations = new();
 
@@ -88,14 +91,13 @@ internal sealed partial class JavaScriptEmitter
         return result;
     }
 
-    // A constrained parameter matches exactly the values that int.Parse or Guid.Parse accept, so handlers can
-    // parse it without handling a format error.
+    // Constraints validate an integer or a canonical, hyphenated UUID.
     private string RouteConstraintTest(string constraint)
     {
         var parse = constraint switch
         {
             "int" => NumericParse("value", 0),
-            "guid" => HelperInvocation(JavaScriptHelper.GuidParse, ["value"]),
+            "uuid" => "if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) throw new Error()",
             _ => throw new InvalidOperationException()
         };
         return $"(value) => {{ try {{ {parse}; return true; }} catch {{ return false; }} }}";

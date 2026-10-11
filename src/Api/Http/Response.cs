@@ -3,17 +3,16 @@ namespace Workers;
 public sealed class Response
 {
     public int Status => WorkerApi.NotExecutable<int>();
-    public bool IsSuccessStatusCode => WorkerApi.NotExecutable<bool>();
+    public bool Ok => WorkerApi.NotExecutable<bool>();
     public string StatusText => WorkerApi.NotExecutable<string>();
     public Headers Headers => WorkerApi.NotExecutable<Headers>();
-    public Body Body => WorkerApi.NotExecutable<Body>();
+    public ReadableStream? Body => WorkerApi.NotExecutable<ReadableStream?>();
     public bool BodyUsed => WorkerApi.NotExecutable<bool>();
 
-    public ReadableStream? BodyStream() => WorkerApi.NotExecutable<ReadableStream?>();
     public static Response Empty(int status = 200, string? statusText = null) => WorkerApi.NotExecutable<Response>();
     public static Response Text(string body, int status = 200, string? statusText = null) => WorkerApi.NotExecutable<Response>();
     public static Response Html(string body, int status = 200, string? statusText = null) => WorkerApi.NotExecutable<Response>();
-    public static Response Json<T>(T body, int status = 200, object? options = null, string? statusText = null) => WorkerApi.NotExecutable<Response>();
+    public static Response Json<T>(T body, int status = 200, string? statusText = null) => WorkerApi.NotExecutable<Response>();
     public static Response Redirect(string location, int status = 302, string? statusText = null) => WorkerApi.NotExecutable<Response>();
     public static Response FromBody(Body body, int status = 200, string? statusText = null) => WorkerApi.NotExecutable<Response>();
     public static Response FromStream(ReadableStream stream, int status = 200, string? statusText = null) => WorkerApi.NotExecutable<Response>();
@@ -23,8 +22,8 @@ public sealed class Response
     public Response AppendHeader(string name, string value) => WorkerApi.NotExecutable<Response>();
     public Response WithoutHeader(string name) => WorkerApi.NotExecutable<Response>();
     public Response Clone() => WorkerApi.NotExecutable<Response>();
-    public Task<string> TextAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<string>>();
-    public Task<ReadOnlyMemory<byte>> BytesAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<ReadOnlyMemory<byte>>>();
-    public Task<T?> JsonAsync<T>(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<T?>>();
-    public Task<FormData> FormDataAsync(CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<FormData>>();
+    public Task<string> TextAsync() => WorkerApi.NotExecutable<Task<string>>();
+    public Task<byte[]> BytesAsync() => WorkerApi.NotExecutable<Task<byte[]>>();
+    public Task<T?> JsonAsync<T>() => WorkerApi.NotExecutable<Task<T?>>();
+    public Task<FormData> FormDataAsync() => WorkerApi.NotExecutable<Task<FormData>>();
 }

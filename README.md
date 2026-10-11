@@ -1,6 +1,6 @@
 # Workers
 
-Write Cloudflare Workers in C# compiled to native JavaScript.
+Write Cloudflare Workers in C# compiled to native JavaScript. Use C# to express logic and Workers APIs to interact with the runtime.
 
 ```csharp
 using Workers;
@@ -76,29 +76,34 @@ private static async Task<Response> GetUserAsync(Request request, RouteContext r
 }
 ```
 
-Patterns are checked when the Worker is built. A parameter fills a whole segment and can be constrained to values `int.Parse` or `Guid.Parse` accept, as in `{id:int}` or `{id:guid}`. A final `{*path}` matches the rest of the path. The most specific route wins, `GET` routes also answer `HEAD`, a path that matches with another method gets `405` with an `Allow` header, and other requests go to `Fallback` or receive `404`.
+Patterns are checked when the Worker is built. A parameter fills a whole segment: `{id:int}` matches signed 32-bit integers and `{id:uuid}` matches canonical hyphenated UUIDs. A final `{*path}` matches the rest of the path. The most specific route wins, `GET` routes also answer `HEAD`, a path that matches with another method gets `405` with an `Allow` header, and other requests go to `Fallback` or receive `404`.
 
-Familiar C# APIs such as `Task`, `Console`, `Guid`, and `DateTimeOffset` are supported where they map cleanly to the Workers runtime. Unsupported language or .NET features produce a compiler diagnostic instead of shipping a compatibility runtime.
+## Runtime APIs
 
-See [Compatibility](./COMPATIBILITY.md) for an overview of the supported C# language, .NET API, and Cloudflare Workers profiles.
+JSON, dates, regular expressions, cancellation, streams, logging and number utilities live in `Workers` and follow JavaScript/Web behavior, as do the Cloudflare bindings. No additional package or `System.*` import is needed.
+
+```csharp
+var user = Json.Parse<User>(text);
+var json = Json.Stringify(user);
+var timestamp = new Date().ToIsoString();
+var matched = new RegExp("^[a-z]+$", "i").Test("Workers");
+var response = await Http.FetchAsync(url, new FetchOptions { Signal = AbortSignal.Timeout(3000) });
+Log.Info(timestamp);
+```
+
+The compiler retains a small C# foundation for primitives, strings, collections, LINQ and async/await; string methods map to their JavaScript equivalents. It does not implement the .NET BCL. Unsupported APIs produce compiler diagnostics.
+
+See the [Workers profile](./PROFILE.md) for behavior and supported language features, and [migration guide](./MIGRATION.md) for the breaking changes in 0.5.
 
 ## Databases
 
-PostgreSQL, MySQL, and MongoDB clients map directly to the drivers Cloudflare recommends for Workers. They cover Hyperdrive and services such as Neon, Supabase, PlanetScale, Xata, TiDB Cloud, and MongoDB Atlas.
-
-| Client | npm package | Parameters |
-| --- | --- | --- |
-| `PostgresClient` | `pg` | `$1`, `$2`, ... |
-| `MySqlClient` | `mysql2` | `?` |
-| `MongoClient` | `mongodb` | Filter objects |
-
-Building a Worker that uses a client installs its npm package when it is missing or older than the supported version, the way a restore adds NuGet packages. It goes into the nearest `package.json` above `dist/worker.js`, or the project, and the build verifies the Worker resolves it before writing `worker.js`. Set `<WorkersInstallNpmPackages>false</WorkersInstallNpmPackages>` to report a `WRK121` error with the install command instead. Enable `"compatibility_flags": ["nodejs_compat"]` in your Wrangler configuration, and Wrangler bundles the driver when it deploys `dist/worker.js`.
-
-`mysql2` cannot negotiate TLS inside Workers, so connect to MySQL services that require it, such as PlanetScale and TiDB Cloud, through Hyperdrive. PostgreSQL and MongoDB support TLS directly, including `mongodb+srv://` connection strings.
+D1 and Durable Object SQLite storage are built in, and typed reads map rows to classes and records. Hyperdrive bindings expose connection details and a TCP socket. External database clients such as PostgreSQL, MySQL and MongoDB are not provided yet.
 
 ```csharp
-await using var db = await PostgresClient.ConnectAsync(env.Hyperdrive("HYPERDRIVE"));
-var users = await db.QueryAsync<User>("select id, name from users where team = $1", [teamId]);
+var users = await env.D1("DB")
+    .Prepare("select id, name from users where team = ?")
+    .Bind(teamId)
+    .AllAsync<User>();
 ```
 
 ## Version 0.3

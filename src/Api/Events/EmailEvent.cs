@@ -7,5 +7,5 @@ public sealed class ForwardableEmailMessage
     public Headers Headers => WorkerApi.NotExecutable<Headers>();
 
     public void Reject(string reason) => WorkerApi.NotExecutable();
-    public Task ForwardAsync(string recipient, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task>();
+    public Task ForwardAsync(string recipient) => WorkerApi.NotExecutable<Task>();
 }

@@ -14,9 +14,10 @@ public interface IDurableObjectStub : IFetcherBinding
 {
     DurableObjectId Id { get; }
     string? Name { get; }
-
-    Task<TResult?> InvokeAsync<TResult>(string methodName, IEnumerable<object?>? arguments = null, CancellationToken cancellationToken = default);
-    Task InvokeVoidAsync(string methodName, IEnumerable<object?>? arguments = null, CancellationToken cancellationToken = default);
+    Task<JsonValue> InvokeAsync(string methodName, IEnumerable<object?>? arguments = null);
+    Task<TResult?> InvokeAsync<TResult>(string methodName, IEnumerable<object?>? arguments = null);
+    Task<RpcStub> InvokeStubAsync(string methodName, IEnumerable<object?>? arguments = null);
+    Task InvokeVoidAsync(string methodName, IEnumerable<object?>? arguments = null);
 }
 
 public sealed record DurableObjectIdOptions

@@ -13,7 +13,7 @@ public static class Worker
         await environment.Queue("JOBS").SendJsonAsync(new
         {
             path = request.Path,
-            queuedAt = DateTimeOffset.UtcNow
+            queuedAt = new Date()
         });
 
         return Response.Json(new { queued = true });

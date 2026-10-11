@@ -10,7 +10,7 @@ public static class Worker
         Env environment,
         Context context)
     {
-        Console.WriteLine($"Ran {scheduled.Cron} at {scheduled.ScheduledTime:O}");
+        Log.Info($"Ran {scheduled.Cron} at {scheduled.ScheduledTime.ToIsoString()}");
         return Task.CompletedTask;
     }
 }

@@ -46,9 +46,6 @@ internal sealed partial class JavaScriptEmitter
     {
         if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
             type = nullable.TypeArguments[0];
-        if (type.ToDisplayString() is "System.DateTime" or "System.DateTimeOffset")
-            return LinqOrderKeyKind.DateTime;
-        if (IsDateOrTimeOnly(type)) return LinqOrderKeyKind.Ordinal;
         if (type.SpecialType == SpecialType.System_Char) return LinqOrderKeyKind.Character;
         if (type.TypeKind == TypeKind.Enum || type.SpecialType == SpecialType.System_Boolean
             || type.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Double)
@@ -56,7 +53,7 @@ internal sealed partial class JavaScriptEmitter
         return null;
     }
 
-    private enum LinqOrderKeyKind { Numeric, Character, DateTime, Ordinal, OrdinalIgnoreCase }
+    private enum LinqOrderKeyKind { Numeric, Character, Ordinal, OrdinalIgnoreCase }
 
     private LinqOrderKeyKind? StringComparerOrderKind(SyntaxNode source, ITypeSymbol keyType)
     {

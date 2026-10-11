@@ -8,7 +8,7 @@ public static class Worker
     public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
     {
         var started = Performance.Now();
-        var metadata = await environment.Version("VERSION").GetAsync();
+        var metadata = environment.Version("VERSION");
         var allowed = await environment.RateLimiter("RATE").LimitAsync(RateLimitKey(request));
 
         if (!allowed.Success)
@@ -21,7 +21,7 @@ public static class Worker
 
         if (request.Path == "/api/echo" && request.Method == "POST")
             return Record(environment, request, metadata,
-                Response.Json(new { body = await request.JsonAsync<object>(), version = metadata.Id, requestId = Guid.NewGuid() }),
+                Response.Json(new { body = await request.JsonAsync<object>(), version = metadata.Id, requestId = Crypto.RandomUuid() }),
                 "api_echo", started);
 
         if (request.Method != "GET" && request.Method != "HEAD")
@@ -51,7 +51,7 @@ public static class Worker
     }
 
     private static Response Record(
-        Env environment, Request request, VersionMetadata metadata, Response response, string eventName, double started)
+        Env environment, Request request, IVersionMetadataBinding metadata, Response response, string eventName, double started)
     {
         environment.Analytics("METRICS").WriteDataPoint(new AnalyticsEngineDataPoint(
             [metadata.Id], [response.Status, Performance.Now() - started], [eventName, metadata.Tag ?? "", request.Method, request.Path]));

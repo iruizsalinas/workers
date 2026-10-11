@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Workers;
 
 namespace JobProcessor;
@@ -36,7 +35,7 @@ public static class Worker
             }
             catch (Exception exception)
             {
-                Console.Error.WriteLine($"Job {message.Id} failed: {exception.Message}");
+                Log.Error($"Job {message.Id} failed: {exception.Message}");
                 await environment.D1("DB")
                     .Prepare("UPDATE jobs SET status = 'failed' WHERE id = ?")
                     .Bind(message.Body.Id)
@@ -52,7 +51,7 @@ public static class Worker
     [Scheduled]
     public static void Cleanup(ScheduledEvent scheduled, Env environment, Context context)
     {
-        Console.WriteLine($"Scheduled cleanup {scheduled.ScheduledTime:O}");
+        Log.Info($"Scheduled cleanup {new Date(scheduled.ScheduledTime).ToIsoString()}");
         context.WaitUntil(CleanupAsync(environment));
     }
 
@@ -63,13 +62,13 @@ public static class Worker
             return Error("Invalid callbackUrl", 400);
 
         var job = new Job(
-            Guid.NewGuid().ToString(),
+            Crypto.RandomUuid(),
             input.CallbackUrl,
             input.Payload,
-            DateTimeOffset.UtcNow.ToString("O"));
+            new Date().ToIsoString());
         await environment.D1("DB")
             .Prepare("INSERT INTO jobs (id, status, callback_url, payload, attempts, created_at) VALUES (?, 'queued', ?, ?, 0, ?)")
-            .Bind(job.Id, job.CallbackUrl, job.Payload.ToString(), job.CreatedAt)
+            .Bind(job.Id, job.CallbackUrl, Json.Stringify(job.Payload), job.CreatedAt)
             .RunAsync();
         await environment.Queue("JOBS").SendJsonAsync(job);
         return Response.Json(new { id = job.Id, status = "queued" }, 202);
@@ -90,18 +89,18 @@ public static class Worker
             Headers = headers,
             Body = Body.Json(job.Payload)
         });
-        if (!response.IsSuccessStatusCode)
+        if (!response.Ok)
             throw new InvalidOperationException($"Callback failed with {response.Status}");
 
         await environment.D1("DB")
             .Prepare("UPDATE jobs SET status = 'completed', completed_at = ? WHERE id = ?")
-            .Bind(DateTimeOffset.UtcNow.ToString("O"), job.Id)
+            .Bind(new Date().ToIsoString(), job.Id)
             .RunAsync();
     }
 
     private static async Task CleanupAsync(Env environment)
     {
-        var cutoff = DateTimeOffset.UtcNow.AddDays(-7).ToString("O");
+        var cutoff = new Date(Date.Now() - 7 * 86400000).ToIsoString();
         await environment.D1("DB")
             .Prepare("DELETE FROM jobs WHERE status = 'completed' AND completed_at < ?")
             .Bind(cutoff)
@@ -111,6 +110,6 @@ public static class Worker
     private static Response Error(string message, int status) => Response.Json(new { error = message }, status);
 }
 
-public sealed record CreateJobInput(string CallbackUrl, JsonElement Payload);
-public sealed record Job(string Id, string CallbackUrl, JsonElement Payload, string CreatedAt);
+public sealed record CreateJobInput(string CallbackUrl, JsonValue Payload);
+public sealed record Job(string Id, string CallbackUrl, JsonValue Payload, string CreatedAt);
 public sealed record JobStatus(string Id, string Status, string CallbackUrl, int Attempts);

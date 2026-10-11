@@ -17,6 +17,6 @@ public sealed class FormFile
     public Body Body => WorkerApi.NotExecutable<Body>();
     public long Size => WorkerApi.NotExecutable<long>();
     public long LastModified => WorkerApi.NotExecutable<long>();
-    public Task<byte[]> SliceBytesAsync(int start, int end, CancellationToken cancellationToken = default) =>
+    public Task<byte[]> SliceBytesAsync(int start, int end) =>
         WorkerApi.NotExecutable<Task<byte[]>>();
 }

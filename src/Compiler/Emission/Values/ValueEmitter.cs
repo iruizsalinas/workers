@@ -6,63 +6,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private string DateTimeMember(MemberAccessExpressionSyntax member, IPropertySymbol property)
-    {
-        var receiver = Expression(member.Expression);
-        return property.Name switch
-        {
-            "Year" => $"new Date({receiver}).getUTCFullYear()",
-            "Month" => $"new Date({receiver}).getUTCMonth() + 1",
-            "Day" => $"new Date({receiver}).getUTCDate()",
-            "DayOfWeek" => $"new Date({receiver}).getUTCDay()",
-            "DayOfYear" => DateTimeDayOfYear(receiver),
-            "Hour" => $"new Date({receiver}).getUTCHours()",
-            "Minute" => $"new Date({receiver}).getUTCMinutes()",
-            "Second" => $"new Date({receiver}).getUTCSeconds()",
-            "Millisecond" => $"new Date({receiver}).getUTCMilliseconds()",
-            "Date" => $"new Date(new Date({receiver}).setUTCHours(0, 0, 0, 0))",
-            "DateTime" when property.ContainingType.ToDisplayString() == "System.DateTimeOffset" =>
-                $"new Date({receiver})",
-            _ => throw UnsupportedSymbol(property, member)
-        };
-    }
-
-    private string TimeSpanStaticMember(SyntaxNode source, string name) => name switch
-    {
-        "Zero" => "0",
-        "MaxValue" => TimeSpanLimit(negative: false),
-        "MinValue" => TimeSpanLimit(negative: true),
-        _ => throw Unsupported("WRK105", source)
-    };
-
-    private string TimeSpanLimit(bool negative)
-    {
-        _helpers.Require(JavaScriptHelper.TimeSpan);
-        return (negative ? "-" : "") + _helpers.Name("timeSpanLimit");
-    }
-
-    private string TimeSpanMember(MemberAccessExpressionSyntax member, string name)
-    {
-        var receiver = Expression(member.Expression);
-        return name switch
-        {
-            "Days" => $"Math.trunc(({receiver}) / 86400000)",
-            "Hours" => $"Math.trunc(({receiver}) / 3600000) % 24",
-            "Minutes" => $"Math.trunc(({receiver}) / 60000) % 60",
-            "Seconds" => $"Math.trunc(({receiver}) / 1000) % 60",
-            "Milliseconds" => $"Math.trunc({receiver}) % 1000",
-            "TotalDays" => $"({receiver}) / 86400000",
-            "TotalHours" => $"({receiver}) / 3600000",
-            "TotalMinutes" => $"({receiver}) / 60000",
-            "TotalSeconds" => $"({receiver}) / 1000",
-            "TotalMilliseconds" => receiver,
-            _ => throw Unsupported("WRK105", member)
-        };
-    }
-
-    private string DateTimeDayOfYear(string receiver)
-        => $"{_helpers.Require(JavaScriptHelper.DateTimeDayOfYear)}({receiver})";
-
     private string FormEntryMember(MemberAccessExpressionSyntax member, IPropertySymbol property)
     {
         var receiver = Expression(member.Expression);
@@ -95,7 +38,7 @@ internal sealed partial class JavaScriptEmitter
                 "System.Collections.Generic.ISet<T>" or
                 "System.Collections.Generic.IReadOnlySet<T>"));
 
-    private static void ThrowIfUnsupportedFrameworkMember(ISymbol? symbol, SyntaxNode source)
+    private static void ThrowIfUnsupportedFoundationMember(ISymbol? symbol, SyntaxNode source)
     {
         if (symbol?.ContainingNamespace.ToDisplayString() is { } @namespace
             && (@namespace == "System" || @namespace.StartsWith("System.", StringComparison.Ordinal)))
@@ -105,7 +48,6 @@ internal sealed partial class JavaScriptEmitter
     private static string Response(string[] arguments) => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})";
     private string Identifier(IdentifierNameSyntax value) => _model.GetSymbolInfo(value).Symbol switch
     {
-        IPropertySymbol property when GeneratedRegex(property, value) is { } generatedRegex => generatedRegex,
         IMethodSymbol method when IsMethodGroup(value) => MethodGroup(value, method, null),
         IPropertySymbol { ContainingType: { } type, Name: var name }
             when type.ToDisplayString() == "Workers.WorkerEntrypoint" => name == "Environment" ? "this.env" : "this.ctx",
@@ -181,15 +123,6 @@ internal sealed partial class JavaScriptEmitter
         return $", {{ {string.Join(", ", properties)} }}";
     }
 
-    private static string JsonResponseInit(string[] arguments)
-    {
-        if (arguments.Length == 1) return "";
-        var properties = new List<string>();
-        if (arguments.Length > 2) properties.Add($"...({arguments[2]} ?? {{}})");
-        properties.Add($"status: {arguments[1]}");
-        if (arguments.Length > 3) properties.Add($"statusText: {arguments[3]} ?? undefined");
-        return $", {{ {string.Join(", ", properties)} }}";
-    }
     private string AnonymousMember(AnonymousObjectMemberDeclaratorSyntax value)
     {
         var name = value.NameEquals?.Name.Identifier.ValueText ?? value.Expression switch

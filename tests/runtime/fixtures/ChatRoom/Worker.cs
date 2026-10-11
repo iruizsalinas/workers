@@ -38,7 +38,7 @@ public sealed class ChatRoom
         var pair = WebSocketPair.Create();
         var client = pair.Client;
         var server = pair.Server;
-        server.SerializeAttachment(new ChatAttachment(name, DateTimeOffset.UtcNow.ToString("O")));
+        server.SerializeAttachment(new ChatAttachment(name, new Date().ToIsoString()));
         _state.AcceptWebSocket(server, [$"user:{name}"]);
         server.SendJson(new { type = "welcome", name, online = _state.GetWebSockets().Count });
         Broadcast(new { type = "join", name }, server);
@@ -48,7 +48,7 @@ public sealed class ChatRoom
     public void WebSocketMessageAsync(WebSocket socket, WebSocketMessage message)
     {
         var attachment = socket.DeserializeAttachment<ChatAttachment>()
-            ?? new ChatAttachment("anonymous", DateTimeOffset.UtcNow.ToString("O"));
+            ?? new ChatAttachment("anonymous", new Date().ToIsoString());
         var text = message.AsText();
         if (text == "who")
         {
@@ -68,7 +68,7 @@ public sealed class ChatRoom
             type = "message",
             from = attachment.Name,
             text,
-            at = DateTimeOffset.UtcNow.ToString("O")
+            at = new Date().ToIsoString()
         });
     }
 
@@ -79,10 +79,10 @@ public sealed class ChatRoom
             Broadcast(new { type = "leave", name = attachment.Name, code, reason, wasClean }, socket);
     }
 
-    public void WebSocketErrorAsync(WebSocket socket, WebSocketError error)
+    public void WebSocketErrorAsync(WebSocket socket, Exception error)
     {
         var attachment = socket.DeserializeAttachment<ChatAttachment>();
-        Console.Error.WriteLine($"WebSocket error for {attachment?.Name ?? "anonymous"}: {error.Message}");
+        Log.Error($"WebSocket error for {attachment?.Name ?? "anonymous"}: {error.Message}");
     }
 
     private void Broadcast<T>(T payload, WebSocket? except = null)

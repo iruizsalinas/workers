@@ -10,7 +10,6 @@ D1Intrinsics
             [Key("Workers.ID1Database", "WithSession")] = Direct("withSession"),
             [Key("Workers.ID1Database", "ExecAsync")] = Direct("exec"),
             [Key("Workers.ID1Database", "BatchAsync")] = Direct("batch"),
-            [Key("Workers.ID1Database", "DumpAsync")] = Direct("dump"),
             [Key("Workers.D1PreparedStatement", "Bind")] = Direct("bind"),
             [Key("Workers.D1PreparedStatement", "RunAsync")] = Direct("run"),
             [Key("Workers.D1PreparedStatement", "AllAsync")] = Direct("all"),

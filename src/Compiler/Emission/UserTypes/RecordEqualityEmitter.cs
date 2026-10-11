@@ -89,8 +89,6 @@ internal sealed partial class JavaScriptEmitter
             return $"((a, b) => a == null || b == null ? a == b : {ValueEquality(nullable.TypeArguments[0], "a", "b", source)})({left}, {right})";
         if (type.SpecialType is SpecialType.System_Single or SpecialType.System_Double)
             return $"((a, b) => a === b || a !== a && b !== b)({left}, {right})";
-        if (type.ToDisplayString() is "System.DateTimeOffset" or "System.DateTime")
-            return $"(new Date({left}).getTime() === new Date({right}).getTime())";
         if (type is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record))
             return RecordEquals(record, left, right, source);
         return $"({left} === {right})";

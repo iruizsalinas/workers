@@ -2,8 +2,8 @@ namespace Workers;
 
 public interface IImagesBinding : IBinding
 {
-    ImagesPipeline Input(Body image);
-    Task<ImagesInfo> InfoAsync(Body image, CancellationToken cancellationToken = default);
+    ImagesPipeline Input(ReadableStream image);
+    Task<ImagesInfo> InfoAsync(ReadableStream image);
 }
 
 public sealed class ImagesInfo
@@ -16,8 +16,8 @@ public sealed class ImagesInfo
 public sealed class ImagesPipeline
 {
     public ImagesPipeline Transform(object options) => WorkerApi.NotExecutable<ImagesPipeline>();
-    public ImagesPipeline Draw(Body image, object? options = null) => WorkerApi.NotExecutable<ImagesPipeline>();
-    public Task<Response> OutputAsync(ImagesOutputOptions options, CancellationToken cancellationToken = default) => WorkerApi.NotExecutable<Task<Response>>();
+    public ImagesPipeline Draw(ReadableStream image, object? options = null) => WorkerApi.NotExecutable<ImagesPipeline>();
+    public Task<Response> OutputAsync(ImagesOutputOptions options) => WorkerApi.NotExecutable<Task<Response>>();
 }
 
 public sealed class ImagesOutputOptions

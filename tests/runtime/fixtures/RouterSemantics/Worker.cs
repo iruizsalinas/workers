@@ -29,10 +29,10 @@ public static class Worker
             .Get("/users/{id}", (request, route) => Response.Text($"{prefix}:name:{route.Parameter("id")}"))
             .Delete("/users/{id}", async (request, route) =>
             {
-                await Task.Delay(1);
+                await Timers.WaitAsync(1);
                 return Response.Text($"deleted:{route.Parameter("id")}");
             })
-            .Get("/items/{id:guid}", (request, route) => Response.Text(Guid.Parse(route.Parameter("id")).ToString()))
+            .Get("/items/{id:uuid}", (request, route) => Response.Text(route.Parameter("id").ToLowerInvariant()))
             .Any("/proxy/{*path}", (request, route) => Response.Text($"{request.Method}:{route.Parameter("path")}"))
             .Get("/proxy/status", (request, route) => Response.Text("status"))
             .Post("/echo", async (request, route) => Response.Text(await request.TextAsync(), 201))

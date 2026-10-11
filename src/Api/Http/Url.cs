@@ -2,6 +2,8 @@ namespace Workers;
 
 public sealed class Url
 {
+    public static string EncodeComponent(string text) => WorkerApi.NotExecutable<string>();
+    public static string DecodeComponent(string text) => WorkerApi.NotExecutable<string>();
     public Url(string value) => WorkerApi.NotExecutable();
     public Url(string value, string baseUrl) => WorkerApi.NotExecutable();
 

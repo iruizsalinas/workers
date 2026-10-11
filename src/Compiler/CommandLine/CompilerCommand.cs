@@ -35,10 +35,10 @@ internal static class CompilerCommand
             .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), parseOptions, path))
             .ToArray();
 
-        EmittedWorker worker;
+        string source;
         try
         {
-            worker = WorkerCompiler.CompileWorker(trees, options.Reference is null ? [] : [options.Reference]);
+            source = WorkerCompiler.Compile(trees, options.Reference is null ? [] : [options.Reference]);
         }
         catch (CompilationFailedException exception)
         {
@@ -51,32 +51,8 @@ internal static class CompilerCommand
             error.WriteLine(WorkerDiagnostics.Format(exception));
             return 1;
         }
-        var outputDirectory = Path.GetDirectoryName(options.Output)!;
-        var unsatisfied = NpmDependencies.Unsatisfied(worker.ImportedModules, outputDirectory);
-        var installDirectory = NpmDependencies.InstallDirectory(options.Project, outputDirectory);
-        if (options.NpmInstallArguments is { } arguments)
-        {
-            // The build runs npm install with these arguments, then compiles again to verify the result.
-            Directory.CreateDirectory(Path.GetDirectoryName(arguments)!);
-            File.WriteAllLines(arguments, unsatisfied.Count == 0 || installDirectory is null
-                ? []
-                : ["--prefix", installDirectory, .. unsatisfied.Select(requirement => requirement.Package.InstallSpec)]);
-        }
-        if (unsatisfied.Count != 0 && (options.NpmInstallArguments is null || installDirectory is null))
-        {
-            var command = $"npm install {string.Join(" ", unsatisfied.Select(requirement => requirement.Package.InstallSpec))}";
-            error.WriteLine($"error WRK121: The Worker imports npm packages that Wrangler cannot resolve: "
-                + $"{string.Join(", ", unsatisfied.Select(requirement => requirement.Problem))}. "
-                + (installDirectory is null
-                    ? $"Run '{command}' in '{outputDirectory}' or a directory above it."
-                    : $"Run '{command}' in '{installDirectory}'."));
-            return 1;
-        }
-        // A Worker is only written once the packages it imports resolve, so a failed install never
-        // leaves a deployable artifact.
-        if (unsatisfied.Count != 0) return 0;
-        Directory.CreateDirectory(outputDirectory);
-        File.WriteAllText(options.Output, worker.Source);
+        Directory.CreateDirectory(Path.GetDirectoryName(options.Output)!);
+        File.WriteAllText(options.Output, source);
         return 0;
     }
 
@@ -104,9 +80,6 @@ internal static class CompilerCommand
           --sources <path>            File containing one C# source path per line.
           --reference <path>          Workers API assembly reference.
           --define <symbols>          Preprocessor symbols separated by commas or semicolons.
-          --npm-install-arguments <path>
-                                      Write npm install arguments for missing or outdated packages
-                                      the Worker imports, instead of failing.
           --help                      Show command-line help.
           --version                   Show compiler version.
 

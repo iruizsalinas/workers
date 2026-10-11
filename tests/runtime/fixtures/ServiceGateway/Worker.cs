@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Workers;
 
 namespace ServiceGateway;
@@ -51,7 +50,7 @@ public sealed class UserApi : WorkerEntrypoint
 
     public async Task<IReadOnlyList<User>> SearchUsersAsync(string prefix, int limit = 10)
     {
-        var safeLimit = Math.Min(Math.Max(limit, 1), 50);
+        var safeLimit = (int)Numbers.Min(Numbers.Max(limit, 1), 50);
         var result = await Environment.D1("DB")
             .Prepare("SELECT id, username, created_at AS createdAt FROM users WHERE username LIKE ? ORDER BY username LIMIT ?")
             .Bind($"{prefix}%", safeLimit).AllAsync<User>();
@@ -73,7 +72,7 @@ public sealed class AdminApi : WorkerEntrypoint
     {
         if (!ValidateUsername(input.Username))
             return new(null, "Invalid username");
-        var user = new User(Guid.NewGuid().ToString(), input.Username, DateTimeOffset.UtcNow.ToString("O"));
+        var user = new User(Crypto.RandomUuid(), input.Username, new Date().ToIsoString());
         await Environment.D1("DB").Prepare("INSERT INTO users (id, username, created_at) VALUES (?, ?, ?)")
             .Bind(user.Id, user.Username, user.CreatedAt).RunAsync();
         Context.WaitUntil(Task.CompletedTask);
@@ -87,13 +86,13 @@ public sealed class AdminApi : WorkerEntrypoint
     }
 
     private bool ValidateUsername(string value) =>
-        value.Length >= 3 && value.Length <= 32 && Regex.IsMatch(value, "^[a-zA-Z0-9_-]+$");
+        value.Length >= 3 && value.Length <= 32 && new RegExp("^[a-zA-Z0-9_-]+$").Test(value);
 }
 
 [WorkerEntrypoint("CoreService")]
 public sealed class CoreService : WorkerEntrypoint
 {
-    public Health Health() => new(true, "core", DateTimeOffset.UtcNow.ToString("O"));
+    public Health Health() => new(true, "core", new Date().ToIsoString());
     public Response FetchAsync(Request request) => request.Path == "/internal/health"
         ? Response.Json(Health())
         : Response.Text("Not found", 404);

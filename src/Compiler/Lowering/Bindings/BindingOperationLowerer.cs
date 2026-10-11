@@ -52,20 +52,6 @@ internal sealed partial class JavaScriptEmitter
         return $"{receiver}.{method}({key}, JSON.stringify({value}){(options is null ? "" : ", " + options)})";
     }
 
-    private static string EmitCacheQuery(
-        string receiver,
-        string method,
-        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
-    {
-        var key = arguments[0].Value;
-        var option = arguments.Skip(1).FirstOrDefault().Value;
-        if (option is null)
-            return $"{receiver}.{method}({key})";
-        var parameter = arguments[1].Parameter;
-        var nativeOption = parameter.Name == "ignoreMethod" ? $"{{ ignoreMethod: {option} }}" : option;
-        return $"{receiver}.{method}({key}, {nativeOption})";
-    }
-
     private string EmitServiceRpc(
         string receiver,
         IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)

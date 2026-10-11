@@ -2,20 +2,20 @@ namespace Workers;
 
 public interface IKvNamespace : IBinding
 {
-    Task<string?> GetTextAsync(string key, CancellationToken cancellationToken = default);
-    Task<string?> GetTextAsync(string key, KvGetOptions? options, CancellationToken cancellationToken = default);
-    Task<byte[]?> GetBytesAsync(string key, CancellationToken cancellationToken = default);
-    Task<T?> GetJsonAsync<T>(string key, CancellationToken cancellationToken = default);
-    Task<KvValueWithMetadata<string>> GetTextWithMetadataAsync(string key, KvGetOptions? options = null, CancellationToken cancellationToken = default);
-    Task<KvValueWithMetadata<byte[]>> GetBytesWithMetadataAsync(string key, KvGetOptions? options = null, CancellationToken cancellationToken = default);
-    Task<KvValueWithMetadata<T>> GetJsonWithMetadataAsync<T>(string key, KvGetOptions? options = null, CancellationToken cancellationToken = default);
-    Task<IReadOnlyDictionary<string, string?>> GetTextBulkAsync(IEnumerable<string> keys, KvGetOptions? options = null, CancellationToken cancellationToken = default);
-    Task<IReadOnlyDictionary<string, T?>> GetJsonBulkAsync<T>(IEnumerable<string> keys, KvGetOptions? options = null, CancellationToken cancellationToken = default);
-    Task PutTextAsync(string key, string value, KvPutOptions? options = null, CancellationToken cancellationToken = default);
-    Task PutBytesAsync(string key, ReadOnlyMemory<byte> value, KvPutOptions? options = null, CancellationToken cancellationToken = default);
-    Task PutJsonAsync<T>(string key, T value, KvPutOptions? options = null, CancellationToken cancellationToken = default);
-    Task DeleteAsync(string key, CancellationToken cancellationToken = default);
-    Task<KvListResult> ListAsync(KvListOptions? options = null, CancellationToken cancellationToken = default);
+    Task<string?> GetTextAsync(string key);
+    Task<string?> GetTextAsync(string key, KvGetOptions? options);
+    Task<byte[]?> GetBytesAsync(string key);
+    Task<T?> GetJsonAsync<T>(string key);
+    Task<KvValueWithMetadata<string>> GetTextWithMetadataAsync(string key, KvGetOptions? options = null);
+    Task<KvValueWithMetadata<byte[]>> GetBytesWithMetadataAsync(string key, KvGetOptions? options = null);
+    Task<KvValueWithMetadata<T>> GetJsonWithMetadataAsync<T>(string key, KvGetOptions? options = null);
+    Task<IReadOnlyDictionary<string, string?>> GetTextBulkAsync(IEnumerable<string> keys, KvGetOptions? options = null);
+    Task<IReadOnlyDictionary<string, T?>> GetJsonBulkAsync<T>(IEnumerable<string> keys, KvGetOptions? options = null);
+    Task PutTextAsync(string key, string value, KvPutOptions? options = null);
+    Task PutBytesAsync(string key, ReadOnlyMemory<byte> value, KvPutOptions? options = null);
+    Task PutJsonAsync<T>(string key, T value, KvPutOptions? options = null);
+    Task DeleteAsync(string key);
+    Task<KvListResult> ListAsync(KvListOptions? options = null);
 }
 
 public sealed class KvGetOptions
@@ -37,6 +37,6 @@ public sealed class KvListOptions
     public string? Cursor { get; init; }
 }
 
-public sealed record KvKey(string Name, ulong? Expiration, JsonElement? Metadata);
+public sealed record KvKey(string Name, ulong? Expiration, JsonValue? Metadata);
 public sealed record KvListResult(IReadOnlyList<KvKey> Keys, bool ListComplete, string? Cursor);
-public sealed record KvValueWithMetadata<T>(T? Value, JsonElement? Metadata);
+public sealed record KvValueWithMetadata<T>(T? Value, JsonValue? Metadata);

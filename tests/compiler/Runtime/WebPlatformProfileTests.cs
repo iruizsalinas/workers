@@ -18,7 +18,7 @@ public sealed class WebPlatformProfileTests
                     byte[] signature = [1];
                     byte[] payload = [2];
                     var valid = await Crypto.VerifyHmacSha256Async("secret", signature, payload);
-                    var stream = request.BodyStream()!.Compress(CompressionFormat.Gzip);
+                    var stream = request.Body!.Compress(CompressionFormat.Gzip);
                     return Response.FromStream(stream).WithHeader("x-valid", valid.ToString());
                 }
             }

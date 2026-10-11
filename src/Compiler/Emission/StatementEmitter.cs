@@ -42,7 +42,7 @@ internal sealed partial class JavaScriptEmitter
                     enumerable = $"{_helpers.Require(JavaScriptHelper.LinqValues)}({enumerable})";
                 else if (BindingIntrinsicRegistry.IsQueueMessageBatch(enumerableType))
                     enumerable += ".messages";
-                else if (IsDictionary(enumerableType) && !IsRegexType(enumerableType, "GroupCollection"))
+                else if (IsDictionary(enumerableType))
                     enumerable = $"Object.entries({enumerable})";
                 _output.Append(indent)
                     .Append(loop.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword) ? "for await (const " : "for (const ")
@@ -166,8 +166,6 @@ internal sealed partial class JavaScriptEmitter
             return EmitBindingIntrinsic(receiver, method, intrinsic, []);
         if (method is { IsStatic: false } && IsUserInstanceType(method.ContainingType))
             return $"{receiver}.{UserInstanceMethodName(method)}()";
-        if (method?.ContainingType.ToDisplayString() == "System.Threading.CancellationTokenSource")
-            return HelperInvocation(JavaScriptHelper.CancellationCancelAfter, [receiver, "-1"]);
         throw Unsupported("WRK108", source);
     }
 

@@ -2,8 +2,8 @@ namespace Workers;
 
 public interface ISendEmailBinding : IBinding
 {
-    Task<EmailSendResult> SendAsync(SendEmailMessage message, CancellationToken cancellationToken = default);
-    Task<EmailSendResult> SendRawAsync(string from, string to, ReadOnlyMemory<byte> raw, CancellationToken cancellationToken = default);
+    Task<EmailSendResult> SendAsync(SendEmailMessage message);
+    Task<EmailSendResult> SendRawAsync(string from, string to, ReadOnlyMemory<byte> raw);
 }
 
 public sealed record EmailSendResult(string MessageId);
