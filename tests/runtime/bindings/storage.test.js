@@ -45,8 +45,18 @@ describe("native storage bindings", () => {
     expect(result).toMatchObject({
       size: 8,
       contentType: "text/custom",
+      md5: "a00f959df3b8a4b7a09a6e377dd41720",
+      conditional: "r2-value",
       deleted: null,
     });
+  });
+
+  it("encrypts R2 objects with a customer-provided key", async () => {
+    const response = await invokeNative("/r2-encrypted");
+    const result = await response.json();
+
+    // The local R2 simulator accepts customer keys but does not report the key's MD5.
+    expect(result.text).toBe("secret");
   });
 
   it("executes D1 batches, raw rows, and sessions", async () => {

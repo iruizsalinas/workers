@@ -47,6 +47,11 @@ public static class Worker
                 HttpMetadata = new R2HttpMetadata { ContentType = "text/custom" }
             });
             var head = await bucket.HeadAsync(key);
+            var conditional = await bucket.GetAsync(key, new R2GetOptions
+            {
+                OnlyIf = new R2Conditional { UploadedAfter = new Date(0), SecondsGranularity = true }
+            });
+            var md5 = head!.Checksums.Md5;
             var listed = await bucket.ListAsync(new R2ListOptions { Prefix = key });
             await bucket.DeleteAsync(key);
             var deleted = await bucket.HeadAsync(key);
@@ -55,9 +60,30 @@ public static class Worker
                 key = head!.Key,
                 size = head.Size,
                 contentType = head.HttpMetadata?.ContentType,
+                md5 = md5 is null ? null : Hex.Encode(md5),
+                conditional = conditional is not null ? await conditional.TextAsync() : null,
                 listed = listed.Objects[0].Key,
                 deleted
             });
+        }
+
+        if (path == "/r2-encrypted")
+        {
+            const string encryptionKey = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+            var key = $"encrypted-{Crypto.RandomUuid()}";
+            var bucket = environment.R2("BUCKET");
+            var stored = await bucket.PutAsync(key, "secret", new R2PutOptions { SsecKey = encryptionKey });
+            var read = await bucket.GetAsync(key, new R2GetOptions { SsecKey = encryptionKey });
+            var text = read is null ? null : await read.TextAsync();
+            await bucket.DeleteAsync(key);
+            return Response.Json(new { keyMd5 = stored?.SsecKeyMd5, text });
+        }
+
+        if (path == "/durable-primary")
+        {
+            var stub = environment.DurableObject("ECHO").GetByName("primary-csharp",
+                new DurableObjectNamespaceGetDurableObjectOptions { RoutingMode = DurableObjectRoutingMode.PrimaryOnly });
+            return await stub.FetchAsync("https://worker.test/primary");
         }
 
         if (path == "/d1-advanced")
@@ -154,6 +180,23 @@ public sealed class EchoObject : DurableObject
         var stored = await Ctx.Storage.GetAsync<string>("transactional");
         await Ctx.Storage.DeleteAsync("transactional");
         return observed && stored == "stored";
+    }
+
+    public async Task<bool> AlarmOptionsLifecycleAsync()
+    {
+        await Ctx.Storage.SetAlarmAsync(new Date(Date.Now() + 60000), new DurableObjectSetAlarmOptions { AllowUnconfirmed = true });
+        var scheduled = await Ctx.Storage.GetAlarmAsync(new DurableObjectGetAlarmOptions { AllowConcurrency = true });
+        var inTransaction = await Ctx.Storage.TransactionAsync(async transaction =>
+        {
+            var seen = await transaction.GetAlarmAsync();
+            await transaction.DeleteAlarmAsync();
+            await transaction.SetAlarmAsync(new Date(Date.Now() + 120000));
+            return seen is not null && seen.GetTime() == scheduled!.GetTime();
+        });
+        var moved = await Ctx.Storage.GetAlarmAsync();
+        await Ctx.Storage.DeleteAlarmAsync(new DurableObjectSetAlarmOptions { AllowConcurrency = true });
+        var cleared = await Ctx.Storage.GetAlarmAsync();
+        return inTransaction && moved!.GetTime() > scheduled!.GetTime() && cleared is null;
     }
 
     public override Task AlarmAsync(AlarmInvocationInfo alarmInfo) => Task.CompletedTask;

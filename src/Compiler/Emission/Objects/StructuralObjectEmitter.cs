@@ -93,8 +93,10 @@ internal sealed partial class JavaScriptEmitter
     };
 
     private string StructuralPropertyName(ExpressionSyntax source, string name) =>
-        _model.GetSymbolInfo(source).Symbol?.ContainingType.ToDisplayString() == "Workers.JsonWebKey" && name == "KeyOps"
-            ? "key_ops" : LowerFirst(name);
+        _model.GetSymbolInfo(source).Symbol?.ContainingType.ToDisplayString() is { } type
+            && NativePropertyNames.Get(type, name) is { } nativeName
+            ? nativeName
+            : LowerFirst(name);
 
     private string StructuralValue(AssignmentExpressionSyntax assignment)
     {

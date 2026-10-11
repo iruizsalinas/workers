@@ -117,6 +117,11 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.DictionaryObject => EmitDictionaryObject(receiver, method, intrinsic.JavascriptName, arguments),
             BindingIntrinsicKind.SyncStorageGet => $"({receiver}.get({arguments[0].Value}) ?? null)",
             BindingIntrinsicKind.SqlCursorNext => $"(row => row.done ? null : row.value)({receiver}.next())",
+            BindingIntrinsicKind.AsyncIteratorNext => $"{receiver}.next().then(item => item.done ? null : item.value)",
+            // Calling a loopback export with props specializes it; without props the export is the binding itself.
+            BindingIntrinsicKind.ExportBinding => arguments.Count == 1
+                ? $"{receiver}[{arguments[0].Value}]"
+                : $"{receiver}[{arguments[0].Value}]({{ props: {arguments[1].Value} }})",
             BindingIntrinsicKind.CacheMatch => $"{receiver}.{intrinsic.JavascriptName}({values}).then(value => value ?? null)",
             BindingIntrinsicKind.Rpc => EmitRpc(receiver, method, arguments),
             BindingIntrinsicKind.DateResult => $"{receiver}.{intrinsic.JavascriptName}({values}).then(value => value == null ? null : new Date(value))",

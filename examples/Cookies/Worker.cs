@@ -7,10 +7,7 @@ public static class Worker
     private const int OneYear = 60 * 60 * 24 * 365;
 
     [Fetch]
-    public static Task<Response> FetchAsync(
-        Request request,
-        Env env,
-        ExecutionContext ctx)
+    public static Task<Response> FetchAsync(Request request)
     {
         var url = new Url(request.Url);
         if (url.Pathname == "/logout")

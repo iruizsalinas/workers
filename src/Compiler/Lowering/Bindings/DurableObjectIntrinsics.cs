@@ -36,6 +36,9 @@ internal static class DurableObjectIntrinsics
             [Key("Workers.DurableObjectStorage", "GetAlarmAsync")] = new("getAlarm", BindingIntrinsicKind.DateResult),
             [Key("Workers.DurableObjectStorage", "SetAlarmAsync")] = Direct("setAlarm"),
             [Key("Workers.DurableObjectStorage", "DeleteAlarmAsync")] = Direct("deleteAlarm"),
+            [Key("Workers.DurableObjectTransaction", "GetAlarmAsync")] = new("getAlarm", BindingIntrinsicKind.DateResult),
+            [Key("Workers.DurableObjectTransaction", "SetAlarmAsync")] = Direct("setAlarm"),
+            [Key("Workers.DurableObjectTransaction", "DeleteAlarmAsync")] = Direct("deleteAlarm"),
             [Key("Workers.DurableObjectStorage", "GetCurrentBookmarkAsync")] = Direct("getCurrentBookmark"),
             [Key("Workers.DurableObjectStorage", "GetBookmarkForTimeAsync")] = Direct("getBookmarkForTime"),
             [Key("Workers.DurableObjectStorage", "OnNextSessionRestoreBookmarkAsync")] = Direct("onNextSessionRestoreBookmark"),
@@ -63,7 +66,10 @@ internal static class DurableObjectIntrinsics
             [Key("Workers.Container", "InterceptOutboundHttpsAsync")] = Direct("interceptOutboundHttps"),
             [Key("Workers.Container", "SetInactivityTimeoutAsync")] = Direct("setInactivityTimeout"),
             [Key("Workers.Container", "ExecAsync")] = Direct("exec"),
+            [Key("Workers.Container", "SnapshotContainerAsync")] = Direct("snapshotContainer"),
+            [Key("Workers.Container", "InspectAsync")] = Direct("inspect"),
             [Key("Workers.ExecProcess", "OutputAsync")] = Direct("output"),
-            [Key("Workers.ExecProcess", "Kill")] = Direct("kill")
+            [Key("Workers.ExecProcess", "Kill")] = Direct("kill"),
+            [Key("Workers.ExecProcess", "Resize")] = Direct("resize")
         };
 }

@@ -5,7 +5,7 @@ namespace TelemetryPipeline;
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> FetchAsync(Request request, Env env, ExecutionContext ctx)
+    public static async Task<Response> FetchAsync(Request request, Env env)
     {
         if (request.Method != "GET" || new Url(request.Url).Pathname != "/health")
             return new Response("Not found") { Status = 404 };
@@ -21,10 +21,7 @@ public static class Worker
         ctx.WaitUntil(EnqueueDueSensorsAsync(env, scheduled.ScheduledTime.GetTime()));
 
     [Queue]
-    public static async Task QueueAsync(
-        MessageBatch<SensorJob> batch,
-        Env env,
-        ExecutionContext ctx)
+    public static async Task QueueAsync(MessageBatch<SensorJob> batch, Env env)
     {
         foreach (var message in batch.Messages)
         {

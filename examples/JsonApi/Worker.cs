@@ -5,10 +5,7 @@ namespace JsonApi;
 public static class Worker
 {
     [Fetch]
-    public static Task<Response> FetchAsync(
-        Request request,
-        Env env,
-        ExecutionContext ctx)
+    public static Task<Response> FetchAsync(Request request)
     {
         return Task.FromResult(Response.Json(new
         {

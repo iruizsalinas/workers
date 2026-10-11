@@ -11,13 +11,13 @@ internal sealed partial class JavaScriptEmitter
         var cast = conversion.Syntax;
         var operand = conversion.Operand;
         var target = conversion.Type ?? throw Unsupported("WRK101", cast);
-        var bodyInput = conversion.OperatorMethod?.ContainingType.ToDisplayString() == "Workers.BodyInit";
-        if (conversion.OperatorMethod is not null && !IsByteViewConversion(conversion) && !bodyInput)
+        var nativeUnion = NativeUnionTypes.Contains(conversion.OperatorMethod?.ContainingType.ToDisplayString() ?? "");
+        if (conversion.OperatorMethod is not null && !IsByteViewConversion(conversion) && !nativeUnion)
             throw UnsupportedSymbol(conversion.OperatorMethod, cast);
         var value = Expression(operand);
         var source = operand.Type;
         if (source is null) return value;
-        if (IsByteViewConversion(conversion) || bodyInput) return value;
+        if (IsByteViewConversion(conversion) || nativeUnion) return value;
         if (conversion.Conversion.IsIdentity || source.IsValueType && target.SpecialType == SpecialType.System_Object
             || conversion.Conversion.IsImplicit && conversion.Conversion.IsReference
             || conversion.IsImplicit && target.SpecialType == SpecialType.System_Object)
@@ -53,6 +53,14 @@ internal sealed partial class JavaScriptEmitter
             return $"(({parameter}) => {{ if ({parameter} == null) throw new TypeError(\"Nullable object must have a value.\"); return {converted}; }})({value})";
         return converted == parameter ? value : $"(({parameter}) => {converted})({value})";
     }
+
+    // Types that stand for a JavaScript union, such as string | ReadableStream. Each member converts to the union
+    // as itself, so the runtime receives the value unchanged.
+    private static readonly HashSet<string> NativeUnionTypes =
+    [
+        "Workers.BodyInit", "Workers.ContainerInstanceType", "Workers.ContainerExecStdin", "Workers.ContainerExecPty",
+        "Workers.EmailAddressInit", "Workers.EmailAttachmentContent"
+    ];
 
     // Byte buffers use Uint8Array across the supported memory/span API boundaries.
     private static bool IsByteViewConversion(IConversionOperation conversion) =>

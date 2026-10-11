@@ -91,13 +91,14 @@ internal sealed partial class JavaScriptEmitter
         {
             "Workers.Crypto" when property.Name == "Subtle" => "globalThis.crypto.subtle",
             "Workers.DigestStream" when property.Name == "BytesWritten" => $"Number({receiver}.bytesWritten)",
-            "Workers.JsonWebKey" when property.Name == "KeyOps" => $"{receiver}.key_ops",
             "Workers.CryptoKeyAlgorithm" when property.Name == "Hash" => $"({receiver}.hash?.name ?? null)",
             "Workers.CryptoKeyAlgorithm" when property.Name == "PublicExponent" => $"(value => value == null ? null : new Uint8Array(value))({receiver}.publicExponent)",
-            "Workers.TextDecoder" when property.Name == "IgnoreBom" => $"{receiver}.ignoreBOM",
             "Workers.DigestStream" when property.Name == "Digest" => $"{receiver}.digest.then(value => new Uint8Array(value))",
             "Workers.ExecOutput" when property.Name is "Stdout" or "Stderr" => $"new Uint8Array({receiver}.{LowerFirst(property.Name)})",
             "Workers.EncapsulatedBits" => $"new Uint8Array({receiver}.{LowerFirst(property.Name)})",
+            "Workers.R2Checksums" => $"(value => value == null ? null : new Uint8Array(value))({receiver}.{LowerFirst(property.Name)})",
+            // new Date normalizes the log's timestamp whether the binding returns a Date or an ISO string.
+            "Workers.AiGatewayLog" when property.Name == "CreatedAt" => $"new Date({receiver}.created_at)",
             "Workers.EncapsulatedKey" when property.Name == "Ciphertext" => $"new Uint8Array({receiver}.ciphertext)",
             "Workers.JsonValue" => property.Name switch
             {
@@ -117,9 +118,12 @@ internal sealed partial class JavaScriptEmitter
     {
         "Workers.RedirectMode" or "Workers.ResponseBodyEncoding" or "Workers.ResponseType" or "Workers.R2ListInclude"
             or "Workers.VectorizeMetadataRetrievalLevel" => LowerFirst(name),
-        "Workers.SecureTransport" or "Workers.QueueContentType" or "Workers.Base64Alphabet" => name.ToLowerInvariant(),
+        "Workers.SecureTransport" or "Workers.QueueContentType" or "Workers.Base64Alphabet" or "Workers.ContainerStdio"
+            or "Workers.EmailAttachmentDisposition" or "Workers.ImageEncoding" or "Workers.RequestInitCfPropertiesVaryAction"
+            or "Workers.TracingSpanStatusCode" or "Workers.ConversionOutputFormat" => name.ToLowerInvariant(),
         "Workers.RequestCache" => name switch { "NoStore" => "no-store", "NoCache" => "no-cache", _ => null },
         "Workers.CompressionFormat" => name switch { "Gzip" => "gzip", "Deflate" => "deflate", "DeflateRaw" => "deflate-raw", _ => null },
+        "Workers.DurableObjectRoutingMode" => name == "PrimaryOnly" ? "primary-only" : null,
         "Workers.D1SessionConstraint" => name switch { "FirstPrimary" => "first-primary", "FirstUnconstrained" => "first-unconstrained", _ => null },
         _ => null
     };

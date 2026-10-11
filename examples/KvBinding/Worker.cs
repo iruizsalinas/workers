@@ -5,10 +5,7 @@ namespace KvBinding;
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> FetchAsync(
-        Request request,
-        Env env,
-        ExecutionContext ctx)
+    public static async Task<Response> FetchAsync(Request request, Env env)
     {
         var key = new Url(request.Url).SearchParams.Get("key") ?? "message";
         var value = await env.KV("KV").GetAsync(key);

@@ -50,6 +50,8 @@ public sealed class RequestInit
     public RequestCache? Cache { get; init; }
     /// <summary>A subresource integrity hash the response body must match.</summary>
     public string? Integrity { get; init; }
+    /// <summary>Use <see cref="ResponseBodyEncoding.Manual"/> to receive a compressed response body as-is instead of decoded.</summary>
+    public ResponseBodyEncoding? EncodeResponseBody { get; init; }
 }
 
 public enum RedirectMode
@@ -75,14 +77,63 @@ public sealed class RequestInitCfProperties
     public int? CacheTtl { get; init; }
     /// <summary>Cache TTLs by status code or range, such as <c>"200-299"</c>.</summary>
     public IReadOnlyDictionary<string, int>? CacheTtlByStatus { get; init; }
+    /// <summary>The <c>Cache-Control</c> value stored with the cached response, such as <c>public, max-age=3600</c>.
+    /// Cannot be combined with <see cref="CacheTtl"/> or <see cref="RequestInit.Cache"/>.</summary>
+    public string? CacheControl { get; init; }
+    public bool? CacheReserveEligible { get; init; }
+    /// <summary>The minimum size in bytes for a response to be stored in Cache Reserve.</summary>
+    public long? CacheReserveMinimumFileSize { get; init; }
+    public bool? CacheDeceptionArmor { get; init; }
+    public bool? RespectStrongEtag { get; init; }
+    public bool? StripEtags { get; init; }
+    public bool? StripLastModified { get; init; }
+    /// <summary>How responses with a <c>Vary</c> header are cached.</summary>
+    public RequestInitCfPropertiesVary? Vary { get; init; }
+    /// <summary><c>on</c> or <c>off</c>: whether Cloudflare fetches from the origin with range requests.</summary>
+    public string? OriginRangeRequests { get; init; }
     public string? ResolveOverride { get; init; }
     public bool? ScrapeShield { get; init; }
     public bool? Apps { get; init; }
     public bool? Mirage { get; init; }
     /// <summary><c>lossy</c>, <c>lossless</c> or <c>off</c>.</summary>
     public string? Polish { get; init; }
+    /// <summary>Options for a subrequest to an R2 public bucket.</summary>
+    public RequestInitCfPropertiesR2? R2 { get; init; }
+    /// <summary><c>passthrough</c> (the default) forwards a gRPC-web subrequest unchanged; <c>convert</c> converts it to gRPC at the edge.</summary>
+    public string? GrpcWeb { get; init; }
     /// <summary>Image Resizing options, such as <c>new { width = 800, fit = "scale-down" }</c>.</summary>
     public object? Image { get; init; }
+}
+
+public sealed class RequestInitCfPropertiesR2
+{
+    /// <summary>The ID of the colo that stores the object.</summary>
+    public int? BucketColoId { get; init; }
+}
+
+/// <summary>How the cache varies on request headers when the origin sends <c>Vary</c>.</summary>
+public sealed class RequestInitCfPropertiesVary
+{
+    /// <summary>The behavior for varied headers not listed in <see cref="Headers"/>.</summary>
+    public required RequestInitCfPropertiesVaryHeader Default { get; init; }
+    /// <summary>Behavior by lowercase request header name, such as <c>accept</c> or <c>accept-language</c>.</summary>
+    public IReadOnlyDictionary<string, RequestInitCfPropertiesVaryHeader>? Headers { get; init; }
+}
+
+public sealed class RequestInitCfPropertiesVaryHeader
+{
+    public required RequestInitCfPropertiesVaryAction Action { get; init; }
+    /// <summary>For <c>accept</c>: the media types kept when normalizing the header.</summary>
+    public IReadOnlyList<string>? MediaTypes { get; init; }
+    /// <summary>For <c>accept-language</c>: the language tags kept when normalizing the header.</summary>
+    public IReadOnlyList<string>? Languages { get; init; }
+}
+
+public enum RequestInitCfPropertiesVaryAction
+{
+    Normalize,
+    Passthrough,
+    Bypass
 }
 
 /// <summary>Cloudflare's properties of an incoming request. Geolocation fields are null when unknown.</summary>
@@ -92,6 +143,8 @@ public sealed class IncomingRequestCfProperties
 
     public int? Asn => WorkerApi.NotExecutable<int?>();
     public string? AsOrganization => WorkerApi.NotExecutable<string?>();
+    /// <summary>The original <c>Accept-Encoding</c> header, when Cloudflare modified it.</summary>
+    public string? ClientAcceptEncoding => WorkerApi.NotExecutable<string?>();
     public string Colo => WorkerApi.NotExecutable<string>();
     public string? Country => WorkerApi.NotExecutable<string?>();
     public string? IsEUCountry => WorkerApi.NotExecutable<string?>();
@@ -108,9 +161,27 @@ public sealed class IncomingRequestCfProperties
     public string TlsVersion => WorkerApi.NotExecutable<string>();
     public string TlsCipher => WorkerApi.NotExecutable<string>();
     public int? ClientTcpRtt => WorkerApi.NotExecutable<int?>();
+    /// <summary>
+    /// The upstream's response to Cloudflare's TCP keepalive: 0 unknown, 1 no keepalives (always 1 without an upstream),
+    /// 2 keepalive failed, 3 keepalive accepted, 4 reuse refused by the origin, 5 reuse accepted.
+    /// </summary>
+    public int EdgeRequestKeepAliveStatus => WorkerApi.NotExecutable<int>();
+    /// <summary>The TLS handshake's <c>HELLO</c> and <c>FINISHED</c> messages; null over plaintext.</summary>
+    public IncomingRequestCfPropertiesExportedAuthenticatorMetadata? TlsExportedAuthenticator =>
+        WorkerApi.NotExecutable<IncomingRequestCfPropertiesExportedAuthenticatorMetadata?>();
     public string RequestPriority => WorkerApi.NotExecutable<string>();
     /// <summary>Bot Management signals; null unless Bot Management is enabled for the zone.</summary>
     public IncomingRequestCfPropertiesBotManagementBase? BotManagement => WorkerApi.NotExecutable<IncomingRequestCfPropertiesBotManagementBase?>();
+}
+
+public sealed class IncomingRequestCfPropertiesExportedAuthenticatorMetadata
+{
+    private IncomingRequestCfPropertiesExportedAuthenticatorMetadata() { }
+
+    public string ClientHandshake => WorkerApi.NotExecutable<string>();
+    public string ServerHandshake => WorkerApi.NotExecutable<string>();
+    public string ClientFinished => WorkerApi.NotExecutable<string>();
+    public string ServerFinished => WorkerApi.NotExecutable<string>();
 }
 
 public sealed class IncomingRequestCfPropertiesBotManagementBase

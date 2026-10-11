@@ -95,19 +95,15 @@ internal sealed partial class JavaScriptEmitter
         if (property is { Name: "Count" }
             && property.ContainingType.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>")
             return $"{Receiver()}.count";
-        if (property?.ContainingType.ToDisplayString() == "Workers.HtmlElement" && property.Name == "NamespaceUri")
-            return $"{Receiver()}.namespaceURI";
         if (property?.ContainingType.ToDisplayString() == "Workers.WebSocketMessage" && property.Name == "IsText")
             return $"(typeof {Receiver()} === \"string\")";
         // The runtime reports these instants as millisecond numbers; the API exposes them as dates.
         if (property is { Name: "ScheduledTime" or "EventTimestamp" or "Timestamp" }
             && property.ContainingType.ToDisplayString() is "Workers.ScheduledController" or "Workers.AlarmInvocationInfo"
-                or "Workers.TraceItem" or "Workers.TraceLog" or "Workers.TraceException")
+                or "Workers.TraceItem" or "Workers.TraceLog" or "Workers.TraceException" or "Workers.WorkflowInstanceEvent")
             return $"(value => value == null ? null : new Date(value))({Receiver()}.{LowerFirst(property.Name)})";
-        if (property?.ContainingType.ToDisplayString() == "Workers.KVNamespaceListResult" && property.Name == "ListComplete")
-            return $"{Receiver()}.list_complete";
-        if (property?.ContainingType.ToDisplayString() is "Workers.D1Meta" or "Workers.D1Timings")
-            return $"{Receiver()}.{SnakeCase(property.Name)}";
+        if (property is not null && NativePropertyNames.Get(property.ContainingType.ToDisplayString(), property.Name) is { } nativeName)
+            return $"{Receiver()}.{nativeName}";
         if (property?.ContainingType.ToDisplayString() == "System.Exception" && property.Name == "Message")
             return $"{Receiver()}.message";
         if (property is { Name: "Keys" or "Values" } && IsDictionary(instance?.Type))

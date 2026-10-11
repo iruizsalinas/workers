@@ -8,7 +8,7 @@ using Workers;
 public static class Worker
 {
     [Fetch]
-    public static Response Fetch(Request request, Env env, ExecutionContext ctx)
+    public static Response Fetch(Request request)
     {
         return new Response("Hello from C#!");
     }

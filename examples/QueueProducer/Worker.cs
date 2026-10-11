@@ -5,10 +5,7 @@ namespace QueueProducer;
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> FetchAsync(
-        Request request,
-        Env env,
-        ExecutionContext ctx)
+    public static async Task<Response> FetchAsync(Request request, Env env)
     {
         await env.Queue("JOBS").SendAsync(new
         {

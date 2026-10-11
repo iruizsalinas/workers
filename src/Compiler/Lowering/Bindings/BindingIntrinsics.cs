@@ -17,6 +17,8 @@ internal enum BindingIntrinsicKind
     DictionaryObject,
     SyncStorageGet,
     SqlCursorNext,
+    AsyncIteratorNext,
+    ExportBinding,
     CacheMatch,
     Rpc,
     DateResult,

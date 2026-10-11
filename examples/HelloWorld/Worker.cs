@@ -5,10 +5,7 @@ namespace HelloWorld;
 public static class Worker
 {
     [Fetch]
-    public static Task<Response> FetchAsync(
-        Request request,
-        Env env,
-        ExecutionContext ctx)
+    public static Task<Response> FetchAsync(Request request)
     {
         if (new Url(request.Url).Pathname == "/")
             return Task.FromResult(new Response("Hello from C# on Cloudflare Workers."));

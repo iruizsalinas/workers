@@ -36,6 +36,10 @@ public class R2Object
     /// <summary>Null in list results unless <see cref="R2ListOptions.Include"/> requests it.</summary>
     public IReadOnlyDictionary<string, string>? CustomMetadata => WorkerApi.NotExecutable<IReadOnlyDictionary<string, string>?>();
     public R2Range? Range => WorkerApi.NotExecutable<R2Range?>();
+    /// <summary>The object's checksums. An MD5 is always present unless the object was uploaded in parts.</summary>
+    public R2Checksums Checksums => WorkerApi.NotExecutable<R2Checksums>();
+    /// <summary>The MD5 of the customer-provided encryption key, or null when the object is not encrypted with one.</summary>
+    public string? SsecKeyMd5 => WorkerApi.NotExecutable<string?>();
 
     public void WriteHttpMetadata(Headers headers) => WorkerApi.NotExecutable();
 }
@@ -64,10 +68,24 @@ public sealed class R2Objects
     public IReadOnlyList<string> DelimitedPrefixes => WorkerApi.NotExecutable<IReadOnlyList<string>>();
 }
 
+/// <summary>An object's checksums; each is null when it was not computed or supplied.</summary>
+public sealed class R2Checksums
+{
+    private R2Checksums() { }
+
+    public byte[]? Md5 => WorkerApi.NotExecutable<byte[]?>();
+    public byte[]? Sha1 => WorkerApi.NotExecutable<byte[]?>();
+    public byte[]? Sha256 => WorkerApi.NotExecutable<byte[]?>();
+    public byte[]? Sha384 => WorkerApi.NotExecutable<byte[]?>();
+    public byte[]? Sha512 => WorkerApi.NotExecutable<byte[]?>();
+}
+
 public sealed class R2GetOptions
 {
     public R2Conditional? OnlyIf { get; init; }
     public R2Range? Range { get; init; }
+    /// <summary>The customer-provided key, as 64 hex characters, that the object was encrypted with.</summary>
+    public string? SsecKey { get; init; }
 }
 
 public sealed class R2PutOptions
@@ -83,6 +101,8 @@ public sealed class R2PutOptions
     public string? Sha256 { get; init; }
     public string? Sha384 { get; init; }
     public string? Sha512 { get; init; }
+    /// <summary>A customer-provided 256-bit key, as 64 hex characters, to encrypt the object with. Reads need the same key.</summary>
+    public string? SsecKey { get; init; }
 }
 
 public sealed class R2MultipartOptions
@@ -90,6 +110,8 @@ public sealed class R2MultipartOptions
     public R2HttpMetadata? HttpMetadata { get; init; }
     public IReadOnlyDictionary<string, string>? CustomMetadata { get; init; }
     public string? StorageClass { get; init; }
+    /// <summary>A customer-provided 256-bit key, as 64 hex characters; every part upload must use the same key.</summary>
+    public string? SsecKey { get; init; }
 }
 
 public sealed class R2ListOptions
@@ -114,6 +136,8 @@ public sealed class R2Conditional
     public string? EtagDoesNotMatch { get; init; }
     public Date? UploadedBefore { get; init; }
     public Date? UploadedAfter { get; init; }
+    /// <summary>Compares upload times at second precision, as HTTP date headers do, instead of milliseconds.</summary>
+    public bool? SecondsGranularity { get; init; }
 }
 
 /// <summary>A byte range: <see cref="Offset"/> with an optional <see cref="Length"/>, or a <see cref="Suffix"/> of the last bytes.</summary>
@@ -141,7 +165,8 @@ public sealed class R2MultipartUpload
     public string Key => WorkerApi.NotExecutable<string>();
     public string UploadId => WorkerApi.NotExecutable<string>();
 
-    public Task<R2UploadedPart> UploadPartAsync(int partNumber, BodyInit value) => WorkerApi.NotExecutable<Task<R2UploadedPart>>();
+    public Task<R2UploadedPart> UploadPartAsync(int partNumber, BodyInit value, R2UploadPartOptions? options = null) =>
+        WorkerApi.NotExecutable<Task<R2UploadedPart>>();
     public Task AbortAsync() => WorkerApi.NotExecutable<Task>();
     public Task<R2Object> CompleteAsync(IEnumerable<R2UploadedPart> uploadedParts) => WorkerApi.NotExecutable<Task<R2Object>>();
 }
@@ -151,4 +176,10 @@ public sealed class R2UploadedPart
 {
     public required int PartNumber { get; init; }
     public required string Etag { get; init; }
+}
+
+public sealed class R2UploadPartOptions
+{
+    /// <summary>The customer-provided key, as 64 hex characters, that the upload was created with.</summary>
+    public string? SsecKey { get; init; }
 }

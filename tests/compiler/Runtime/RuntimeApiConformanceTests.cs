@@ -14,8 +14,18 @@ public sealed partial class RuntimeApiConformanceTests
     private static readonly Dictionary<string, string> RuntimeTypeNames = new()
     {
         ["Workers.ExecutionContext"] = "ExecutionContext",
+        ["Workers.CacheContext"] = "CacheContext",
+        ["Workers.CachePurgeOptions"] = "CachePurgeOptions",
+        ["Workers.CachePurgeResult"] = "CachePurgeResult",
+        ["Workers.CachePurgeError"] = "CachePurgeError",
+        ["Workers.CloudflareAccessContext"] = "CloudflareAccessContext",
+        ["Workers.CloudflareAccessIdentity"] = "CloudflareAccessIdentity",
+        ["Workers.Tracing"] = "Tracing",
+        ["Workers.Span"] = "Span",
+        ["Workers.TracingSpanStatus"] = "TracingSpanStatus",
         ["Workers.ScheduledController"] = "ScheduledController",
         ["Workers.MessageBatch<T>"] = "MessageBatch",
+        ["Workers.MessageBatchMetadata"] = "MessageBatchMetadata",
         ["Workers.Message<T>"] = "Message",
         ["Workers.ForwardableEmailMessage"] = "ForwardableEmailMessage",
         ["Workers.TraceItem"] = "TraceItem",
@@ -23,6 +33,8 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.TraceItemFetchEventInfoRequest"] = "TraceItemFetchEventInfoRequest",
         ["Workers.TraceItemFetchEventInfoResponse"] = "TraceItemFetchEventInfoResponse",
         ["Workers.TraceLog"] = "TraceLog",
+        ["Workers.TraceLogErrorInfo"] = "TraceLogErrorInfo",
+        ["Workers.ScriptVersion"] = "ScriptVersion",
         ["Workers.TraceException"] = "TraceException",
         ["Workers.AlarmInvocationInfo"] = "AlarmInvocationInfo",
         ["Workers.Request"] = "Request",
@@ -35,6 +47,7 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.File"] = "File",
         ["Workers.IncomingRequestCfProperties"] = "IncomingRequestCfPropertiesBase|IncomingRequestCfPropertiesGeographicInformation|IncomingRequestCfPropertiesBotManagement",
         ["Workers.IncomingRequestCfPropertiesBotManagementBase"] = "IncomingRequestCfPropertiesBotManagementBase",
+        ["Workers.IncomingRequestCfPropertiesExportedAuthenticatorMetadata"] = "IncomingRequestCfPropertiesExportedAuthenticatorMetadata",
         ["Workers.ReadableStream"] = "ReadableStream",
         ["Workers.ReadableStreamDefaultReader"] = "ReadableStreamDefaultReader",
         ["Workers.WritableStream"] = "WritableStream",
@@ -100,6 +113,9 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.CacheQueryOptions"] = "CacheQueryOptions",
         ["Workers.RequestInit"] = "RequestInit",
         ["Workers.RequestInitCfProperties"] = "RequestInitCfProperties",
+        ["Workers.RequestInitCfPropertiesR2"] = "RequestInitCfPropertiesR2",
+        ["Workers.RequestInitCfPropertiesVary"] = "RequestInitCfPropertiesVary",
+        ["Workers.RequestInitCfPropertiesVaryHeader"] = "RequestInitCfPropertiesVaryAcceptHeader|RequestInitCfPropertiesVaryAcceptLanguageHeader",
         ["Workers.StreamPipeOptions"] = "StreamPipeOptions",
         ["Workers.Fetcher"] = "Fetcher",
         ["Workers.DispatchNamespace"] = "DispatchNamespace",
@@ -114,6 +130,8 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.R2Object"] = "R2Object",
         ["Workers.R2ObjectBody"] = "R2ObjectBody",
         ["Workers.R2Objects"] = "R2Objects",
+        ["Workers.R2Checksums"] = "R2Checksums",
+        ["Workers.R2UploadPartOptions"] = "R2UploadPartOptions",
         ["Workers.R2GetOptions"] = "R2GetOptions",
         ["Workers.R2PutOptions"] = "R2PutOptions",
         ["Workers.R2MultipartOptions"] = "R2MultipartOptions",
@@ -134,12 +152,18 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.MessageSendRequest<T>"] = "MessageSendRequest",
         ["Workers.QueueRetryOptions"] = "QueueRetryOptions",
         ["Workers.QueueMetrics"] = "QueueMetrics",
+        ["Workers.QueueSendResponse"] = "QueueSendResponse",
+        ["Workers.QueueSendBatchResponse"] = "QueueSendBatchResponse",
+        ["Workers.QueueSendMetadata"] = "QueueSendMetadata|QueueSendBatchMetadata",
         ["Workers.DurableObjectNamespace"] = "DurableObjectNamespace",
         ["Workers.DurableObjectNamespaceNewUniqueIdOptions"] = "DurableObjectNamespaceNewUniqueIdOptions",
         ["Workers.DurableObjectNamespaceGetDurableObjectOptions"] = "DurableObjectNamespaceGetDurableObjectOptions",
         ["Workers.DurableObjectId"] = "DurableObjectId",
         ["Workers.DurableObjectStub"] = "DurableObjectStub",
         ["Workers.DurableObjectState"] = "DurableObjectState",
+        ["Workers.DurableObjectAbortOptions"] = "DurableObjectAbortOptions",
+        ["Workers.DurableObjectGetAlarmOptions"] = "DurableObjectGetAlarmOptions",
+        ["Workers.DurableObjectSetAlarmOptions"] = "DurableObjectSetAlarmOptions",
         ["Workers.DurableObjectStorage"] = "DurableObjectStorage",
         ["Workers.DurableObjectTransaction"] = "DurableObjectTransaction",
         ["Workers.DurableObjectGetOptions"] = "DurableObjectGetOptions",
@@ -151,7 +175,13 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.SqlStorageCursor<T>"] = "SqlStorageCursor",
         ["Workers.Container"] = "Container",
         ["Workers.ContainerStartupOptions"] = "ContainerStartupOptions",
+        ["Workers.ContainerStartResources"] = "ContainerStartResources",
+        ["Workers.ContainerSnapshotOptions"] = "ContainerSnapshotOptions",
+        ["Workers.ContainerSnapshot"] = "ContainerSnapshot",
+        ["Workers.ContainerSnapshotRestoreParams"] = "ContainerSnapshotRestoreParams",
+        ["Workers.ContainerInfo"] = "ContainerInfo",
         ["Workers.ContainerExecOptions"] = "ContainerExecOptions",
+        ["Workers.ContainerExecPtyOptions"] = "ContainerExecPtyOptions",
         ["Workers.ExecProcess"] = "ExecProcess",
         ["Workers.ExecOutput"] = "ExecOutput",
         ["Workers.RateLimit"] = "RateLimit",
@@ -162,11 +192,40 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.SendEmail"] = "SendEmail",
         ["Workers.EmailMessage"] = "EmailMessage",
         ["Workers.EmailMessageBuilder"] = "EmailReplyMessageBuilder|EmailDestinations",
+        ["Workers.EmailReplyMessageBuilder"] = "EmailReplyMessageBuilder",
+        ["Workers.EmailAddress"] = "EmailAddress",
+        ["Workers.EmailAttachment"] = "EmailAttachment",
         ["Workers.EmailSendResult"] = "EmailSendResult",
         ["Workers.Ai"] = "Ai",
+        ["Workers.AiOptions"] = "AiOptions",
+        ["Workers.GatewayOptions"] = "GatewayOptions",
+        ["Workers.GatewayRetries"] = "GatewayRetries",
+        ["Workers.AiWebSearchRequest"] = "AiWebSearchRequest",
+        ["Workers.AiGateway"] = "AiGateway",
+        ["Workers.AiGatewayPatchLog"] = "AiGatewayPatchLog",
+        ["Workers.AiGatewayLog"] = "AiGatewayLog",
+        ["Workers.AIGatewayUniversalRequest"] = "AIGatewayUniversalRequest",
+        ["Workers.UniversalGatewayOptions"] = "GatewayOptions",
+        ["Workers.AiModelsSearchParams"] = "AiModelsSearchParams",
+        ["Workers.AiModelsSearchObject"] = "AiModelsSearchObject",
+        ["Workers.ToMarkdownService"] = "ToMarkdownService",
+        ["Workers.SupportedFileFormat"] = "SupportedFileFormat",
+        ["Workers.MarkdownDocument"] = "MarkdownDocument",
+        ["Workers.ConversionRequestOptions"] = "ConversionRequestOptions",
+        ["Workers.ConversionOptions"] = "ConversionOptions",
+        ["Workers.ConversionOutputOptions"] = "ConversionOutputOptions",
+        ["Workers.ImageConversionOptions"] = "ImageConversionOptions",
+        ["Workers.EmbeddedImageConversionOptions"] = "EmbeddedImageConversionOptions|ImageConversionOptions",
+        ["Workers.ConversionResponse"] = "ConversionResponse",
         ["Workers.Workflow"] = "Workflow",
         ["Workers.WorkflowInstance"] = "WorkflowInstance",
         ["Workers.WorkflowInstanceCreateOptions"] = "WorkflowInstanceCreateOptions",
+        ["Workers.WorkflowBatchCreateOptions"] = "WorkflowBatchCreateOptions",
+        ["Workers.WorkflowBatchCreateResult"] = "WorkflowBatchCreateResult",
+        ["Workers.WorkflowBatchDeleteResult"] = "WorkflowBatchDeleteResult",
+        ["Workers.WorkflowInstanceSubscribeOptions"] = "WorkflowInstanceSubscribeOptions",
+        ["Workers.WorkflowInstanceSubscription"] = "WorkflowInstanceSubscription",
+        ["Workers.WorkflowInstanceEvent"] = "WorkflowInstanceEvent",
         ["Workers.WorkflowInstanceTerminateOptions"] = "WorkflowInstanceTerminateOptions",
         ["Workers.WorkflowInstanceRestartOptions"] = "WorkflowInstanceRestartOptions",
         ["Workers.InstanceStatus"] = "InstanceStatus",
@@ -174,6 +233,10 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.ImageTransformer"] = "ImageTransformer",
         ["Workers.ImageTransformationResult"] = "ImageTransformationResult",
         ["Workers.ImageOutputOptions"] = "ImageOutputOptions",
+        ["Workers.ImageInputOptions"] = "ImageInputOptions",
+        ["Workers.ImageTextOptions"] = "TextOptions",
+        ["Workers.ImageTransformationResponseOptions"] = "ImageTransformationResponseOptions",
+        ["Workers.ImageTransformationOutputOptions"] = "ImageTransformationOutputOptions",
         ["Workers.MediaBinding"] = "MediaBinding",
         ["Workers.MediaTransformer"] = "MediaTransformer",
         ["Workers.MediaTransformationGenerator"] = "MediaTransformationGenerator",
@@ -204,22 +267,10 @@ public sealed partial class RuntimeApiConformanceTests
     // Receivers whose members are not a fixed runtime interface.
     private static readonly HashSet<string> OpenReceivers = ["Workers.RawBinding"];
 
-    // Properties whose runtime name is not the camel-case form of the C# name.
-    private static readonly Dictionary<string, string> RenamedProperties = new()
+    // Properties whose runtime declaration differs from the name the compiler emits. Every other rename comes from
+    // the compiler's NativePropertyNames table, so the test checks the names the compiler actually uses.
+    private static readonly Dictionary<string, string> DeclarationNames = new()
     {
-        ["Workers.HtmlElement.NamespaceUri"] = "namespaceURI",
-        ["Workers.JsonWebKey.KeyOps"] = "key_ops",
-        ["Workers.TextDecoder.IgnoreBom"] = "ignoreBOM",
-        ["Workers.KVNamespaceListResult.ListComplete"] = "list_complete",
-        ["Workers.D1Meta.SizeAfter"] = "size_after",
-        ["Workers.D1Meta.RowsRead"] = "rows_read",
-        ["Workers.D1Meta.RowsWritten"] = "rows_written",
-        ["Workers.D1Meta.LastRowId"] = "last_row_id",
-        ["Workers.D1Meta.ChangedDb"] = "changed_db",
-        ["Workers.D1Meta.ServedByRegion"] = "served_by_region",
-        ["Workers.D1Meta.ServedByColo"] = "served_by_colo",
-        ["Workers.D1Meta.ServedByPrimary"] = "served_by_primary",
-        ["Workers.D1Meta.TotalAttempts"] = "total_attempts",
         // Runtime declarations retain the C++ identifier, but the JS dictionary field is public.
         ["Workers.EcdhKeyDeriveParams.Public"] = "$public"
     };
@@ -227,9 +278,22 @@ public sealed partial class RuntimeApiConformanceTests
     // Properties the compiler computes instead of reading a runtime member of the same name.
     private static readonly HashSet<string> ComputedProperties =
     [
-        "Workers.Request.Cookies", "Workers.Response.Cookies", "Workers.Headers.Item",
-        // Declared in the truncated/not-truncated union branches of R2Objects, which the declaration scan skips.
-        "Workers.R2Objects.Cursor", "Workers.R2Objects.Truncated"
+        "Workers.Request.Cookies", "Workers.Response.Cookies", "Workers.Headers.Item", "Workers.CloudflareAccessIdentity.Item"
+    ];
+
+    // Properties declared only in the union branches of a runtime type (`{ ... } & ({ ... } | { ... })`),
+    // which the declaration scan skips.
+    private static readonly HashSet<string> UnionBranchProperties =
+    [
+        "Workers.R2Objects.Cursor", "Workers.R2Objects.Truncated",
+        "Workers.ConversionResponse.Error",
+        // convertOGImage is declared inline on the HTML image options rather than on EmbeddedImageConversionOptions.
+        "Workers.EmbeddedImageConversionOptions.ConvertOGImage",
+        "Workers.ContainerStartupOptions.Image", "Workers.ContainerStartupOptions.ContainerSnapshot",
+        "Workers.WorkflowInstanceEvent.Type", "Workers.WorkflowInstanceEvent.StepName", "Workers.WorkflowInstanceEvent.Attempt",
+        "Workers.WorkflowInstanceEvent.Params", "Workers.WorkflowInstanceEvent.Output", "Workers.WorkflowInstanceEvent.Error",
+        "Workers.WorkflowInstanceEvent.RetryDelayMs", "Workers.WorkflowInstanceEvent.DurationMs",
+        "Workers.WorkflowInstanceEvent.EventType"
     ];
 
     [Fact]
@@ -255,8 +319,10 @@ public sealed partial class RuntimeApiConformanceTests
                 .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                 .Where(property => property.CanRead)
                 .Select(property => (type.Name, Property: property.Name)))
-            .Where(item => !ComputedProperties.Contains($"{item.Name}.{item.Property}"))
-            .Where(item => !HasRuntimeMember(item.Name, RenamedProperties.GetValueOrDefault($"{item.Name}.{item.Property}")
+            .Where(item => !ComputedProperties.Contains($"{item.Name}.{item.Property}")
+                && !UnionBranchProperties.Contains($"{item.Name}.{item.Property}"))
+            .Where(item => !HasRuntimeMember(item.Name, DeclarationNames.GetValueOrDefault($"{item.Name}.{item.Property}")
+                ?? global::NativePropertyNames.Get(item.Name, item.Property)
                 ?? char.ToLowerInvariant(item.Property[0]) + item.Property[1..]))
             .Select(item => $"{item.Name}.{item.Property}")
             .Order(StringComparer.Ordinal)

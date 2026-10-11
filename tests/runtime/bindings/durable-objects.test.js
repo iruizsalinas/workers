@@ -21,6 +21,17 @@ describe("Durable Object bindings", () => {
     expect(await response.text()).toBe("durable:/from-csharp");
   });
 
+  it("routes a stub to the primary instance", async () => {
+    const nativeBindings = await import("../fixtures/NativeBindings/dist/worker.js");
+    const response = await nativeBindings.default.fetch(
+      new Request("https://worker.test/durable-primary"),
+      env,
+      createExecutionContext(),
+    );
+
+    expect(await response.text()).toBe("durable:/primary");
+  });
+
   it("exposes generated C# Durable Object RPC methods", async () => {
     const stub = env.ECHO.getByName(`rpc-${crypto.randomUUID()}`);
 
@@ -30,6 +41,7 @@ describe("Durable Object bindings", () => {
     await expect(stub.increment()).resolves.toBe(2);
     await expect(stub.storageLifecycle()).resolves.toBe(true);
     await expect(stub.transactionLifecycle()).resolves.toBe(true);
+    await expect(stub.alarmOptionsLifecycle()).resolves.toBe(true);
   });
 
   it("runs a generated C# Durable Object alarm handler", async () => {

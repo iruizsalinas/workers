@@ -11,7 +11,7 @@ public sealed class DurableObjectNamespace
         WorkerApi.NotExecutable<DurableObjectStub>();
     public DurableObjectStub GetByName(string name, DurableObjectNamespaceGetDurableObjectOptions? options = null) =>
         WorkerApi.NotExecutable<DurableObjectStub>();
-    /// <summary>A namespace whose new objects are created in a jurisdiction, such as <c>eu</c> or <c>fedramp</c>.</summary>
+    /// <summary>A namespace whose new objects are created in a jurisdiction: <c>eu</c>, <c>us</c>, <c>fedramp</c> or <c>fedramp-high</c>.</summary>
     public DurableObjectNamespace Jurisdiction(string jurisdiction) => WorkerApi.NotExecutable<DurableObjectNamespace>();
 }
 
@@ -41,6 +41,13 @@ public sealed class DurableObjectNamespaceNewUniqueIdOptions
 
 public sealed class DurableObjectNamespaceGetDurableObjectOptions
 {
-    /// <summary>Where to create the object if it does not exist yet, such as <c>weur</c> or <c>enam</c>.</summary>
+    /// <summary>Where to create the object if it does not exist yet, such as <c>weur</c>, <c>enam</c> or <c>apac-ne</c>.</summary>
     public string? LocationHint { get; init; }
+    public DurableObjectRoutingMode? RoutingMode { get; init; }
+}
+
+public enum DurableObjectRoutingMode
+{
+    /// <summary>Routes requests to the object's primary instance, never to a read replica.</summary>
+    PrimaryOnly
 }
