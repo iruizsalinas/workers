@@ -20,7 +20,7 @@ internal sealed partial class JavaScriptEmitter
             .Select(property => $"{property.Name}: {property.Value}"));
         properties.AddRange(arguments.Select((argument, index) =>
         {
-            var parameter = ArgumentParameter(constructor!, argument, index);
+            var parameter = BoundParameter(argument);
             return $"{JavaScriptObjectKey(LowerFirst(parameter.Name))}: {OptionalValue(argument.Expression)}";
         }));
         if (value.Initializer is not null)
@@ -41,7 +41,7 @@ internal sealed partial class JavaScriptEmitter
         ArgumentSyntax[] arguments)
     {
         var supplied = arguments.Select((argument, index) =>
-            (Parameter: ArgumentParameter(constructor, argument, index), Value: Expression(argument.Expression))).ToArray();
+            (Parameter: BoundParameter(argument), Value: ArgumentValue(argument))).ToArray();
         var properties = supplied.Select(argument =>
             $"{JavaScriptObjectKey(LowerFirst(argument.Parameter.Name))}: {argument.Value}").ToList();
         properties.AddRange(constructor.Parameters
@@ -65,12 +65,12 @@ internal sealed partial class JavaScriptEmitter
         ArgumentSyntax[] arguments,
         Func<IReadOnlyList<string>, string> emit)
     {
-        var values = arguments.Select(argument => Expression(argument.Expression)).ToArray();
+        var values = arguments.Select(ArgumentValue).ToArray();
         if (constructor is null || arguments.Length == 0)
             return emit(values);
 
         var ordinals = arguments.Select((argument, index) =>
-            ArgumentParameter(constructor, argument, index).Ordinal).ToArray();
+            BoundParameter(argument).Ordinal).ToArray();
         if (ordinals.SequenceEqual(Enumerable.Range(0, ordinals.Length)))
             return emit(values);
 
@@ -81,13 +81,6 @@ internal sealed partial class JavaScriptEmitter
             ordered[ordinals[index]] = temporaries[index];
         return $"(({string.Join(", ", temporaries)}) => {emit(ordered)})({string.Join(", ", values)})";
     }
-
-    private static IParameterSymbol ArgumentParameter(
-        IMethodSymbol constructor,
-        ArgumentSyntax argument,
-        int position) => argument.NameColon is { } name
-        ? constructor.Parameters.Single(parameter => parameter.Name == name.Name.Identifier.ValueText)
-        : constructor.Parameters[position];
 
     private string StructuralInitializerProperty(ExpressionSyntax expression) => expression switch
     {

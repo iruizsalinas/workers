@@ -176,7 +176,7 @@ internal sealed partial class JavaScriptEmitter
             for (var index = 0; index < initializer.ArgumentList.Arguments.Count; index++)
             {
                 var argument = initializer.ArgumentList.Arguments[index];
-                var parameter = ArgumentParameter(baseConstructor, argument, index);
+                var parameter = BoundParameter(argument);
                 if (parameter.Name == "message")
                     message = $"({Expression(argument.Expression)}) ?? {fallback}";
                 else if (parameter.Name == "innerException")

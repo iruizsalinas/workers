@@ -1,12 +1,14 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 using System.Text.Json;
 internal sealed partial class JavaScriptEmitter
 {
-    private string ObjectCreation(BaseObjectCreationExpressionSyntax value)
+    private string ObjectCreation(IObjectCreationOperation operation)
     {
-        var constructor = _model.GetSymbolInfo(value).Symbol as IMethodSymbol;
+        var value = (BaseObjectCreationExpressionSyntax)operation.Syntax;
+        var constructor = operation.Constructor;
         var type = constructor?.ContainingType;
         var arguments = value.ArgumentList?.Arguments.ToArray() ?? [];
         var typeName = type?.ToDisplayString();
@@ -84,7 +86,7 @@ internal sealed partial class JavaScriptEmitter
         {
             if (constructor is null) return null;
             for (var index = 0; index < arguments.Length; index++)
-                if (ArgumentParameter(constructor, arguments[index], index).Name == name)
+                if (BoundParameter(arguments[index]).Name == name)
                     return arguments[index].Expression;
             return null;
         }

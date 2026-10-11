@@ -1,35 +1,37 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private void EmitTry(TryStatementSyntax statement, int depth)
+    private void EmitTry(ITryOperation operation, int depth)
     {
         var indent = new string(' ', depth * 2);
         _output.Append(indent).AppendLine("try {");
-        EmitEmbedded(statement.Block, depth + 1);
+        EmitEmbedded(operation.Body, depth + 1);
         _output.Append(indent).Append('}');
 
-        if (statement.Catches is [{ Filter: null } single] && CatchTypeTest(single, "") is null)
+        if (operation.Catches is [{ Filter: null } single] && CatchTypeTest(single, "") is null)
         {
             var variable = CatchVariable(single);
             _output.Append(" catch (").Append(variable).AppendLine(") {");
             EmitCatchBody(single, variable, depth + 1);
             _output.Append(indent).Append('}');
         }
-        else if (statement.Catches.Count != 0)
+        else if (operation.Catches.Length != 0)
         {
-            var caught = _names.Get($"catch:{statement.SyntaxTree.FilePath}:{statement.SpanStart}", "exception");
+            var source = operation.Syntax;
+            var caught = _names.Get($"catch:{source.SyntaxTree.FilePath}:{source.SpanStart}", "exception");
             _output.Append(" catch (").Append(caught).AppendLine(") {");
             var catchAll = false;
-            for (var index = 0; index < statement.Catches.Count && !catchAll; index++)
+            for (var index = 0; index < operation.Catches.Length && !catchAll; index++)
             {
-                var clause = statement.Catches[index];
+                var clause = operation.Catches[index];
                 var variable = CatchVariable(clause);
                 var conditions = new List<string>();
                 if (CatchTypeTest(clause, caught) is { } typeTest) conditions.Add(typeTest);
+                // C# treats an exception thrown by a filter as a failed match.
                 if (clause.Filter is not null)
-                    conditions.Add($"(({variable}) => {Expression(clause.Filter.FilterExpression)})({caught})");
+                    conditions.Add($"(({variable}) => {{ try {{ return {Expression(clause.Filter)}; }} catch {{ return false; }} }})({caught})");
                 catchAll = conditions.Count == 0;
                 _output.Append(indent).Append(index == 0 ? "  " : "  else ")
                     .Append(catchAll ? "" : $"if ({string.Join(" && ", conditions)}) ").AppendLine("{");
@@ -37,108 +39,72 @@ internal sealed partial class JavaScriptEmitter
                 EmitCatchBody(clause, variable, depth + 2);
                 _output.Append(indent).AppendLine("  }");
             }
-            if (!catchAll)
-                _output.Append(indent).Append("  else throw ").Append(caught).AppendLine(";");
+            if (!catchAll) _output.Append(indent).Append("  else throw ").Append(caught).AppendLine(";");
             _output.Append(indent).Append('}');
         }
 
-        if (statement.Finally is not null)
+        if (operation.Finally is not null)
         {
             _output.AppendLine(" finally {");
-            EmitEmbedded(statement.Finally.Block, depth + 1);
+            EmitEmbedded(operation.Finally, depth + 1);
             _output.Append(indent).Append('}');
         }
-
         _output.AppendLine();
     }
 
-    // Pattern case labels become conditions of switch (true), which keeps the section and break
-    // semantics of the C# switch statement while testing labels in source order.
-    private void EmitPatternSwitch(SwitchStatementSyntax statement, int depth)
+    private string CatchVariable(ICatchClauseOperation clause) =>
+        clause.ExceptionDeclarationOrExpression is IVariableDeclaratorOperation declaration
+            ? UserIdentifier(declaration.Symbol, declaration.Symbol.Name)
+            : _names.Get($"catch:{clause.Syntax.SyntaxTree.FilePath}:{clause.Syntax.SpanStart}", "exception");
+
+    // Framework exceptions share Error; only user exception classes are distinguishable.
+    private string? CatchTypeTest(ICatchClauseOperation clause, string caught)
     {
-        var indent = new string(' ', depth * 2);
-        var subject = _names.Get($"switch:{statement.SyntaxTree.FilePath}:{statement.SpanStart}", "subject");
-        var input = _model.GetTypeInfo(statement.Expression).Type;
-        _output.Append(indent).Append("const ").Append(subject).Append(" = ").Append(Expression(statement.Expression)).AppendLine(";");
-        _output.Append(indent).AppendLine("switch (true) {");
-        foreach (var section in statement.Sections)
-        {
-            foreach (var label in section.Labels)
-            {
-                _output.Append(indent).Append("  ");
-                if (label is DefaultSwitchLabelSyntax)
-                {
-                    _output.AppendLine("default:");
-                    continue;
-                }
-                var condition = label switch
-                {
-                    CasePatternSwitchLabelSyntax pattern => PatternTest(pattern.Pattern, subject, input)
-                        + (pattern.WhenClause is null ? "" : $" && ({Expression(pattern.WhenClause.Condition)})"),
-                    CaseSwitchLabelSyntax @case => $"{subject} === {Expression(@case.Value)}",
-                    _ => throw Unsupported("WRK100", label)
-                };
-                _output.Append("case ").Append(condition).AppendLine(":");
-            }
-            EmitStatements(section.Statements, depth + 2);
-        }
-        _output.Append(indent).AppendLine("}");
+        var type = clause.ExceptionType;
+        if (type is null || type.SpecialType == SpecialType.System_Object || type.ToDisplayString() == "System.Exception") return null;
+        if (type is INamedTypeSymbol named && IsException(named) && IsUserInstanceType(named))
+            return $"{caught} instanceof {QueueUserType(named, clause.Syntax)}";
+        throw WorkerDiagnostics.WithLocation(new NotSupportedException(
+            $"WRK108: Catching '{type}' is not supported; catch System.Exception or an exception type declared in the Worker."), clause.Syntax);
     }
 
-    private string CatchVariable(CatchClauseSyntax clause) =>
-        clause.Declaration?.Identifier is { RawKind: not 0 } identifier
-            ? UserIdentifier(_model.GetDeclaredSymbol(clause.Declaration!)!, identifier)
-            : _names.Get($"catch:{clause.SyntaxTree.FilePath}:{clause.SpanStart}", "exception");
-
-    // Returns null when the clause catches every exception. Only user exception types have a
-    // distinguishable JavaScript class; framework exception types all lower to Error.
-    private string? CatchTypeTest(CatchClauseSyntax clause, string caught)
-    {
-        if (clause.Declaration is null) return null;
-        var type = _model.GetTypeInfo(clause.Declaration.Type).Type as INamedTypeSymbol;
-        if (type?.ToDisplayString() == "System.Exception") return null;
-        if (type is not null && IsException(type) && IsUserInstanceType(type))
-            return $"{caught} instanceof {QueueUserType(type, clause.Declaration)}";
-        throw new NotSupportedException(
-            $"WRK108: Catching '{type}' is not supported; catch System.Exception or an exception type declared in the Worker.");
-    }
-
-    private void EmitCatchBody(CatchClauseSyntax clause, string variable, int depth)
+    private void EmitCatchBody(ICatchClauseOperation clause, string variable, int depth)
     {
         _caughtExceptions.Push(variable);
-        try
-        {
-            EmitEmbedded(clause.Block, depth);
-        }
-        finally
-        {
-            _caughtExceptions.Pop();
-        }
+        try { EmitEmbedded(clause.Handler, depth); }
+        finally { _caughtExceptions.Pop(); }
     }
 
-    private void EmitSwitch(SwitchStatementSyntax statement, int depth)
+    private void EmitSwitch(ISwitchOperation operation, int depth)
     {
         var indent = new string(' ', depth * 2);
-        if (statement.Sections.SelectMany(section => section.Labels).Any(label => label is CasePatternSwitchLabelSyntax
-                || label is CaseSwitchLabelSyntax @case && !_model.GetConstantValue(@case.Value).HasValue))
+        var patterns = operation.Cases.SelectMany(section => section.Clauses)
+            .Any(clause => clause is IPatternCaseClauseOperation
+                || clause is ISingleValueCaseClauseOperation single && !single.Value.ConstantValue.HasValue);
+        var source = operation.Syntax;
+        var subject = _names.Get($"switch:{source.SyntaxTree.FilePath}:{source.SpanStart}", "subject");
+        if (patterns)
+            _output.Append(indent).Append("const ").Append(subject).Append(" = ").Append(Expression(operation.Value)).AppendLine(";");
+        _output.Append(indent).Append("switch (").Append(patterns ? "true" : Expression(operation.Value)).AppendLine(") {");
+        foreach (var section in operation.Cases)
         {
-            EmitPatternSwitch(statement, depth);
-            return;
-        }
-        _output.Append(indent).Append("switch (").Append(Expression(statement.Expression)).AppendLine(") {");
-        foreach (var section in statement.Sections)
-        {
-            foreach (var label in section.Labels)
+            foreach (var clause in section.Clauses)
             {
                 _output.Append(indent).Append("  ");
-                if (label is DefaultSwitchLabelSyntax)
-                    _output.AppendLine("default:");
-                else if (label is CaseSwitchLabelSyntax @case)
-                    _output.Append("case ").Append(Expression(@case.Value)).AppendLine(":");
+                if (clause is IDefaultCaseClauseOperation) _output.AppendLine("default:");
                 else
-                    throw Unsupported("WRK100", label);
+                {
+                    var condition = clause switch
+                    {
+                        ISingleValueCaseClauseOperation single => patterns ? $"{subject} === {Expression(single.Value)}" : Expression(single.Value),
+                        IPatternCaseClauseOperation pattern => PatternTest(pattern.Pattern, subject)
+                            + (pattern.Guard is null ? "" : $" && ({Expression(pattern.Guard)})"),
+                        _ => throw Unsupported("WRK100", clause.Syntax)
+                    };
+                    _output.Append("case ").Append(condition).AppendLine(":");
+                }
             }
-            EmitStatements(section.Statements, depth + 2);
+            EmitStatements(section.Body, depth + 2);
         }
         _output.Append(indent).AppendLine("}");
     }

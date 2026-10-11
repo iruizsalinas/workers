@@ -66,9 +66,7 @@ internal sealed partial class JavaScriptEmitter
         BindingIntrinsic intrinsic)
     {
         var arguments = BindingArguments(invocation, method);
-        var parameterOrdinals = invocation.ArgumentList.Arguments.Select((argument, index) => argument.NameColon is { } name
-            ? method.Parameters.Single(parameter => parameter.Name == name.Name.Identifier.ValueText).Ordinal
-            : Math.Min(index, method.Parameters.Length - 1)).ToArray();
+        var parameterOrdinals = invocation.ArgumentList.Arguments.Select(argument => BoundParameter(argument).Ordinal).ToArray();
         if (parameterOrdinals.Where((ordinal, index) => ordinal != index).Any())
         {
             var key = $"binding:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}";
@@ -160,10 +158,8 @@ internal sealed partial class JavaScriptEmitter
         for (var index = 0; index < invocation.ArgumentList.Arguments.Count; index++)
         {
             var argument = invocation.ArgumentList.Arguments[index];
-            var parameter = argument.NameColon is { } name
-                ? method.Parameters.Single(item => item.Name == name.Name.Identifier.ValueText)
-                : method.Parameters[Math.Min(index, method.Parameters.Length - 1)];
-            values.Add((parameter, Expression(argument.Expression)));
+            var parameter = BoundParameter(argument);
+            values.Add((parameter, ArgumentValue(argument)));
         }
         return values;
     }

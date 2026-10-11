@@ -1,30 +1,37 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private string Invocation(InvocationExpressionSyntax invocation)
+    private string Invocation(IInvocationOperation operation)
     {
-        var method = _model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
-        if (method is not null && method.DeclaringSyntaxReferences.Length == 0
-            && TryEmitOutInvocation(invocation, method, out var outInvocation))
+        var invocation = (InvocationExpressionSyntax)operation.Syntax;
+        // Reduced extension symbols retain the platform adapters' receiver convention.
+        var method = _model.GetSymbolInfo(invocation).Symbol as IMethodSymbol ?? operation.TargetMethod;
+        if (method.DeclaringSyntaxReferences.Length == 0
+            && TryEmitOutInvocation(operation, method, out var outInvocation))
             return outInvocation;
-        if (method?.Name is "Parse" or "TryParse" && method.ContainingType.SpecialType is
+        if (method.Name is "Parse" or "TryParse" && method.ContainingType.SpecialType is
             SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal or SpecialType.System_Single)
             throw UnsupportedSymbol(method, invocation);
-        var arguments = invocation.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)).ToArray();
+        var arguments = invocation.ArgumentList.Arguments.Select(ArgumentValue).ToArray();
         var member = invocation.Expression as MemberAccessExpressionSyntax;
-        var isBindingIntrinsic = method is not null && BindingIntrinsicRegistry.TryGet(method, out _);
-        if (method is not null
-            && invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
+        var receiver = operation.Instance is null || operation.Instance is IInstanceReferenceOperation ? null : Operand(operation.Instance);
+        if (method.MethodKind == MethodKind.DelegateInvoke)
+            return invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
+                ? EmitNormalizedInvocation(invocation, method, Operand(operation.Instance!),
+                    (target, values) => $"{target}({string.Join(", ", values)})")
+                : $"{Operand(operation.Instance!)}({string.Join(", ", arguments)})";
+        var isBindingIntrinsic = BindingIntrinsicRegistry.TryGet(method, out _);
+        if (invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
             && !isBindingIntrinsic)
         {
-            var receiver = member is null || method.IsStatic ? null : Expression(member.Expression);
             return EmitNormalizedInvocation(invocation, method, receiver,
                 (normalizedReceiver, normalizedArguments) =>
                     InvocationCore(invocation, method, normalizedArguments, member, normalizedReceiver));
         }
-        return InvocationCore(invocation, method, arguments, member);
+        return InvocationCore(invocation, method, arguments, member, receiver);
     }
 
     private string InvocationCore(
@@ -48,7 +55,7 @@ internal sealed partial class JavaScriptEmitter
         if (containingType == "System.Threading.Tasks.Task" && methodName == "WhenAll")
             return TaskWhenAll(invocation, method!, arguments);
         if (TryEmitStaticInvocation(invocation, method, containingType, methodName, arguments, receiverOverride, out var result)) return result;
-        if (member is not null)
+        if (member is not null || receiverOverride is not null)
             return MemberInvocation(invocation, member, method, containingType, arguments, receiverOverride);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
             return $"this.{GeneratedInstanceMethodName(method)}({string.Join(", ", arguments)})";
@@ -69,13 +76,13 @@ internal sealed partial class JavaScriptEmitter
         Func<string?, string[], string> emit)
     {
         var sourceArguments = invocation.ArgumentList.Arguments
-            .Select(argument => Expression(argument.Expression)).ToArray();
+            .Select(ArgumentValue).ToArray();
         var key = $"invocation:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}";
         var receiverTemporary = receiver is null ? null : _names.Get(key + ":receiver", "receiver");
         var temporaries = sourceArguments.Select((_, index) =>
             _names.Get($"{key}:argument:{index}", $"arg{index + 1}")).ToArray();
         var supplied = invocation.ArgumentList.Arguments.Select((argument, index) =>
-            (Parameter: InvocationParameter(method, argument, index), Value: temporaries[index])).ToArray();
+            (Parameter: BoundParameter(argument), Value: temporaries[index])).ToArray();
         var lastOrdinal = supplied.Length == 0 ? -1 : supplied.Max(argument => argument.Parameter.Ordinal);
         var ordered = new List<string>();
         foreach (var parameter in method.Parameters.Take(lastOrdinal + 1))
@@ -98,9 +105,39 @@ internal sealed partial class JavaScriptEmitter
             + $"({string.Join(", ", sourceValues)})";
     }
 
-    private static IParameterSymbol InvocationParameter(IMethodSymbol method, ArgumentSyntax argument, int position) =>
-        argument.NameColon is { } name
-            ? method.Parameters.Single(parameter => parameter.Name == name.Name.Identifier.ValueText)
-            : method.Parameters[Math.Min(position, method.Parameters.Length - 1)];
+    private IArgumentOperation BoundArgument(ArgumentSyntax argument)
+    {
+        if (_model.GetOperation(argument) is IArgumentOperation bound) return bound;
+        // Expanded params elements belong to the implicit array/collection argument.
+        ExpressionSyntax expression = argument.Expression;
+        while (expression is PostfixUnaryExpressionSyntax { RawKind: (int)Microsoft.CodeAnalysis.CSharp.SyntaxKind.SuppressNullableWarningExpression }
+            or ParenthesizedExpressionSyntax or CheckedExpressionSyntax)
+            expression = expression switch
+            {
+                ParenthesizedExpressionSyntax parentheses => parentheses.Expression,
+                CheckedExpressionSyntax checkedExpression => checkedExpression.Expression,
+                _ => ((PostfixUnaryExpressionSyntax)expression).Operand
+            };
+        for (var operation = _model.GetOperation(expression); operation is not null; operation = operation.Parent)
+            if (operation is IArgumentOperation parameter) return parameter;
+        throw Unsupported("WRK105", argument);
+    }
+
+    private IParameterSymbol BoundParameter(ArgumentSyntax argument)
+    {
+        var parameter = BoundArgument(argument).Parameter ?? throw Unsupported("WRK105", argument);
+        if (argument.Parent?.Parent is InvocationExpressionSyntax invocation
+            && _model.GetSymbolInfo(invocation).Symbol is IMethodSymbol { ReducedFrom: not null } reduced)
+            return reduced.Parameters[parameter.Ordinal - 1];
+        return parameter;
+    }
+
+    private string ArgumentValue(ArgumentSyntax argument)
+    {
+        var bound = BoundArgument(argument);
+        // Platform adapters deliberately receive expanded params as individual JS arguments.
+        return bound.ArgumentKind is ArgumentKind.ParamArray or ArgumentKind.ParamCollection
+            ? Expression(argument.Expression) : Expression(bound.Value);
+    }
 
 }

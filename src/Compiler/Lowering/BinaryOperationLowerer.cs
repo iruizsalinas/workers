@@ -5,60 +5,54 @@ using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private string Binary(BinaryExpressionSyntax expression)
+    private string Binary(IBinaryOperation operation)
     {
-        var operation = _model.GetOperation(expression) as IBinaryOperation;
-        if (operation?.OperatorMethod is { } recordOperator && IsSynthesizedRecordMember(recordOperator)
-            && expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
+        var expression = operation.Syntax;
+        if (operation.OperatorMethod is { } recordOperator && IsSynthesizedRecordMember(recordOperator)
+            && operation.OperatorKind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals)
         {
-            var equals = RecordEquals(recordOperator.ContainingType, Expression(expression.Left), Expression(expression.Right), expression, referenceComparison: true);
-            return expression.IsKind(SyntaxKind.EqualsExpression) ? equals : $"!{equals}";
+            var equals = RecordEquals(recordOperator.ContainingType, Expression(operation.LeftOperand), Expression(operation.RightOperand), expression, referenceComparison: true);
+            return operation.OperatorKind == BinaryOperatorKind.Equals ? equals : $"!{equals}";
         }
-        if (operation?.OperatorMethod is not null)
+        if (operation.OperatorMethod is not null)
             throw UnsupportedSymbol(operation.OperatorMethod, expression);
         if (operation is { IsLifted: true }
             && IsSupportedNullableNumeric(operation.LeftOperand.Type)
             && IsSupportedNullableNumeric(operation.RightOperand.Type))
-            return LiftedNumericBinary(expression, operation);
-        var type = operation?.Type?.SpecialType ?? SpecialType.None;
-        var numeric = type != SpecialType.System_String
-            && expression.Kind() is (SyntaxKind.AddExpression or SyntaxKind.SubtractExpression
-                or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression or SyntaxKind.ModuloExpression);
-        var left = BinaryOperand(expression.Left, numeric);
-        var right = BinaryOperand(expression.Right, numeric);
+            return LiftedNumericBinary(operation);
+        var type = operation.Type?.SpecialType ?? SpecialType.None;
+        var left = Operand(operation.LeftOperand);
+        var right = Operand(operation.RightOperand);
         var integral32 = type is SpecialType.System_Int32 or SpecialType.System_UInt32;
 
-        if (expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression
-            && (expression.Left.IsKind(SyntaxKind.NullLiteralExpression)
-                || expression.Right.IsKind(SyntaxKind.NullLiteralExpression)))
-            return $"{left} {(expression.IsKind(SyntaxKind.EqualsExpression) ? "==" : "!=")} {right}";
+        if (operation.OperatorKind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals
+            && (operation.LeftOperand.ConstantValue is { HasValue: true, Value: null }
+                || operation.RightOperand.ConstantValue is { HasValue: true, Value: null }))
+            return $"{left} {(operation.OperatorKind == BinaryOperatorKind.Equals ? "==" : "!=")} {right}";
 
-        if (expression.IsKind(SyntaxKind.CoalesceExpression))
-            return $"(({left}) ?? ({right}))";
-
-        if (IsNullableBoolean(operation?.Type)
-            && expression.Kind() is SyntaxKind.BitwiseAndExpression or SyntaxKind.BitwiseOrExpression or SyntaxKind.ExclusiveOrExpression)
-            return NullableBooleanBinary(expression, left, right);
+        if (IsNullableBoolean(operation.Type)
+            && operation.OperatorKind is BinaryOperatorKind.And or BinaryOperatorKind.Or or BinaryOperatorKind.ExclusiveOr)
+            return NullableBooleanBinary(operation, left, right);
 
         if (type == SpecialType.System_Boolean
-            && expression.Kind() is SyntaxKind.BitwiseAndExpression or SyntaxKind.BitwiseOrExpression or SyntaxKind.ExclusiveOrExpression)
-            return $"Boolean({left} {BinaryOperator(expression.Kind())} {right})";
+            && operation.OperatorKind is BinaryOperatorKind.And or BinaryOperatorKind.Or or BinaryOperatorKind.ExclusiveOr)
+            return $"Boolean({left} {BinaryOperator(operation.OperatorKind)} {right})";
 
-        if (operation?.IsChecked == true && integral32
-            && expression.Kind() is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression)
+        if (operation.IsChecked == true && integral32
+            && operation.OperatorKind is BinaryOperatorKind.Add or BinaryOperatorKind.Subtract or BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide)
             throw Unsupported("WRK108", expression);
 
         if (type is SpecialType.System_Int64 or SpecialType.System_UInt64
-            && expression.Kind() is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression or SyntaxKind.ModuloExpression)
+            && operation.OperatorKind is BinaryOperatorKind.Add or BinaryOperatorKind.Subtract or BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide or BinaryOperatorKind.Remainder)
             throw Unsupported("WRK108", expression);
 
-        if (expression.IsKind(SyntaxKind.DivideExpression) && integral32)
+        if (operation.OperatorKind == BinaryOperatorKind.Divide && integral32)
         {
             var helper = _helpers.Require(JavaScriptHelper.IntegerDivide);
             return $"{helper}({left}, {right}, {(type == SpecialType.System_UInt32 ? "true" : "false")})";
         }
 
-        if (expression.IsKind(SyntaxKind.ModuloExpression) && integral32)
+        if (operation.OperatorKind == BinaryOperatorKind.Remainder && integral32)
         {
             var helper = _helpers.Require(JavaScriptHelper.IntegerRemainder);
             return $"{helper}({left}, {right}, {(type == SpecialType.System_UInt32 ? "true" : "false")})";
@@ -66,42 +60,43 @@ internal sealed partial class JavaScriptEmitter
 
         if (integral32)
         {
-            if (expression.IsKind(SyntaxKind.MultiplyExpression))
+            if (operation.OperatorKind == BinaryOperatorKind.Multiply)
                 return type == SpecialType.System_UInt32 ? $"(Math.imul({left}, {right}) >>> 0)" : $"Math.imul({left}, {right})";
-            if (expression.Kind() is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression)
+            if (operation.OperatorKind is BinaryOperatorKind.Add or BinaryOperatorKind.Subtract)
             {
-                var native = $"({left} {BinaryOperator(expression.Kind())} {right})";
+                var native = $"({left} {BinaryOperator(operation.OperatorKind)} {right})";
                 return type == SpecialType.System_UInt32 ? $"({native} >>> 0)" : $"({native} | 0)";
             }
         }
 
-        if (expression.IsKind(SyntaxKind.AddExpression) && type == SpecialType.System_String)
-            return $"{StringConcatOperand(expression.Left, left, expression)} + {StringConcatOperand(expression.Right, right, expression)}";
+        if (operation.OperatorKind == BinaryOperatorKind.Add && type == SpecialType.System_String)
+            return $"{StringConcatOperand(operation.LeftOperand, left, expression)} + {StringConcatOperand(operation.RightOperand, right, expression)}";
 
         if (type == SpecialType.System_Single
-            && expression.Kind() is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression)
-            return $"Math.fround({left} {BinaryOperator(expression.Kind())} {right})";
+            && operation.OperatorKind is BinaryOperatorKind.Add or BinaryOperatorKind.Subtract or BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide)
+            return $"Math.fround({left} {BinaryOperator(operation.OperatorKind)} {right})";
 
-        if (expression.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression
-            or SyntaxKind.LessThanExpression or SyntaxKind.LessThanOrEqualExpression
-            or SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression)
-            return $"{ComparisonOperand(expression.Left, left)} {BinaryOperator(expression.Kind())} " +
-                   ComparisonOperand(expression.Right, right);
+        if (operation.OperatorKind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals
+            or BinaryOperatorKind.LessThan or BinaryOperatorKind.LessThanOrEqual
+            or BinaryOperatorKind.GreaterThan or BinaryOperatorKind.GreaterThanOrEqual)
+            return $"{left} {BinaryOperator(operation.OperatorKind)} " +
+                   right;
 
-        return $"{left} {BinaryOperator(expression.Kind())} {right}";
+        return $"{left} {BinaryOperator(operation.OperatorKind)} {right}";
     }
 
     // Converts an operand of string concatenation the way String.Concat calls ToString().
-    private string StringConcatOperand(ExpressionSyntax syntax, string value, SyntaxNode source)
+    private string StringConcatOperand(IOperation operation, string value, SyntaxNode source)
     {
-        var type = _model.GetTypeInfo(syntax).Type;
+        operation = Unbox(operation);
+        var type = operation.Type;
+        if (type is null) return "\"\"";
         var underlying = UnwrapNullable(type!);
         var nullable = type is null || type.IsReferenceType || !SymbolEqualityComparer.Default.Equals(type, underlying);
-        if (_model.GetConstantValue(syntax) is { HasValue: true, Value: string or char })
+        if (operation.ConstantValue is { HasValue: true, Value: string or char })
             return value;
         if (underlying.SpecialType == SpecialType.System_String)
-            return syntax is InterpolatedStringExpressionSyntax
-                   || syntax is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.AddExpression)
+            return operation is IInterpolatedStringOperation or IBinaryOperation { OperatorKind: BinaryOperatorKind.Add }
                 ? $"({value})"
                 : $"({value} ?? \"\")";
         string Convert(string item) => underlying.SpecialType switch
@@ -121,18 +116,19 @@ internal sealed partial class JavaScriptEmitter
             : $"({Convert(value)})";
     }
 
-    private string NullableBooleanBinary(BinaryExpressionSyntax expression, string left, string right)
+    private string NullableBooleanBinary(IBinaryOperation operation, string left, string right)
     {
+        var expression = operation.Syntax;
         var key = $"nullable-boolean:{expression.SyntaxTree.FilePath}:{expression.SpanStart}";
         var leftValue = _names.Get(key + ":left", "left");
         var rightValue = _names.Get(key + ":right", "right");
-        var result = expression.Kind() switch
+        var result = operation.OperatorKind switch
         {
-            SyntaxKind.BitwiseAndExpression =>
+            BinaryOperatorKind.And =>
                 $"{leftValue} === false || {rightValue} === false ? false : {leftValue} == null || {rightValue} == null ? null : true",
-            SyntaxKind.BitwiseOrExpression =>
+            BinaryOperatorKind.Or =>
                 $"{leftValue} === true || {rightValue} === true ? true : {leftValue} == null || {rightValue} == null ? null : false",
-            SyntaxKind.ExclusiveOrExpression =>
+            BinaryOperatorKind.ExclusiveOr =>
                 $"{leftValue} == null || {rightValue} == null ? null : {leftValue} !== {rightValue}",
             _ => throw Unsupported("WRK108", expression)
         };
@@ -143,45 +139,46 @@ internal sealed partial class JavaScriptEmitter
         type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
         && nullable.TypeArguments[0].SpecialType == SpecialType.System_Boolean;
 
-    private string LiftedNumericBinary(BinaryExpressionSyntax expression, IBinaryOperation operation)
+    private string LiftedNumericBinary(IBinaryOperation operation)
     {
-        var kind = expression.Kind();
-        if (kind is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression)
-            return $"{Expression(expression.Left)} {BinaryOperator(kind)} {Expression(expression.Right)}";
+        var expression = operation.Syntax;
+        var kind = operation.OperatorKind;
+        if (kind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals)
+            return $"{Expression(operation.LeftOperand)} {BinaryOperator(kind)} {Expression(operation.RightOperand)}";
 
         var key = $"nullable-numeric:{expression.SyntaxTree.FilePath}:{expression.SpanStart}";
         var left = _names.Get(key + ":left", "left");
         var right = _names.Get(key + ":right", "right");
-        var missing = kind is SyntaxKind.LessThanExpression or SyntaxKind.LessThanOrEqualExpression
-            or SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression
+        var missing = kind is BinaryOperatorKind.LessThan or BinaryOperatorKind.LessThanOrEqual
+            or BinaryOperatorKind.GreaterThan or BinaryOperatorKind.GreaterThanOrEqual
             ? "false"
             : "null";
         var underlying = NullableUnderlyingType(operation.LeftOperand.Type);
         if (operation.IsChecked && underlying is SpecialType.System_Int32 or SpecialType.System_UInt32
-            && kind is SyntaxKind.AddExpression or SyntaxKind.SubtractExpression
-                or SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression)
+            && kind is BinaryOperatorKind.Add or BinaryOperatorKind.Subtract
+                or BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide)
             throw Unsupported("WRK108", expression);
         var result = kind switch
         {
-            SyntaxKind.AddExpression or SyntaxKind.SubtractExpression =>
+            BinaryOperatorKind.Add or BinaryOperatorKind.Subtract =>
                 NumericResult($"{left} {BinaryOperator(kind)} {right}", underlying, expression),
-            SyntaxKind.MultiplyExpression when underlying == SpecialType.System_Int32 => $"Math.imul({left}, {right})",
-            SyntaxKind.MultiplyExpression when underlying == SpecialType.System_UInt32 => $"(Math.imul({left}, {right}) >>> 0)",
-            SyntaxKind.DivideExpression when underlying is SpecialType.System_Int32 or SpecialType.System_UInt32 =>
+            BinaryOperatorKind.Multiply when underlying == SpecialType.System_Int32 => $"Math.imul({left}, {right})",
+            BinaryOperatorKind.Multiply when underlying == SpecialType.System_UInt32 => $"(Math.imul({left}, {right}) >>> 0)",
+            BinaryOperatorKind.Divide when underlying is SpecialType.System_Int32 or SpecialType.System_UInt32 =>
                 $"{_helpers.Require(JavaScriptHelper.IntegerDivide)}({left}, {right}, {(underlying == SpecialType.System_UInt32 ? "true" : "false")})",
-            SyntaxKind.ModuloExpression when underlying is SpecialType.System_Int32 or SpecialType.System_UInt32 =>
+            BinaryOperatorKind.Remainder when underlying is SpecialType.System_Int32 or SpecialType.System_UInt32 =>
                 $"{_helpers.Require(JavaScriptHelper.IntegerRemainder)}({left}, {right}, {(underlying == SpecialType.System_UInt32 ? "true" : "false")})",
-            SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression when underlying == SpecialType.System_Single =>
+            BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide when underlying == SpecialType.System_Single =>
                 $"Math.fround({left} {BinaryOperator(kind)} {right})",
-            SyntaxKind.MultiplyExpression or SyntaxKind.DivideExpression or SyntaxKind.ModuloExpression =>
+            BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide or BinaryOperatorKind.Remainder =>
                 $"{left} {BinaryOperator(kind)} {right}",
-            SyntaxKind.LessThanExpression or SyntaxKind.LessThanOrEqualExpression
-                or SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression =>
+            BinaryOperatorKind.LessThan or BinaryOperatorKind.LessThanOrEqual
+                or BinaryOperatorKind.GreaterThan or BinaryOperatorKind.GreaterThanOrEqual =>
                 $"{left} {BinaryOperator(kind)} {right}",
             _ => throw Unsupported("WRK108", expression)
         };
         return $"(({left}, {right}) => {left} == null || {right} == null ? {missing} : {result})" +
-               $"({Expression(expression.Left)}, {Expression(expression.Right)})";
+               $"({Expression(operation.LeftOperand)}, {Expression(operation.RightOperand)})";
     }
 
     private static bool IsSupportedNullableNumeric(ITypeSymbol? type) =>
@@ -193,39 +190,24 @@ internal sealed partial class JavaScriptEmitter
             ? nullable.TypeArguments[0].SpecialType
             : SpecialType.None;
 
-    private string BinaryOperand(ExpressionSyntax operand, bool numeric)
+    private static string BinaryOperator(BinaryOperatorKind kind) => kind switch
     {
-        var value = Expression(operand);
-        return numeric && _model.GetTypeInfo(operand).Type?.SpecialType == SpecialType.System_Char
-            ? $"({value}).charCodeAt(0)"
-            : value;
-    }
-
-    private static string ComparisonOperand(ExpressionSyntax syntax, string value) => syntax switch
-    {
-        BinaryExpressionSyntax or AssignmentExpressionSyntax => $"({value})",
-        PrefixUnaryExpressionSyntax prefix when !prefix.IsKind(SyntaxKind.LogicalNotExpression) => $"({value})",
-        _ => value
-    };
-
-    private static string BinaryOperator(SyntaxKind kind) => kind switch
-    {
-        SyntaxKind.EqualsExpression => "===",
-        SyntaxKind.NotEqualsExpression => "!==",
-        SyntaxKind.LogicalAndExpression => "&&",
-        SyntaxKind.LogicalOrExpression => "||",
-        SyntaxKind.AddExpression => "+",
-        SyntaxKind.SubtractExpression => "-",
-        SyntaxKind.MultiplyExpression => "*",
-        SyntaxKind.DivideExpression => "/",
-        SyntaxKind.ModuloExpression => "%",
-        SyntaxKind.BitwiseAndExpression => "&",
-        SyntaxKind.BitwiseOrExpression => "|",
-        SyntaxKind.ExclusiveOrExpression => "^",
-        SyntaxKind.LessThanExpression => "<",
-        SyntaxKind.LessThanOrEqualExpression => "<=",
-        SyntaxKind.GreaterThanExpression => ">",
-        SyntaxKind.GreaterThanOrEqualExpression => ">=",
+        BinaryOperatorKind.Equals => "===",
+        BinaryOperatorKind.NotEquals => "!==",
+        BinaryOperatorKind.ConditionalAnd => "&&",
+        BinaryOperatorKind.ConditionalOr => "||",
+        BinaryOperatorKind.Add => "+",
+        BinaryOperatorKind.Subtract => "-",
+        BinaryOperatorKind.Multiply => "*",
+        BinaryOperatorKind.Divide => "/",
+        BinaryOperatorKind.Remainder => "%",
+        BinaryOperatorKind.And => "&",
+        BinaryOperatorKind.Or => "|",
+        BinaryOperatorKind.ExclusiveOr => "^",
+        BinaryOperatorKind.LessThan => "<",
+        BinaryOperatorKind.LessThanOrEqual => "<=",
+        BinaryOperatorKind.GreaterThan => ">",
+        BinaryOperatorKind.GreaterThanOrEqual => ">=",
         _ => throw new NotSupportedException($"WRK103: Binary operator '{kind}' is not supported.")
     };
     private string ParameterName(ParameterSyntax parameter) =>

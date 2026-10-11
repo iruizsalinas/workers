@@ -9,8 +9,8 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 // the decoded path parameters.
 internal sealed partial class JavaScriptEmitter
 {
-    private static ExpressionSyntax? NamedArgument(IMethodSymbol method, IEnumerable<ArgumentSyntax> arguments, string name) =>
-        arguments.Where((argument, index) => ArgumentParameter(method, argument, index).Name == name)
+    private ExpressionSyntax? NamedArgument(IMethodSymbol method, IEnumerable<ArgumentSyntax> arguments, string name) =>
+        arguments.Where((argument, index) => BoundParameter(argument).Name == name)
             .Select(argument => argument.Expression).FirstOrDefault();
     private readonly Dictionary<string, (string Name, RoutePattern Pattern)> _routes = new(StringComparer.Ordinal);
     private readonly StringBuilder _routeDeclarations = new();

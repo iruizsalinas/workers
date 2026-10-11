@@ -79,9 +79,9 @@ internal sealed partial class JavaScriptEmitter
         _ => LowerFirst(name).Replace("Utc", "UTC", StringComparison.Ordinal)
     };
 
-    private string? NativeMember(MemberAccessExpressionSyntax source, IPropertySymbol property)
+    private string? NativeMember(IOperation? instance, IPropertySymbol property)
     {
-        var receiver = property.IsStatic ? "" : Expression(source.Expression);
+        var receiver = property.IsStatic ? "" : instance is null ? "this" : Operand(instance);
         return property.ContainingType.ToDisplayString() switch
         {
             "Workers.Crypto" when property.Name == "Subtle" => "globalThis.crypto.subtle",

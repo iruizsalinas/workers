@@ -1,39 +1,64 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
 
-// Explicit conversions between the numeric types the compiler represents as JavaScript numbers,
+// Bound conversions between the numeric types the compiler represents as JavaScript numbers,
 // chars (one-character strings), enums and nullable values. Floating-point to integer conversions
 // truncate and saturate, with NaN converting to zero, matching .NET on x64 since .NET 9.
 internal sealed partial class JavaScriptEmitter
 {
-    private string Cast(CastExpressionSyntax cast)
+    private string Conversion(IConversionOperation conversion)
     {
-        if (_model.GetConstantValue(cast) is { HasValue: true } constant && constant.Value is not (float or long or ulong or decimal))
-            return LiteralConstant(constant.Value, cast);
-        if (_model.GetOperation(cast) is not IConversionOperation { Operand: var operand, Type: { } target } conversion
-            || conversion.OperatorMethod is not null || conversion.IsChecked)
-            throw Unsupported("WRK101", cast);
-        // Downcasts between node types check the runtime kind.
-        var value = Expression(cast.Expression);
+        var cast = conversion.Syntax;
+        var operand = conversion.Operand;
+        var target = conversion.Type ?? throw Unsupported("WRK101", cast);
+        if (conversion.OperatorMethod is not null && !IsByteViewConversion(conversion))
+            throw UnsupportedSymbol(conversion.OperatorMethod, cast);
+        var value = Expression(operand);
         var source = operand.Type;
         if (source is null) return value;
+        if (IsByteViewConversion(conversion)) return value;
         if (conversion.Conversion.IsIdentity || source.IsValueType && target.SpecialType == SpecialType.System_Object
-            || conversion.Conversion.IsImplicit && conversion.Conversion.IsReference)
+            || conversion.Conversion.IsImplicit && conversion.Conversion.IsReference
+            || conversion.IsImplicit && target.SpecialType == SpecialType.System_Object)
             return value;
+
+        if (conversion.ConstantValue is { HasValue: true } constant && constant.Value is not decimal)
+            return LiteralConstant(constant.Value, cast);
+        var targetValue = UnwrapNullable(target);
+        if (conversion.IsImplicit && operand.ConstantValue is { HasValue: true } supplied
+            && supplied.Value is byte or sbyte or short or ushort or int or uint or long or ulong or double
+            && targetValue.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Double
+            && targetValue.SpecialType != SpecialType.System_Single)
+            return LiteralConstant(supplied.Value, cast);
+        if (conversion.IsChecked) throw Unsupported("WRK101", cast);
 
         var sourceNullable = source.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
         var targetNullable = target.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
         var sourceValue = UnwrapNullable(source);
-        var targetValue = UnwrapNullable(target);
+        // Character conversions read their operand once, so no capture wrapper is needed.
+        if (!sourceNullable && sourceValue.SpecialType == SpecialType.System_Char)
+            return ConvertValue(sourceValue, targetValue, Operand(operand), cast);
         var parameter = _names.Get($"cast:{cast.SyntaxTree.FilePath}:{cast.SpanStart}", "value");
-        var converted = ConvertValue(sourceValue, targetValue, parameter, cast);
+        var widening = conversion.IsImplicit
+            && (sourceValue.SpecialType is SpecialType.System_Int32 or SpecialType.System_UInt32
+                && targetValue.SpecialType is SpecialType.System_Int64 or SpecialType.System_UInt64
+                || sourceValue.SpecialType is SpecialType.System_Int64 or SpecialType.System_UInt64
+                && targetValue.SpecialType == SpecialType.System_Double);
+        var converted = widening
+            ? parameter : ConvertValue(sourceValue, targetValue, parameter, cast);
         if (sourceNullable && targetNullable)
             return $"(({parameter}) => {parameter} == null ? null : {converted})({value})";
         if (sourceNullable)
             return $"(({parameter}) => {{ if ({parameter} == null) throw new TypeError(\"Nullable object must have a value.\"); return {converted}; }})({value})";
         return converted == parameter ? value : $"(({parameter}) => {converted})({value})";
     }
+
+    // Byte buffers use Uint8Array across the supported memory/span API boundaries.
+    private static bool IsByteViewConversion(IConversionOperation conversion) =>
+        conversion.IsImplicit && conversion.Operand.Type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
+        && conversion.Type is INamedTypeSymbol { TypeArguments: [{ SpecialType: SpecialType.System_Byte }] } target
+        && target.OriginalDefinition.ToDisplayString() is "System.ReadOnlyMemory<T>" or "System.Memory<T>"
+            or "System.ReadOnlySpan<T>" or "System.Span<T>";
 
     private string ConvertValue(ITypeSymbol source, ITypeSymbol target, string value, SyntaxNode node)
     {

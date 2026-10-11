@@ -1,135 +1,154 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private void EmitStatement(StatementSyntax statement, int depth)
+    private void EmitStatement(StatementSyntax statement, int depth) =>
+        EmitStatement(_model.GetOperation(statement) ?? throw Unsupported("WRK100", statement), depth);
+
+    private void EmitStatement(IOperation operation, int depth)
     {
         var indent = new string(' ', depth * 2);
-        _diagnosticNode = statement;
-        EmitOutVariableDeclarations(statement, indent);
-        DeclarePatternVariables(StatementPatternDesignations(statement),
-            name => _output.Append(indent).Append("let ").Append(name).AppendLine(";"));
-        switch (statement)
+        _diagnosticNode = operation.Syntax;
+        if (operation.Syntax is StatementSyntax statement)
         {
-            case ReturnStatementSyntax value:
+            EmitOutVariableDeclarations(statement, indent);
+            DeclarePatternVariables(StatementPatternDesignations(statement),
+                name => _output.Append(indent).Append("let ").Append(name).AppendLine(";"));
+        }
+        switch (operation)
+        {
+            case IReturnOperation value when value.Kind == OperationKind.YieldReturn:
+                _output.Append(indent).Append("yield ").Append(Expression(value.ReturnedValue!)).AppendLine(";");
+                break;
+            case IReturnOperation value when value.Kind == OperationKind.Return:
                 _output.Append(indent).Append("return");
-                if (value.Expression is not null) _output.Append(' ').Append(Expression(value.Expression));
+                if (value.ReturnedValue is not null) _output.Append(' ').Append(Expression(value.ReturnedValue));
                 _output.AppendLine(";");
                 break;
-            case LocalDeclarationStatementSyntax local:
-                if (!local.UsingKeyword.IsKind(SyntaxKind.None))
-                    throw Unsupported("WRK108", local);
-                foreach (var variable in local.Declaration.Variables)
-                    _output.Append(indent).Append("let ").Append(UserIdentifier(_model.GetDeclaredSymbol(variable)!, variable.Identifier))
-                        .Append(variable.Initializer is null ? "" : " = " + Expression(variable.Initializer.Value)).AppendLine(";");
+            case IVariableDeclarationGroupOperation declarations:
+                foreach (var variable in declarations.Declarations.SelectMany(declaration => declaration.Declarators))
+                    _output.Append(indent).Append("let ").Append(VariableDeclaration(variable)).AppendLine(";");
                 break;
-            case ExpressionStatementSyntax expression:
-                _output.Append(indent).Append(Expression(expression.Expression)).AppendLine(";");
+            case IExpressionStatementOperation expression:
+                _output.Append(indent).Append(Expression(expression.Operation)).AppendLine(";");
                 break;
-            case IfStatementSyntax conditional:
+            case IConditionalOperation conditional:
                 _output.Append(indent).Append("if (").Append(Expression(conditional.Condition)).AppendLine(") {");
-                EmitEmbedded(conditional.Statement, depth + 1);
+                EmitEmbedded(conditional.WhenTrue, depth + 1);
                 _output.Append(indent).Append('}');
-                if (conditional.Else is not null) { _output.AppendLine(" else {"); EmitEmbedded(conditional.Else.Statement, depth + 1); _output.Append(indent).Append('}'); }
+                if (conditional.WhenFalse is not null)
+                {
+                    _output.AppendLine(" else {");
+                    EmitEmbedded(conditional.WhenFalse, depth + 1);
+                    _output.Append(indent).Append('}');
+                }
                 _output.AppendLine();
                 break;
-            case ForEachStatementSyntax loop:
-                var enumerable = Expression(loop.Expression);
-                var enumerableType = _model.GetTypeInfo(loop.Expression).Type;
-                if (enumerableType?.SpecialType == SpecialType.System_String)
+            case IForEachLoopOperation loop:
+                var collection = loop.Collection;
+                while (collection is IConversionOperation { IsImplicit: true } conversion) collection = conversion.Operand;
+                var enumerable = Expression(collection);
+                if (collection.Type?.SpecialType == SpecialType.System_String)
                     enumerable = $"{_helpers.Require(JavaScriptHelper.LinqValues)}({enumerable})";
-                else if (BindingIntrinsicRegistry.IsQueueMessageBatch(enumerableType))
-                    enumerable += ".messages";
-                else if (IsDictionary(enumerableType))
-                    enumerable = $"Object.entries({enumerable})";
-                _output.Append(indent)
-                    .Append(loop.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword) ? "for await (const " : "for (const ")
-                    .Append(UserIdentifier(_model.GetDeclaredSymbol(loop)!, loop.Identifier))
-                    .Append(" of ")
-                    .Append(enumerable)
-                    .AppendLine(") {");
-                EmitEmbedded(loop.Statement, depth + 1);
+                else if (BindingIntrinsicRegistry.IsQueueMessageBatch(collection.Type)) enumerable += ".messages";
+                else if (IsDictionary(collection.Type)) enumerable = $"Object.entries({enumerable})";
+                if (loop.Locals.Length != 1 || loop.LoopControlVariable is not IVariableDeclaratorOperation)
+                    throw Unsupported("WRK108", loop.Syntax);
+                _output.Append(indent).Append(loop.IsAsynchronous ? "for await (const " : "for (const ")
+                    .Append(UserIdentifier(loop.Locals[0], loop.Locals[0].Name)).Append(" of ").Append(enumerable).AppendLine(") {");
+                EmitEmbedded(loop.Body, depth + 1);
                 _output.Append(indent).AppendLine("}");
                 break;
-            case TryStatementSyntax value:
+            case ITryOperation value:
                 EmitTry(value, depth);
                 break;
-            case SwitchStatementSyntax value:
+            case ISwitchOperation value:
                 EmitSwitch(value, depth);
                 break;
-            case BreakStatementSyntax:
+            case IBranchOperation { BranchKind: BranchKind.Break }:
                 _output.Append(indent).AppendLine("break;");
                 break;
-            case ThrowStatementSyntax value:
-                _output.Append(indent).Append("throw");
-                if (value.Expression is not null)
-                    _output.Append(' ').Append(Expression(value.Expression));
-                else if (_caughtExceptions.TryPeek(out var exception))
-                    _output.Append(' ').Append(exception);
-                else
-                    throw Unsupported("WRK108", value);
-                _output.AppendLine(";");
-                break;
-            case DoStatementSyntax value:
-                _output.Append(indent).AppendLine("do {");
-                EmitEmbedded(value.Statement, depth + 1);
-                _output.Append(indent).Append("} while (").Append(Expression(value.Condition)).AppendLine(");");
-                break;
-            case WhileStatementSyntax value:
-                _output.Append(indent).Append("while (").Append(Expression(value.Condition)).AppendLine(") {");
-                EmitEmbedded(value.Statement, depth + 1);
-                _output.Append(indent).AppendLine("}");
-                break;
-            case ForStatementSyntax value:
-                var declaration = value.Declaration is null ? "" : string.Join(", ", value.Declaration.Variables.Select(variable =>
-                    variable.Initializer is null
-                        ? UserIdentifier(_model.GetDeclaredSymbol(variable)!, variable.Identifier)
-                        : $"{UserIdentifier(_model.GetDeclaredSymbol(variable)!, variable.Identifier)} = {Expression(variable.Initializer.Value)}"));
-                var initializers = value.Declaration is null
-                    ? string.Join(", ", value.Initializers.Select(Expression))
-                    : $"let {declaration}";
-                _output.Append(indent).Append("for (").Append(initializers).Append("; ")
-                    .Append(value.Condition is null ? "" : Expression(value.Condition)).Append("; ")
-                    .Append(string.Join(", ", value.Incrementors.Select(Expression))).AppendLine(") {");
-                EmitEmbedded(value.Statement, depth + 1);
-                _output.Append(indent).AppendLine("}");
-                break;
-            case UsingStatementSyntax { Declaration: { } resources } value:
-                _output.Append(indent).AppendLine("{");
-                EmitUsing(resources, value.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword),
-                    body => EmitEmbedded(value.Statement, body), depth + 1);
-                _output.Append(indent).AppendLine("}");
-                break;
-            case ContinueStatementSyntax:
+            case IBranchOperation { BranchKind: BranchKind.Continue }:
                 _output.Append(indent).AppendLine("continue;");
                 break;
-            case YieldStatementSyntax value when value.IsKind(SyntaxKind.YieldReturnStatement):
-                _output.Append(indent).Append("yield ").Append(Expression(value.Expression!)).AppendLine(";");
+            case IThrowOperation value:
+                var exception = value.Exception is not null ? Expression(value.Exception)
+                    : _caughtExceptions.TryPeek(out var caught) ? caught : throw Unsupported("WRK108", value.Syntax);
+                _output.Append(indent).Append("throw ").Append(exception).AppendLine(";");
+                break;
+            case IWhileLoopOperation { ConditionIsTop: false } loop:
+                _output.Append(indent).AppendLine("do {");
+                EmitEmbedded(loop.Body, depth + 1);
+                _output.Append(indent).Append("} while (").Append(Expression(loop.Condition!)).AppendLine(");");
+                break;
+            case IWhileLoopOperation loop:
+                _output.Append(indent).Append("while (").Append(Expression(loop.Condition!)).AppendLine(") {");
+                EmitEmbedded(loop.Body, depth + 1);
+                _output.Append(indent).AppendLine("}");
+                break;
+            case IForLoopOperation loop:
+                _output.Append(indent).Append("for (").Append(string.Join(", ", loop.Before.Select(ForInitializer))).Append("; ")
+                    .Append(loop.Condition is null ? "" : Expression(loop.Condition)).Append("; ")
+                    .Append(string.Join(", ", loop.AtLoopBottom.Select(ForInitializer))).AppendLine(") {");
+                EmitEmbedded(loop.Body, depth + 1);
+                _output.Append(indent).AppendLine("}");
+                break;
+            case IUsingOperation { Resources: IVariableDeclarationGroupOperation } value:
+                var source = (UsingStatementSyntax)value.Syntax;
+                _output.Append(indent).AppendLine("{");
+                EmitUsing(source.Declaration!, value.IsAsynchronous, body => EmitEmbedded(value.Body, body), depth + 1);
+                _output.Append(indent).AppendLine("}");
+                break;
+            case IBlockOperation block:
+                _output.Append(indent).AppendLine("{");
+                EmitStatements(block.Operations, depth + 1);
+                _output.Append(indent).AppendLine("}");
+                break;
+            case IEmptyOperation:
                 break;
             default:
-                throw Unsupported("WRK100", statement);
+                throw Unsupported("WRK100", operation.Syntax);
         }
     }
 
-    private void EmitEmbedded(StatementSyntax statement, int depth)
+    private string VariableDeclaration(IVariableDeclaratorOperation variable) =>
+        UserIdentifier(variable.Symbol, variable.Symbol.Name)
+        + (variable.Initializer is null ? "" : " = " + Expression(variable.Initializer.Value));
+
+    private string ForInitializer(IOperation operation) => operation switch
     {
-        if (statement is BlockSyntax block) EmitStatements(block.Statements, depth);
-        else EmitStatement(statement, depth);
+        IVariableDeclarationGroupOperation group => "let " + string.Join(", ", group.Declarations
+            .SelectMany(declaration => declaration.Declarators).Select(VariableDeclaration)),
+        IExpressionStatementOperation expression => Expression(expression.Operation),
+        _ => throw Unsupported("WRK100", operation.Syntax)
+    };
+
+    private void EmitEmbedded(StatementSyntax statement, int depth) =>
+        EmitEmbedded(_model.GetOperation(statement) ?? throw Unsupported("WRK100", statement), depth);
+
+    private void EmitEmbedded(IOperation operation, int depth)
+    {
+        if (operation is IBlockOperation block) EmitStatements(block.Operations, depth);
+        else EmitStatement(operation, depth);
     }
 
-    // A using declaration owns the rest of its block, so the remaining statements become the
-    // body of the try whose finally disposes the resource.
-    private void EmitStatements(IReadOnlyList<StatementSyntax> statements, int depth)
+    private void EmitStatements(IReadOnlyList<StatementSyntax> statements, int depth) =>
+        EmitStatements(statements.Select(statement => _model.GetOperation(statement)
+            ?? throw Unsupported("WRK100", statement)).ToArray(), depth);
+
+    // Using declarations own the remaining operations in their enclosing block.
+    private void EmitStatements(IReadOnlyList<IOperation> statements, int depth)
     {
         for (var index = 0; index < statements.Count; index++)
         {
-            if (statements[index] is LocalDeclarationStatementSyntax { UsingKeyword.RawKind: not 0 } local)
+            if (statements[index] is IUsingDeclarationOperation resource)
             {
+                _diagnosticNode = resource.Syntax;
+                var local = (LocalDeclarationStatementSyntax)resource.Syntax;
                 var rest = statements.Skip(index + 1).ToArray();
-                EmitUsing(local.Declaration, local.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword),
-                    body => EmitStatements(rest, body), depth);
+                EmitUsing(local.Declaration, resource.IsAsynchronous, body => EmitStatements(rest, body), depth);
                 return;
             }
             EmitStatement(statements[index], depth);
@@ -145,10 +164,11 @@ internal sealed partial class JavaScriptEmitter
         }
         var indent = new string(' ', depth * 2);
         var variable = declaration.Variables[index];
-        var local = (ILocalSymbol)_model.GetDeclaredSymbol(variable)!;
-        var name = UserIdentifier(local, variable.Identifier);
+        var operation = (IVariableDeclaratorOperation)_model.GetOperation(variable)!;
+        var local = operation.Symbol;
+        var name = UserIdentifier(local, local.Name);
         _output.Append(indent).Append("const ").Append(name).Append(" = ")
-            .Append(Expression(variable.Initializer!.Value)).AppendLine(";");
+            .Append(Expression(operation.Initializer!.Value)).AppendLine(";");
         var dispose = DisposeInvocation(local.Type, name, isAsync, variable);
         _output.Append(indent).AppendLine("try {");
         EmitUsing(declaration, isAsync, body, depth + 1, index + 1);

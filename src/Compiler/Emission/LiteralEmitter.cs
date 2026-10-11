@@ -2,44 +2,10 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private string Literal(LiteralExpressionSyntax literal)
-    {
-        if (literal.IsKind(SyntaxKind.DefaultLiteralExpression)) return DefaultValue(literal);
-        if (literal.IsKind(SyntaxKind.NullLiteralExpression)) return "null";
-        if (literal.IsKind(SyntaxKind.TrueLiteralExpression)) return "true";
-        if (literal.IsKind(SyntaxKind.FalseLiteralExpression)) return "false";
-        var type = _model.GetTypeInfo(literal).Type?.SpecialType ?? SpecialType.None;
-        if (type is SpecialType.System_String or SpecialType.System_Char) return JavaScriptStringLiteral(literal.Token.ValueText);
-        // 64-bit integers are JavaScript numbers, so only literals in the safe integer range are exact.
-        if (type is SpecialType.System_Int64 or SpecialType.System_UInt64
-            && literal.Token.Value is long or ulong
-            && Convert.ToDecimal(literal.Token.Value, CultureInfo.InvariantCulture) is <= 9007199254740991m and >= -9007199254740991m)
-            return Convert.ToString(literal.Token.Value, CultureInfo.InvariantCulture)!;
-        if (type is SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal) throw Unsupported("WRK108", literal);
-        // A float value is the nearest single-precision number, so emit that exact double. This also
-        // covers integer constants implicitly converted to float.
-        if (_model.GetTypeInfo(literal).ConvertedType?.SpecialType == SpecialType.System_Single
-            && literal.Token.Value is IConvertible numeric and not string and not char)
-        {
-            var single = (double)Convert.ToSingle(numeric, CultureInfo.InvariantCulture);
-            if (double.IsFinite(single))
-                return single.ToString("R", CultureInfo.InvariantCulture);
-        }
-        if (literal.Token.Value is IFormattable value)
-            return value.ToString(null, CultureInfo.InvariantCulture) switch
-            {
-                "NaN" => "Number.NaN",
-                "Infinity" => "Number.POSITIVE_INFINITY",
-                "-Infinity" => "Number.NEGATIVE_INFINITY",
-                var text => text
-            };
-        throw Unsupported("WRK101", literal);
-    }
-
     // System.Text.Json replaces unpaired UTF-16 surrogates. JavaScript strings can retain them,
     // which matters when native encoders and DigestStream decide how to encode each chunk.
     private static string JavaScriptStringLiteral(string text)
@@ -57,30 +23,31 @@ internal sealed partial class JavaScriptEmitter
         return JsonSerializer.Serialize(text);
     }
 
-    private string InterpolatedPart(InterpolatedStringContentSyntax value) => value switch
+    private string InterpolatedPart(IInterpolatedStringContentOperation value) => value switch
     {
-        InterpolatedStringTextSyntax text => EscapeTemplateText(text.TextToken.ValueText),
-        InterpolationSyntax item => "${" + InterpolationText(item) + "}",
-        _ => throw Unsupported("WRK108", value)
+        IInterpolatedStringTextOperation text => EscapeTemplateText((string)text.Text.ConstantValue.Value!),
+        IInterpolationOperation item => "${" + InterpolationText(item) + "}",
+        _ => throw Unsupported("WRK108", value.Syntax)
     };
 
-    private string InterpolationText(InterpolationSyntax item)
+    private string InterpolationText(IInterpolationOperation item)
     {
-        if (item.FormatClause is { } clause)
-            throw new NotSupportedException($"WRK108: The format '{clause.FormatStringToken.ValueText}' is outside the Workers profile; "
+        if (item.FormatString is { } format)
+            throw new NotSupportedException($"WRK108: The format '{format.ConstantValue.Value}' is outside the Workers profile; "
                 + "format numbers with Numbers.ToFixed or Numbers.ToPrecision and dates with Date.ToIsoString.");
         var text = InterpolationValue(item);
-        if (item.AlignmentClause is null) return text;
-        if (_model.GetConstantValue(item.AlignmentClause.Value) is not { HasValue: true, Value: int width })
-            throw Unsupported("WRK108", item.AlignmentClause);
+        if (item.Alignment is null) return text;
+        if (item.Alignment.ConstantValue is not { HasValue: true, Value: int width })
+            throw Unsupported("WRK108", item.Alignment.Syntax);
         return width >= 0 ? $"String({text}).padStart({width})" : $"String({text}).padEnd({-width})";
     }
 
 
-    private string InterpolationValue(InterpolationSyntax item)
+    private string InterpolationValue(IInterpolationOperation item)
     {
-        var expression = Expression(item.Expression);
-        var type = _model.GetTypeInfo(item.Expression).Type;
+        var value = Unbox(item.Expression);
+        var expression = Expression(value);
+        var type = value.Type;
         var underlying = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
             ? nullable.TypeArguments[0]
             : type;
@@ -92,17 +59,18 @@ internal sealed partial class JavaScriptEmitter
         if (underlying?.SpecialType is SpecialType.System_String or SpecialType.System_Char
             or >= SpecialType.System_SByte and <= SpecialType.System_Double)
             return mayBeNull ? $"({expression}) ?? \"\"" : expression;
-        throw Unsupported("WRK108", item);
+        throw Unsupported("WRK108", item.Syntax);
+    }
+
+    private static IOperation Unbox(IOperation operation)
+    {
+        while (operation is IConversionOperation { IsImplicit: true, Type.SpecialType: SpecialType.System_Object } conversion)
+            operation = conversion.Operand;
+        return operation;
     }
 
     private static string EscapeTemplateText(string value) => value.Replace("{{", "{", StringComparison.Ordinal)
         .Replace("}}", "}", StringComparison.Ordinal).Replace("\\", "\\\\", StringComparison.Ordinal)
         .Replace("`", "\\`", StringComparison.Ordinal).Replace("${", "\\${", StringComparison.Ordinal);
 
-    private string Element(CollectionElementSyntax value) => value switch
-    {
-        ExpressionElementSyntax expression => Expression(expression.Expression),
-        SpreadElementSyntax spread => "..." + Expression(spread.Expression),
-        _ => throw Unsupported("WRK102", value)
-    };
 }

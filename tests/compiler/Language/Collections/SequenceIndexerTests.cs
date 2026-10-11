@@ -23,7 +23,7 @@ public sealed class SequenceIndexerTests
 
         Assert.Contains("sequenceSet(values, 0, $workers$sequenceIndex(values, 1))", module);
         Assert.Contains("$workers$sequenceIndex(\"ab\", 1)", module);
-        Assert.Contains("== null ? null : $workers$sequenceIndex(", module);
+        Assert.Contains("== null ? null : ($workers$sequenceIndex(", module);
         Assert.Contains("index < 0 || index >= source.length", module);
     }
 
@@ -68,4 +68,3 @@ public sealed class SequenceIndexerTests
         Assert.Contains("Object.hasOwn(source, key)", module);
     }
 }
-

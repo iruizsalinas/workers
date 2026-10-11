@@ -5,7 +5,16 @@ internal static class WorkerCompiler
 {
     public static int Run(string[] args) => CompilerCommand.Run(args);
 
-    internal static string Compile(IEnumerable<SyntaxTree> trees, IEnumerable<string>? additionalReferences = null)
+    internal static string Compile(IEnumerable<SyntaxTree> trees, IEnumerable<string>? additionalReferences = null) =>
+        Compile(CreateCompilation(trees, additionalReferences));
+
+    internal static string Compile(CSharpCompilation compilation)
+    {
+        CompilationGuard.ThrowIfInvalid(compilation);
+        return JavaScriptEmitter.Emit(compilation);
+    }
+
+    internal static CSharpCompilation CreateCompilation(IEnumerable<SyntaxTree> trees, IEnumerable<string>? additionalReferences = null)
     {
         var inputTrees = trees.ToArray();
         var parseOptions = inputTrees.OfType<CSharpSyntaxTree>().FirstOrDefault()?.Options
@@ -16,14 +25,11 @@ internal static class WorkerCompiler
             .Concat(additionalReferences ?? [])
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(path => MetadataReference.CreateFromFile(path));
-        var compilation = CSharpCompilation.Create(
+        return CSharpCompilation.Create(
             "Workers.UserCode",
             syntaxTrees,
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
-        CompilationGuard.ThrowIfInvalid(compilation);
-        return JavaScriptEmitter.Emit(compilation);
     }
 
     private const string GlobalUsings = """

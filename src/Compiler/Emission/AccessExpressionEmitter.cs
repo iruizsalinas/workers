@@ -1,117 +1,49 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private string ConditionalAccess(ConditionalAccessExpressionSyntax value)
-    {
-        var receiver = Expression(value.Expression);
-        return value.WhenNotNull switch
-        {
-            MemberBindingExpressionSyntax member => ConditionalMember(value, member, receiver),
-            ElementBindingExpressionSyntax element => ConditionalElement(value, element, receiver),
-            _ => SpeculativeConditionalAccess(value, receiver)
-        };
-    }
+    private readonly Stack<(IConditionalAccessOperation Access, string Receiver)> _conditionalReceivers = new();
 
-    // General x?.rest: the rest is re-bound speculatively against a local of the receiver's
-    // non-nullable type, emitted with the regular lowering, and guarded by a null check.
-    private string SpeculativeConditionalAccess(ConditionalAccessExpressionSyntax value, string receiver)
+    private string ConditionalAccess(IConditionalAccessOperation operation)
     {
-        const string local = "__workers_receiver";
-        var receiverType = _model.GetTypeInfo(value.Expression).Type;
-        var resultType = _model.GetTypeInfo(value).Type;
-        if (receiverType is null) throw Unsupported("WRK101", value.WhenNotNull);
-        var declared = UnwrapNullable(receiverType).ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var access = local + value.WhenNotNull.ToFullString().Trim();
-        var statement = Microsoft.CodeAnalysis.CSharp.SyntaxFactory.ParseStatement(
-            $"{{ {declared} {local} = default!; {(resultType?.SpecialType == SpecialType.System_Void ? "" : "_ = ")}{access}; }}");
-        // A chained x?.a?.b speculates again from inside a speculative model, which Roslyn only allows
-        // from the original model at the original position.
-        var (model, position) = _model.IsSpeculativeSemanticModel
-            ? (_model.ParentModel!, _model.OriginalPositionForSpeculation)
-            : (_model, value.SpanStart);
-        if (!model.TryGetSpeculativeSemanticModel(position, statement, out var speculative))
-            throw Unsupported("WRK101", value.WhenNotNull);
-        var block = (BlockSyntax)statement;
-        var expression = block.Statements[1] is ExpressionStatementSyntax
-        {
-            Expression: AssignmentExpressionSyntax { Right: var right }
-        } ? right : ((ExpressionStatementSyntax)block.Statements[1]).Expression;
-        var original = _model;
-        string emitted;
+        var receiver = Expression(operation.Operation);
+        var source = operation.Syntax;
+        var temporary = _names.Get($"conditional:{source.SyntaxTree.FilePath}:{source.SpanStart}", "receiver");
+        _conditionalReceivers.Push((operation, temporary));
         try
         {
-            _model = speculative;
-            emitted = Expression(expression);
+            var body = Expression(operation.WhenNotNull);
+            return $"(({temporary}) => {temporary} == null ? null : ({body} ?? null))({receiver})";
         }
         finally
         {
-            _model = original;
+            _conditionalReceivers.Pop();
         }
-        return $"(({local}) => {local} == null ? null : {emitted})({receiver})";
     }
 
-    private string ConditionalElement(
-        ConditionalAccessExpressionSyntax access,
-        ElementBindingExpressionSyntax element,
-        string receiver)
+    private string ConditionalReceiver(IConditionalAccessInstanceOperation operation)
     {
-        var arguments = element.ArgumentList.Arguments;
-        if (!IsSequenceType(_model.GetTypeInfo(access.Expression).Type))
-        {
-            if (!IsDictionary(_model.GetTypeInfo(access.Expression).Type))
-                return $"({receiver}?.[{string.Join(", ", arguments.Select(argument => Expression(argument.Expression)))}] ?? null)";
-            var dictionary = _names.Get($"conditional-dictionary:{access.SyntaxTree.FilePath}:{access.SpanStart}", "dictionary");
-            return $"(({dictionary}) => {dictionary} == null ? null : {HelperInvocation(JavaScriptHelper.DictionaryIndex, [dictionary, Expression(arguments.Single().Expression)])})({receiver})";
-        }
-        var temporary = _names.Get($"conditional-index:{access.SyntaxTree.FilePath}:{access.SpanStart}", "sequence");
-        return $"(({temporary}) => {temporary} == null ? null : {HelperInvocation(JavaScriptHelper.SequenceIndex, [temporary, Expression(arguments.Single().Expression)])})({receiver})";
+        for (var parent = operation.Parent; parent is not null; parent = parent.Parent)
+            if (parent is IConditionalAccessOperation access)
+                foreach (var entry in _conditionalReceivers)
+                    if (ReferenceEquals(entry.Access, access)) return entry.Receiver;
+        throw Unsupported("WRK101", operation.Syntax);
     }
 
-    private string ConditionalMember(
-        ConditionalAccessExpressionSyntax access,
-        MemberBindingExpressionSyntax member,
-        string receiver)
+    private string ElementAccess(IPropertyReferenceOperation operation)
     {
-        var symbol = _model.GetSymbolInfo(member).Symbol;
-        var receiverType = _model.GetTypeInfo(access.Expression).Type;
-        if (symbol?.Name == "Length"
-            && (receiverType?.SpecialType == SpecialType.System_String || receiverType is IArrayTypeSymbol))
-            return $"({receiver}?.length ?? null)";
-        if (symbol?.ContainingType is { } userType && IsUserInstanceType(userType) && RequiresUserClass(userType)
-            && symbol is IFieldSymbol or IPropertySymbol)
-        {
-            QueueUserType(userType, member);
-            var name = UserMemberName(symbol);
-            return IsJavaScriptPropertyIdentifier(name)
-                ? $"({receiver}?.{name} ?? null)"
-                : $"({receiver}?.[{System.Text.Json.JsonSerializer.Serialize(name)}] ?? null)";
-        }
-        ThrowIfUnsupportedFoundationMember(symbol, member);
-        return $"({receiver}?.{LowerFirst(symbol?.Name ?? member.Name.Identifier.ValueText)} ?? null)";
-    }
-
-    private string ElementAccess(ElementAccessExpressionSyntax value)
-    {
-        var receiver = Expression(value.Expression);
-        if (_model.GetTypeInfo(value.Expression).Type is INamedTypeSymbol lookup
-            && lookup.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>")
-            return $"{receiver}.get({string.Join(", ", value.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))})";
-        if (BindingIntrinsicRegistry.IsQueueMessageBatch(_model.GetTypeInfo(value.Expression).Type))
-            receiver += ".messages";
-        if (IsSequenceType(_model.GetTypeInfo(value.Expression).Type))
-        {
-            var index = value.ArgumentList.Arguments.Single();
-            return HelperInvocation(JavaScriptHelper.SequenceIndex, [receiver, Expression(index.Expression)]);
-        }
-        if (IsDictionary(_model.GetTypeInfo(value.Expression).Type))
-        {
-            var key = value.ArgumentList.Arguments.Single();
-            return HelperInvocation(JavaScriptHelper.DictionaryIndex, [receiver, Expression(key.Expression)]);
-        }
-        return $"{receiver}[{string.Join(", ", value.ArgumentList.Arguments.Select(argument => Expression(argument.Expression)))}]";
+        if (operation.Instance is null) throw Unsupported("WRK101", operation.Syntax);
+        var receiver = Expression(operation.Instance);
+        var arguments = operation.Arguments.Select(argument => Expression(argument.Value)).ToArray();
+        var type = operation.Instance.Type;
+        if (type is INamedTypeSymbol lookup && lookup.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>")
+            return $"{receiver}.get({string.Join(", ", arguments)})";
+        if (BindingIntrinsicRegistry.IsQueueMessageBatch(type)) receiver += ".messages";
+        if (IsSequenceType(type)) return HelperInvocation(JavaScriptHelper.SequenceIndex, [receiver, arguments.Single()]);
+        if (IsDictionary(type)) return HelperInvocation(JavaScriptHelper.DictionaryIndex, [receiver, arguments.Single()]);
+        if (arguments.Length != 1) throw Unsupported("WRK101", operation.Syntax);
+        return $"{receiver}[{arguments[0]}]";
     }
 
     private static bool IsSequenceType(ITypeSymbol? type)

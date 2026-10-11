@@ -131,13 +131,13 @@ internal sealed partial class JavaScriptEmitter
         return isParams && arguments.Count != 1 ? $"[{string.Join(", ", arguments)}]" : arguments[0];
     }
 
-    private static bool? StringComparisonMode(InvocationExpressionSyntax source, IMethodSymbol? method) =>
+    private bool? StringComparisonMode(InvocationExpressionSyntax source, IMethodSymbol? method) =>
         InvocationArgument(source, method, "comparisonType") is MemberAccessExpressionSyntax comparison
         && comparison.Name.Identifier.ValueText is "Ordinal" or "OrdinalIgnoreCase"
             ? comparison.Name.Identifier.ValueText == "OrdinalIgnoreCase"
             : null;
 
-    private static ExpressionSyntax? InvocationArgument(
+    private ExpressionSyntax? InvocationArgument(
         InvocationExpressionSyntax invocation,
         IMethodSymbol? method,
         string parameterName)
@@ -150,7 +150,7 @@ internal sealed partial class JavaScriptEmitter
         return invocation.ArgumentList.Arguments.Select((argument, position) => new
             {
                 Argument = argument,
-                Parameter = InvocationParameter(method, argument, position)
+                Parameter = BoundParameter(argument)
             })
             .FirstOrDefault(item => item.Parameter.Ordinal == ordinal)?.Argument.Expression;
     }

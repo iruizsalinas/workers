@@ -31,6 +31,11 @@ public sealed class PackageTests
         var consumer = Directory.CreateDirectory(Path.Combine(workspace.Path, "consumer")).FullName;
         File.WriteAllText(Path.Combine(consumer, "Consumer.csproj"), Project(package, workspace.Path));
         File.WriteAllText(Path.Combine(consumer, "Worker.cs"), Source);
+        File.WriteAllText(Path.Combine(consumer, ".editorconfig"), """
+            root = true
+            [*.cs]
+            dotnet_diagnostic.CS0168.severity = none
+            """);
 
         var packages = Path.Combine(workspace.Path, "packages");
         RunDotNet(consumer, "publish", "-c", "Release", "--packages", packages);
@@ -39,6 +44,12 @@ public sealed class PackageTests
         Assert.True(File.Exists(module));
         Assert.Contains("Hello from package", File.ReadAllText(module), StringComparison.Ordinal);
         Assert.Contains("globalThis.crypto.subtle.generateKey", File.ReadAllText(module), StringComparison.Ordinal);
+
+        var compilerArguments = Directory.GetFiles(Path.Combine(consumer, "obj"), "worker-compiler-arguments.rsp", SearchOption.AllDirectories).Single();
+        File.Delete(compilerArguments);
+        RunDotNet(consumer, "build", "-c", "Release", "--packages", packages);
+        Assert.True(File.Exists(compilerArguments), "An incremental build must recover a missing compiler argument manifest.");
+        Assert.True(File.Exists(module));
 
         File.WriteAllText(Path.Combine(consumer, "Worker.cs"), Source.Replace("Response.Text", "Response.DoesNotExist", StringComparison.Ordinal));
         RunDotNetFailure(consumer, "build", "-c", "Release", "--packages", packages);
@@ -57,6 +68,7 @@ public sealed class PackageTests
             <TargetFramework>net10.0</TargetFramework>
             <ImplicitUsings>enable</ImplicitUsings>
             <Nullable>enable</Nullable>
+            <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
             <RestoreSources>{{source}}</RestoreSources>
           </PropertyGroup>
           <ItemGroup>
@@ -73,6 +85,7 @@ public sealed class PackageTests
             [Fetch]
             public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
             {
+                int unused;
                 var key = await Crypto.Subtle.GenerateKeyAsync(
                     new AesKeyParams { Name = AesAlgorithm.AesGcm, Length = 256 },
                     false, [CryptoKeyUsage.Encrypt, CryptoKeyUsage.Decrypt]);

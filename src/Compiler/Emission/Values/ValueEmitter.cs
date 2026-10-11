@@ -6,9 +6,8 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private string FormEntryMember(MemberAccessExpressionSyntax member, IPropertySymbol property)
+    private string FormEntryMember(SyntaxNode member, IPropertySymbol property, string receiver)
     {
-        var receiver = Expression(member.Expression);
         var value = _names.Get(
             $"form-entry:{member.SyntaxTree.FilePath}:{member.SpanStart}",
             "formEntry");
@@ -46,26 +45,6 @@ internal sealed partial class JavaScriptEmitter
     }
 
     private static string Response(string[] arguments) => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})";
-    private string Identifier(IdentifierNameSyntax value) => _model.GetSymbolInfo(value).Symbol switch
-    {
-        IMethodSymbol method when IsMethodGroup(value) => MethodGroup(value, method, null),
-        IPropertySymbol { IsStatic: true, Name: "Subtle", ContainingType: { } type }
-            when type.ToDisplayString() == "Workers.Crypto" => "globalThis.crypto.subtle",
-        IPropertySymbol { ContainingType: { } type, Name: var name }
-            when type.ToDisplayString() == "Workers.WorkerEntrypoint" => name == "Environment" ? "this.env" : "this.ctx",
-        IPropertySymbol { IsStatic: false } property when IsUserInstanceType(property.ContainingType) =>
-            UserMemberAccess("this", property),
-        IFieldSymbol { IsStatic: false } field when IsUserInstanceType(field.ContainingType) =>
-            UserMemberAccess("this", field),
-        IFieldSymbol { IsStatic: false } field => $"this.{UserIdentifier(field, field.Name)}",
-        IFieldSymbol { IsStatic: true } field when CryptoEnumValue(field.ContainingType.ToDisplayString(), field.Name) is { } cryptoEnum => cryptoEnum,
-        IFieldSymbol { IsStatic: true, HasConstantValue: true } field => LiteralConstant(field.ConstantValue, value),
-        ISymbol staticState when IsUserStaticState(staticState) => StaticMemberAccess(staticState, value),
-        IFieldSymbol { IsStatic: true } => throw Unsupported("WRK110", value),
-        ISymbol symbol => UserIdentifier(symbol, value.Identifier),
-        _ => value.Identifier.ValueText
-    };
-
     private static bool IsMethodGroup(ExpressionSyntax syntax)
     {
         var target = syntax.Parent is MemberAccessExpressionSyntax access && access.Name == syntax ? access : syntax;
@@ -126,14 +105,4 @@ internal sealed partial class JavaScriptEmitter
         return $", {{ {string.Join(", ", properties)} }}";
     }
 
-    private string AnonymousMember(AnonymousObjectMemberDeclaratorSyntax value)
-    {
-        var name = value.NameEquals?.Name.Identifier.ValueText ?? value.Expression switch
-        {
-            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-            MemberAccessExpressionSyntax member => LowerFirst(member.Name.Identifier.ValueText),
-            _ => throw Unsupported("WRK107", value)
-        };
-        return $"{JavaScriptObjectKey(name)}: {Expression(value.Expression)}";
-    }
 }

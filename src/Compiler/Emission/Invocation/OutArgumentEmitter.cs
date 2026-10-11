@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 // Supports the framework Try-pattern methods that report a value through an out argument, such as
 // int.TryParse and Dictionary.TryGetValue. Each call lowers to a helper returning [succeeded, value]
@@ -27,20 +28,20 @@ internal sealed partial class JavaScriptEmitter
         }
     }
 
-    private bool TryEmitOutInvocation(InvocationExpressionSyntax invocation, IMethodSymbol method, out string result)
+    private bool TryEmitOutInvocation(IInvocationOperation operation, IMethodSymbol method, out string result)
     {
+        var invocation = (InvocationExpressionSyntax)operation.Syntax;
         result = "";
-        var outArguments = invocation.ArgumentList.Arguments
-            .Where(argument => argument.RefKindKeyword.IsKind(SyntaxKind.OutKeyword)).ToArray();
+        var outArguments = operation.Arguments.Where(argument => argument.Parameter?.RefKind == RefKind.Out).ToArray();
         if (outArguments.Length == 0) return false;
         if (outArguments.Length != 1 || invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null))
             throw UnsupportedSymbol(method, invocation);
 
-        var inputs = invocation.ArgumentList.Arguments.Where(argument => argument != outArguments[0])
-            .Select(argument => Expression(argument.Expression)).ToArray();
-        var receiver = invocation.Expression is MemberAccessExpressionSyntax member && !method.IsStatic
-            ? Expression(member.Expression)
-            : null;
+        var sourceInputs = operation.Arguments.Where(argument => argument.Parameter?.RefKind != RefKind.Out
+            && argument.ArgumentKind != ArgumentKind.DefaultValue).Select(argument => Expression(argument.Value)).ToArray();
+        var key = $"out:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}";
+        var inputs = sourceInputs.Select((_, index) => _names.Get($"{key}:argument:{index}", $"arg{index + 1}")).ToArray();
+        var receiver = operation.Instance is null ? null : _names.Get(key + ":receiver", "receiver");
         var outType = method.Parameters.Single(parameter => parameter.RefKind == RefKind.Out).Type;
         var fallback = DefaultFieldValue(outType, invocation);
         var owner = method.ContainingType.OriginalDefinition.ToDisplayString();
@@ -73,23 +74,46 @@ internal sealed partial class JavaScriptEmitter
         else
             throw UnsupportedSymbol(method, invocation);
 
-        var target = outArguments[0].Expression switch
+        var output = outArguments[0].Value;
+        if (output is IDeclarationExpressionOperation declaration)
         {
-            DeclarationExpressionSyntax { Designation: DiscardDesignationSyntax } => null,
-            IdentifierNameSyntax { Identifier.ValueText: "_" } discard
-                when _model.GetSymbolInfo(discard).Symbol is null or IDiscardSymbol => null,
-            DeclarationExpressionSyntax { Designation: SingleVariableDesignationSyntax designation } =>
-                _model.GetDeclaredSymbol(designation) is { } symbol && _declaredOutVariables.Contains(symbol)
-                    ? UserIdentifier(symbol, designation.Identifier)
-                    : throw new NotSupportedException(
-                        "WRK108: An 'out var' declaration is only supported inside a statement; use a block body."),
-            var existing when IsSimpleMutationTarget(existing) => Expression(existing),
-            var other => throw Unsupported("WRK108", other)
+            output = declaration.Expression;
+            if (output is ILocalReferenceOperation local && !_declaredOutVariables.Contains(local.Local))
+                throw Unsupported("WRK108", declaration.Syntax);
+        }
+        string? outputReceiver = null;
+        string? outputValue = null;
+        string? target;
+        if (output is IFieldReferenceOperation { Instance: not null } field
+            && field.Instance is not IInstanceReferenceOperation && IsUserInstanceType(field.Field.ContainingType))
+        {
+            QueueUserType(field.Field.ContainingType, field.Syntax);
+            outputReceiver = _names.Get(key + ":outReceiver", "outReceiver");
+            outputValue = Expression(field.Instance);
+            target = UserMemberAccess(outputReceiver, field.Field);
+        }
+        else target = output switch
+        {
+            IDiscardOperation => null,
+            ILocalReferenceOperation or IParameterReferenceOperation => Expression(output),
+            IFieldReferenceOperation { Instance: IInstanceReferenceOperation } => Expression(output),
+            _ => throw Unsupported("WRK108", output.Syntax)
         };
-        var outcome = _names.Get($"out:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}", "outcome");
-        result = target is null
+        var outcome = _names.Get(key + ":outcome", "outcome");
+        var body = target is null
             ? $"{call}[0]"
             : $"(({outcome}) => ({target} = {outcome}[1], {outcome}[0]))({call})";
+        var parameters = receiver is null ? inputs : [receiver, .. inputs];
+        var values = receiver is null ? sourceInputs : [Expression(operation.Instance!), .. sourceInputs];
+        if (outputReceiver is not null)
+        {
+            parameters = [.. parameters, outputReceiver];
+            values = [.. values, outputValue!];
+            // Form the field reference before invoking the Try-method, even if it fails.
+            body = $"{{ if ({outputReceiver} == null) throw new TypeError(\"Object reference not set to an instance of an object.\"); return {body}; }}";
+        }
+        // Evaluate inputs outside TryCall, so exceptions from evaluating arguments propagate.
+        result = $"(({string.Join(", ", parameters)}) => {body})({string.Join(", ", values)})";
         return true;
     }
 }

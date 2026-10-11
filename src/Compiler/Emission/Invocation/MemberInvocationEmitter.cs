@@ -5,14 +5,14 @@ internal sealed partial class JavaScriptEmitter
 {
     private string MemberInvocation(
         InvocationExpressionSyntax invocation,
-        MemberAccessExpressionSyntax member,
+        MemberAccessExpressionSyntax? member,
         IMethodSymbol? method,
         string? type,
         string[] arguments,
         string? receiverOverride = null)
     {
-        var name = method?.Name ?? member.Name.Identifier.ValueText;
-        var receiver = receiverOverride ?? Expression(member.Expression);
+        var name = method?.Name ?? throw Unsupported("WRK105", invocation);
+        var receiver = receiverOverride ?? (method?.IsStatic == true ? "" : member is null ? "this" : Expression(member.Expression));
         if (IsSynthesizedRecordToString(method))
             return RecordText(method!.ContainingType, receiver, invocation);
         if (IsSynthesizedRecordMember(method))

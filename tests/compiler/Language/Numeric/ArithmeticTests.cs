@@ -236,13 +236,10 @@ public sealed class ArithmeticTests
     [Fact]
     public void PromotesCharactersToUtf16CodeUnitsForArithmetic()
     {
-        var module = Compile("""
-            using Workers;
-            public static class Worker
+        DifferentialRunner.Equal("""
+            public static class Test
             {
-                [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) =>
-                    Response.Json(Calculate('C', 'A'));
+                public static object Run() => Calculate('C', 'A');
 
                 private static object Calculate(char value, char other) => new
                 {
@@ -254,10 +251,6 @@ public sealed class ArithmeticTests
             }
             """);
 
-        Assert.Contains("(\"A\").charCodeAt(0) + 1", module);
-        Assert.Contains("(\"B\").charCodeAt(0) - (\"A\").charCodeAt(0)", module);
-        Assert.Contains("(value).charCodeAt(0) + 5", module);
-        Assert.Contains("(value).charCodeAt(0) - (other).charCodeAt(0)", module);
     }
 
     [Fact]

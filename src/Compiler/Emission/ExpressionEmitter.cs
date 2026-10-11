@@ -5,61 +5,102 @@ using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private string Expression(ExpressionSyntax expression) =>
-        ExpressionCore(expression);
-
-    private string ExpressionCore(ExpressionSyntax expression) => expression switch
+    // Roslyn's operation tree is the typed IR. Syntax remains available for diagnostics and
+    // platform adapters, but never supplies a fallback for an unrecognized operation.
+    private string Expression(ExpressionSyntax syntax)
     {
-        LiteralExpressionSyntax value => Literal(value),
-        DefaultExpressionSyntax value => DefaultValue(value),
-        IdentifierNameSyntax value => Identifier(value),
-        ThisExpressionSyntax => "this",
-        ParenthesizedExpressionSyntax value => $"({Expression(value.Expression)})",
-        PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.LogicalNotExpression) =>
-            $"!({Expression(value.Operand)})",
-        PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.UnaryMinusExpression) =>
-            UnaryNumeric(value, "-"),
-        PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.UnaryPlusExpression) =>
-            UnaryNumeric(value, "+"),
-        PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PreIncrementExpression) => NumericMutation(value, 1, postfix: false),
-        PrefixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PreDecrementExpression) => NumericMutation(value, -1, postfix: false),
-        PostfixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PostIncrementExpression) => NumericMutation(value, 1, postfix: true),
-        PostfixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.PostDecrementExpression) => NumericMutation(value, -1, postfix: true),
-        PostfixUnaryExpressionSyntax value when value.IsKind(SyntaxKind.SuppressNullableWarningExpression) =>
-            Expression(value.Operand),
-        AwaitExpressionSyntax value => $"await {Expression(value.Expression)}",
-        BinaryExpressionSyntax value => Binary(value),
-        ConditionalExpressionSyntax value => $"{Expression(value.Condition)} ? {Expression(value.WhenTrue)} : {Expression(value.WhenFalse)}",
-        ConditionalAccessExpressionSyntax value => ConditionalAccess(value),
-        AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.SimpleAssignmentExpression) => SimpleAssignment(value),
-        AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.AddAssignmentExpression) => CompoundMutation(value, "+"),
-        AssignmentExpressionSyntax value when value.IsKind(SyntaxKind.SubtractAssignmentExpression) => CompoundMutation(value, "-"),
-        AssignmentExpressionSyntax value when value.Kind() is SyntaxKind.MultiplyAssignmentExpression
-            or SyntaxKind.DivideAssignmentExpression or SyntaxKind.ModuloAssignmentExpression => CompoundArithmetic(value),
-        WithExpressionSyntax value => WithExpression(value),
-        SwitchExpressionSyntax value => SwitchExpression(value),
-        CastExpressionSyntax value => Cast(value),
-        ArrayCreationExpressionSyntax value => ArrayCreation(value, value.Initializer),
-        ImplicitArrayCreationExpressionSyntax value => ArrayCreation(value, value.Initializer),
-        ThrowExpressionSyntax value => $"(() => {{ throw {Expression(value.Expression)}; }})()",
-        IsPatternExpressionSyntax value => IsPattern(value),
-        MemberAccessExpressionSyntax value => Member(value),
-        InvocationExpressionSyntax value when _model.GetConstantValue(value) is { HasValue: true, Value: string text } =>
-            LiteralConstant(text, value),
-        InvocationExpressionSyntax value => Invocation(value),
-        ElementAccessExpressionSyntax value => ElementAccess(value),
-        AnonymousObjectCreationExpressionSyntax value => "{ " + string.Join(", ", value.Initializers.Select(AnonymousMember)) + " }",
-        InterpolatedStringExpressionSyntax value => "`" + string.Concat(value.Contents.Select(InterpolatedPart)) + "`",
-        CollectionExpressionSyntax value => Collection(value),
-        ObjectCreationExpressionSyntax value => ObjectCreation(value),
-        ImplicitObjectCreationExpressionSyntax value => ObjectCreation(value),
-        ParenthesizedLambdaExpressionSyntax value when value.ExpressionBody is not null =>
+        // Parentheses and null-forgiving operators have no independent operation in C#.
+        if (syntax is ParenthesizedExpressionSyntax parenthesized)
+            return $"({Expression(parenthesized.Expression)})";
+        if (syntax is CheckedExpressionSyntax checkedExpression)
+            return Expression(checkedExpression.Expression);
+        if (syntax is PostfixUnaryExpressionSyntax suppression && suppression.IsKind(SyntaxKind.SuppressNullableWarningExpression))
+            return Expression(suppression.Operand);
+        var operation = _model.GetOperation(syntax) ?? throw Unsupported("WRK101", syntax);
+        while (operation.Parent is IConversionOperation { IsImplicit: true } conversion
+            && conversion.Syntax.Span == syntax.Span)
+            operation = conversion;
+        return Expression(operation);
+    }
+
+    private string Expression(IOperation operation)
+    {
+        try
+        {
+            return operation switch
+            {
+                IConversionOperation value => Conversion(value),
+                IParenthesizedOperation value => $"({Expression(value.Operand)})",
+                ILiteralOperation value => LiteralConstant(value.ConstantValue.Value, value.Syntax),
+                INameOfOperation value => LiteralConstant(value.ConstantValue.Value, value.Syntax),
+                IDefaultValueOperation value => DefaultFieldValue(value.Type!, value.Syntax),
+                ILocalReferenceOperation value => UserIdentifier(value.Local, value.Local.Name),
+                IParameterReferenceOperation value => UserIdentifier(value.Parameter, value.Parameter.Name),
+                IInstanceReferenceOperation => "this",
+                IUnaryOperation value => Unary(value),
+                IIncrementOrDecrementOperation value => NumericMutation(value),
+                IAwaitOperation value => $"await {Operand(value.Operation)}",
+                IBinaryOperation value => Binary(value),
+                ICoalesceOperation value => $"(({Expression(value.Value)}) ?? ({Expression(value.WhenNull)}))",
+                IConditionalOperation value => $"{Expression(value.Condition)} ? {Expression(value.WhenTrue)} : {Expression(value.WhenFalse!)}",
+                IConditionalAccessOperation value => ConditionalAccess(value),
+                IConditionalAccessInstanceOperation value => ConditionalReceiver(value),
+                ISimpleAssignmentOperation value => SimpleAssignment(value),
+                ICompoundAssignmentOperation value => CompoundAssignment(value),
+                IWithOperation value => WithExpression(value),
+                ISwitchExpressionOperation value => SwitchExpression(value),
+                IArrayCreationOperation value => ArrayCreation(value),
+                IThrowOperation value => $"(() => {{ throw {Expression(value.Exception!)}; }})()",
+                IIsPatternOperation value => IsPattern(value),
+                IFieldReferenceOperation value => Member(value),
+                IPropertyReferenceOperation value => Member(value),
+                IInvocationOperation value => Invocation(value),
+                IArrayElementReferenceOperation value => HelperInvocation(JavaScriptHelper.SequenceIndex,
+                    [Expression(value.ArrayReference), Expression(value.Indices.Single())]),
+                IAnonymousObjectCreationOperation value => AnonymousObject(value),
+                IInterpolatedStringOperation value => "`" + string.Concat(value.Parts.Select(InterpolatedPart)) + "`",
+                ICollectionExpressionOperation value => Collection(value),
+                IObjectCreationOperation value => ObjectCreation(value),
+                IDelegateCreationOperation value => Expression(value.Target),
+                IMethodReferenceOperation value => MethodGroup((ExpressionSyntax)value.Syntax, value.Method,
+                    value.Syntax is MemberAccessExpressionSyntax member ? member.Expression : null),
+                IAnonymousFunctionOperation value => AnonymousFunction(value),
+                _ => throw Unsupported("WRK101", operation.Syntax)
+            };
+        }
+        catch (NotSupportedException exception)
+        {
+            throw WorkerDiagnostics.WithLocation(exception, operation.Syntax);
+        }
+    }
+
+    private string Operand(IOperation operation)
+    {
+        var value = Expression(operation);
+        return operation is IBinaryOperation or IConditionalOperation or IAwaitOperation
+            or ISimpleAssignmentOperation or ICompoundAssignmentOperation ? $"({value})" : value;
+    }
+
+    private string AnonymousObject(IAnonymousObjectCreationOperation operation) =>
+        "{ " + string.Join(", ", operation.Initializers.Select(initializer =>
+        {
+            if (initializer is not ISimpleAssignmentOperation { Target: IPropertyReferenceOperation property } assignment)
+                throw Unsupported("WRK101", initializer.Syntax);
+            var name = property.Property.Name;
+            if (initializer.Syntax is AnonymousObjectMemberDeclaratorSyntax { NameEquals: null, Expression: MemberAccessExpressionSyntax })
+                name = LowerFirst(name);
+            return $"{JavaScriptObjectKey(name)}: {Expression(assignment.Value)}";
+        })) + " }";
+
+    private string AnonymousFunction(IAnonymousFunctionOperation operation) => operation.Syntax switch
+    {
+        ParenthesizedLambdaExpressionSyntax { ExpressionBody: not null } value =>
             $"{AsyncPrefix(value.AsyncKeyword)}({string.Join(", ", value.ParameterList.Parameters.Select(ParameterName))}) => {LambdaExpressionBody(value.ExpressionBody)}",
-        ParenthesizedLambdaExpressionSyntax value when value.Block is not null => Lambda(value),
-        SimpleLambdaExpressionSyntax value when value.ExpressionBody is not null =>
+        ParenthesizedLambdaExpressionSyntax value => Lambda(value),
+        SimpleLambdaExpressionSyntax { ExpressionBody: not null } value =>
             $"{AsyncPrefix(value.AsyncKeyword)}{ParameterName(value.Parameter)} => {LambdaExpressionBody(value.ExpressionBody)}",
-        SimpleLambdaExpressionSyntax value when value.Block is not null => Lambda(value),
-        _ => throw Unsupported("WRK101", expression)
+        SimpleLambdaExpressionSyntax value => Lambda(value),
+        _ => throw Unsupported("WRK101", operation.Syntax)
     };
 
     private string LambdaExpressionBody(ExpressionSyntax expression)
@@ -69,125 +110,149 @@ internal sealed partial class JavaScriptEmitter
         return body.StartsWith('{') ? $"({body})" : body;
     }
 
-    private string DefaultValue(ExpressionSyntax expression) =>
-        _model.GetTypeInfo(expression).ConvertedType is { IsReferenceType: true } or { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T }
-            ? "null"
-            : throw Unsupported("WRK108", expression);
-
-    private string SimpleAssignment(AssignmentExpressionSyntax value)
+    private string SimpleAssignment(ISimpleAssignmentOperation operation)
     {
-        if (_model.GetOperation(value) is ISimpleAssignmentOperation { Target: IDiscardOperation })
-            return $"({Expression(value.Right)})";
-        if (value.Left is ElementAccessExpressionSyntax element && IsSequenceType(_model.GetTypeInfo(element.Expression).Type))
+        var right = Expression(operation.Value);
+        if (operation.Target is IDiscardOperation) return $"({right})";
+        if (operation.Target is IArrayElementReferenceOperation array)
         {
-            var index = element.ArgumentList.Arguments.Single();
             _helpers.Require(JavaScriptHelper.SequenceIndex);
-            return $"{_helpers.Name("sequenceSet")}({Expression(element.Expression)}, {Expression(index.Expression)}, {Expression(value.Right)})";
+            return $"{_helpers.Name("sequenceSet")}({Expression(array.ArrayReference)}, {Expression(array.Indices.Single())}, {right})";
         }
-        if (value.Left is ElementAccessExpressionSyntax dictionary && IsDictionary(_model.GetTypeInfo(dictionary.Expression).Type))
+        if (operation.Target is IPropertyReferenceOperation { Property.IsIndexer: true } property)
         {
-            var key = dictionary.ArgumentList.Arguments.Single();
-            _helpers.Require(JavaScriptHelper.DictionaryIndex);
-            return $"{_helpers.Name("dictionarySet")}({Expression(dictionary.Expression)}, {Expression(key.Expression)}, {Expression(value.Right)})";
+            if (IsSequenceType(property.Instance?.Type))
+            {
+                _helpers.Require(JavaScriptHelper.SequenceIndex);
+                return $"{_helpers.Name("sequenceSet")}({Expression(property.Instance!)}, {Expression(property.Arguments.Single().Value)}, {right})";
+            }
+            if (IsDictionary(property.Instance?.Type))
+            {
+                _helpers.Require(JavaScriptHelper.DictionaryIndex);
+                return $"{_helpers.Name("dictionarySet")}({Expression(property.Instance!)}, {Expression(property.Arguments.Single().Value)}, {right})";
+            }
         }
-        return $"{Expression(value.Left)} = {Expression(value.Right)}";
+        return $"{Expression(operation.Target)} = {right}";
     }
 
-    private string UnaryNumeric(PrefixUnaryExpressionSyntax value, string operation)
+    private string Unary(IUnaryOperation operation)
     {
-        var unary = _model.GetOperation(value) as IUnaryOperation;
-        if (unary?.OperatorMethod is not null)
-            throw UnsupportedSymbol(unary.OperatorMethod, value);
-        var type = unary?.Type?.SpecialType ?? SpecialType.None;
-        if (_model.GetConstantValue(value) is { HasValue: true, Value: int or uint or double } constant)
-            return LiteralConstant(constant.Value, value);
-        return NumericResult($"{operation}{Expression(value.Operand)}", type, value);
-    }
-
-    private string NumericMutation(ExpressionSyntax value, int delta, bool postfix)
-    {
-        var operand = value switch
+        if (operation.OperatorMethod is not null) throw UnsupportedSymbol(operation.OperatorMethod, operation.Syntax);
+        if (operation.Type?.SpecialType is SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal)
+            throw Unsupported("WRK108", operation.Syntax);
+        var operand = Operand(operation.Operand);
+        if (operation.OperatorKind == UnaryOperatorKind.Not && operation.Type?.SpecialType == SpecialType.System_Boolean)
+            return $"!({operand})";
+        if (operation.IsChecked || operation.IsLifted) throw Unsupported("WRK108", operation.Syntax);
+        if (operation.ConstantValue is { HasValue: true, Value: int or uint or double } constant)
+            return LiteralConstant(constant.Value, operation.Syntax);
+        var token = operation.OperatorKind switch
         {
-            PrefixUnaryExpressionSyntax prefix => prefix.Operand,
-            PostfixUnaryExpressionSyntax postfixValue => postfixValue.Operand,
-            _ => throw new InvalidOperationException()
+            UnaryOperatorKind.Minus => "-",
+            UnaryOperatorKind.Plus => "+",
+            UnaryOperatorKind.BitwiseNegation => "~",
+            _ => throw Unsupported("WRK108", operation.Syntax)
         };
-        if (!IsSimpleMutationTarget(operand))
-            throw Unsupported("WRK108", value);
-        var type = _model.GetTypeInfo(operand).Type?.SpecialType ?? SpecialType.None;
-        var target = Expression(operand);
-        var updated = NumericResult($"$workers$value {(delta > 0 ? "+" : "-")} 1", type, value);
-        return postfix
-            ? $"(($workers$value) => {{ {target} = {updated}; return $workers$value; }})({target})"
-            : $"({target} = {NumericResult($"{target} {(delta > 0 ? "+" : "-")} 1", type, value)})";
+        return NumericResult($"{token}{operand}", operation.Type?.SpecialType ?? SpecialType.None, operation.Syntax);
     }
 
-    private string CompoundMutation(AssignmentExpressionSyntax value, string operation)
+    private string NumericMutation(IIncrementOrDecrementOperation operation)
     {
-        if (!IsSimpleMutationTarget(value.Left))
-            throw Unsupported("WRK108", value);
-        var type = _model.GetTypeInfo(value).Type?.SpecialType ?? SpecialType.None;
-        var target = Expression(value.Left);
-        if (type == SpecialType.System_String && operation == "+")
-            return $"({target} = ({target} ?? \"\") + {StringConcatOperand(value.Right, Expression(value.Right), value)})";
-        return $"({target} = {NumericResult($"{target} {operation} {Expression(value.Right)}", type, value)})";
-    }
-
-    private string CompoundArithmetic(AssignmentExpressionSyntax value)
-    {
-        if (!IsSimpleMutationTarget(value.Left) || _model.GetOperation(value) is not ICompoundAssignmentOperation operation
-            || operation.OperatorMethod is not null || operation.InConversion is { IsIdentity: false } || operation.IsChecked)
-            throw Unsupported("WRK108", value);
+        if (operation.OperatorMethod is not null || operation.IsChecked || operation.IsLifted
+            || !IsSimpleMutationTarget(operation.Target))
+            throw Unsupported("WRK108", operation.Syntax);
+        var token = operation.Kind == OperationKind.Increment ? "+" : "-";
         var type = operation.Type?.SpecialType ?? SpecialType.None;
-        var target = Expression(value.Left);
-        var right = Expression(value.Right);
+        var updated = NumericResult($"$workers$value {token} 1", type, operation.Syntax);
+        return Mutate(operation.Target, target => operation.IsPostfix
+            ? $"(($workers$value) => {{ {target} = {updated}; return $workers$value; }})({target})"
+            : $"({target} = {NumericResult($"{target} {token} 1", type, operation.Syntax)})");
+    }
+
+    private string CompoundAssignment(ICompoundAssignmentOperation operation)
+    {
+        if (!IsSimpleMutationTarget(operation.Target)
+            || operation.OperatorMethod is not null || !operation.InConversion.IsIdentity
+            || !operation.OutConversion.IsIdentity || operation.IsChecked || operation.IsLifted)
+            throw Unsupported("WRK108", operation.Syntax);
+        return Mutate(operation.Target, target => CompoundAssignment(operation, target), ContainsAwait(operation.Value));
+    }
+
+    private string CompoundAssignment(ICompoundAssignmentOperation operation, string target)
+    {
+        var type = operation.Type?.SpecialType ?? SpecialType.None;
+        var right = Operand(operation.Value);
+        if (type == SpecialType.System_String && operation.OperatorKind == BinaryOperatorKind.Add)
+            return $"({target} = ({target} ?? \"\") + {StringConcatOperand(operation.Value, right, operation.Syntax)})";
         var integral = type is SpecialType.System_Int32 or SpecialType.System_UInt32;
         var unsigned = type == SpecialType.System_UInt32 ? "true" : "false";
-        var result = value.Kind() switch
+        var result = operation.OperatorKind switch
         {
-            SyntaxKind.MultiplyAssignmentExpression when type == SpecialType.System_Int32 => $"Math.imul({target}, {right})",
-            SyntaxKind.MultiplyAssignmentExpression when type == SpecialType.System_UInt32 => $"(Math.imul({target}, {right}) >>> 0)",
-            SyntaxKind.DivideAssignmentExpression when integral =>
+            BinaryOperatorKind.Multiply when type == SpecialType.System_Int32 => $"Math.imul({target}, {right})",
+            BinaryOperatorKind.Multiply when type == SpecialType.System_UInt32 => $"(Math.imul({target}, {right}) >>> 0)",
+            BinaryOperatorKind.Divide when integral =>
                 $"{_helpers.Require(JavaScriptHelper.IntegerDivide)}({target}, {right}, {unsigned})",
-            SyntaxKind.ModuloAssignmentExpression when integral =>
+            BinaryOperatorKind.Remainder when integral =>
                 $"{_helpers.Require(JavaScriptHelper.IntegerRemainder)}({target}, {right}, {unsigned})",
-            SyntaxKind.MultiplyAssignmentExpression => NumericResult($"{target} * {right}", type, value),
-            SyntaxKind.DivideAssignmentExpression => NumericResult($"{target} / {right}", type, value),
-            _ => NumericResult($"{target} % {right}", type, value)
+            BinaryOperatorKind.Add or BinaryOperatorKind.Subtract or BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide or BinaryOperatorKind.Remainder =>
+                NumericResult($"{target} {BinaryOperator(operation.OperatorKind)} {right}", type, operation.Syntax),
+            _ => throw Unsupported("WRK108", operation.Syntax)
         };
         return $"({target} = {result})";
     }
 
+    // Capture a member receiver before a getter or RHS can change the original variable.
+    private string Mutate(IOperation operation, Func<string, string> emit, bool isAsync = false)
+    {
+        var instance = operation switch
+        {
+            IFieldReferenceOperation field => field.Instance,
+            IPropertyReferenceOperation property => property.Instance,
+            _ => null
+        };
+        if (instance is null || instance is IInstanceReferenceOperation) return emit(Expression(operation));
+        var symbol = operation is IFieldReferenceOperation fieldTarget ? (ISymbol)fieldTarget.Field
+            : ((IPropertyReferenceOperation)operation).Property;
+        var source = operation.Syntax;
+        var receiver = _names.Get($"mutation:{source.SyntaxTree.FilePath}:{source.SpanStart}", "receiver");
+        var body = emit(UserMemberAccess(receiver, symbol));
+        return isAsync
+            ? $"(await (async ({receiver}) => {body})({Expression(instance)}))"
+            : $"(({receiver}) => {body})({Expression(instance)})";
+    }
+
+    private static bool ContainsAwait(IOperation operation) => operation is IAwaitOperation
+        || operation is not IAnonymousFunctionOperation && operation.ChildOperations.Any(ContainsAwait);
+
     // A record "with" expression is a memberwise clone that keeps the prototype, so class-backed
     // records keep their methods, followed by the initializer assignments.
-    private string WithExpression(WithExpressionSyntax value)
+    private string WithExpression(IWithOperation operation)
     {
-        if (_model.GetTypeInfo(value.Expression).Type is not INamedTypeSymbol { IsRecord: true } type || !IsUserInstanceType(type))
+        var value = operation.Syntax;
+        if (operation.Operand.Type is not INamedTypeSymbol { IsRecord: true } type || !IsUserInstanceType(type))
             throw Unsupported("WRK101", value);
-        var assignments = value.Initializer.Expressions.Select(expression => expression switch
+        var assignments = operation.Initializer.Initializers.Select(expression => expression switch
         {
-            AssignmentExpressionSyntax { Left: IdentifierNameSyntax } assignment =>
-                $"{JavaScriptObjectKey(UserInitializerMemberName(assignment.Left))}: {Expression(assignment.Right)}",
-            _ => throw Unsupported("WRK106", expression)
+            ISimpleAssignmentOperation { Target: IMemberReferenceOperation member } assignment =>
+                $"{JavaScriptObjectKey(UserMemberName(member.Member))}: {Expression(assignment.Value)}",
+            _ => throw Unsupported("WRK106", expression.Syntax)
         });
         if (type.InstanceConstructors.Any(constructor => !constructor.IsImplicitlyDeclared && IsUserRecordCopyConstructor(constructor)))
         {
             var record = QueueUserType(type, value);
             return $"((source) => Object.assign({record}.$copy(source), {{ {string.Join(", ", assignments)} }}))"
-                + $"({Expression(value.Expression)})";
+                + $"({Expression(operation.Operand)})";
         }
         return $"((source) => Object.assign(Object.create(Object.getPrototypeOf(source)), source, {{ {string.Join(", ", assignments)} }}))"
-            + $"({Expression(value.Expression)})";
+            + $"({Expression(operation.Operand)})";
     }
 
-    // Mutations read and write their target, so the target must be safe to evaluate twice.
-    private bool IsSimpleMutationTarget(ExpressionSyntax target) => target switch
+    private static bool IsSimpleMutationTarget(IOperation target) => target switch
     {
-        IdentifierNameSyntax => true,
-        MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax or ThisExpressionSyntax } access =>
-            _model.GetSymbolInfo(access).Symbol is IFieldSymbol { HasConstantValue: false }
-                or IPropertySymbol { IsIndexer: false, SetMethod: not null }
-            && _model.GetSymbolInfo(access).Symbol!.DeclaringSyntaxReferences.Length != 0,
+        ILocalReferenceOperation or IParameterReferenceOperation => true,
+        IFieldReferenceOperation { Field.HasConstantValue: false } field => field.Field.DeclaringSyntaxReferences.Length != 0,
+        IPropertyReferenceOperation { Property: { IsIndexer: false, SetMethod: not null } } property =>
+            property.Property.DeclaringSyntaxReferences.Length != 0,
         _ => false
     };
 
@@ -225,31 +290,45 @@ internal sealed partial class JavaScriptEmitter
 
     // Single-dimensional arrays: byte arrays are Uint8Array, other arrays are JavaScript arrays whose
     // elements start at the element type's default value.
-    private string ArrayCreation(ExpressionSyntax value, InitializerExpressionSyntax? initializer)
+    private string ArrayCreation(IArrayCreationOperation operation)
     {
-        if (_model.GetTypeInfo(value).Type is not IArrayTypeSymbol { Rank: 1 } array)
-            throw Unsupported("WRK101", value);
+        if (operation.Type is not IArrayTypeSymbol { Rank: 1 } array)
+            throw Unsupported("WRK101", operation.Syntax);
         var bytes = array.ElementType.SpecialType == SpecialType.System_Byte;
-        if (initializer is not null)
+        if (operation.Initializer is { } initializer)
         {
-            var items = "[" + string.Join(", ", initializer.Expressions.Select(Expression)) + "]";
+            var items = "[" + string.Join(", ", initializer.ElementValues.Select(Expression)) + "]";
             return bytes ? $"Uint8Array.from({items})" : items;
         }
-        if (value is not ArrayCreationExpressionSyntax { Type.RankSpecifiers: [{ Sizes: [var size] }] })
-            throw Unsupported("WRK101", value);
-        var length = Expression(size);
+        var length = Expression(operation.DimensionSizes.Single());
         if (bytes) return $"new Uint8Array({length})";
-        var fallback = DefaultValueText(array.ElementType, value);
+        var fallback = DefaultValueText(array.ElementType, operation.Syntax);
         return $"((length) => {{ if (!Number.isInteger(length) || length < 0) throw new RangeError(\"Arithmetic operation resulted in an overflow.\"); " +
                $"return Array.from({{ length }}, () => {fallback}); }})({length})";
     }
 
-    private string Collection(CollectionExpressionSyntax value)
+    private string Collection(ICollectionExpressionOperation operation)
     {
-        var items = "[" + string.Join(", ", value.Elements.Select(Element)) + "]";
-        return _model.GetTypeInfo(value).ConvertedType is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
+        var elementType = operation.Type is IArrayTypeSymbol array ? array.ElementType
+            : (operation.Type as INamedTypeSymbol)?.TypeArguments.FirstOrDefault();
+        var items = "[" + string.Join(", ", operation.Elements.Select(element => element is ISpreadOperation spread
+            ? "..." + Spread(spread, elementType) : Expression(element))) + "]";
+        return operation.Type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
             ? $"Uint8Array.from({items})"
             : items;
+    }
+
+    private string Spread(ISpreadOperation operation, ITypeSymbol? elementType)
+    {
+        var values = Expression(operation.Operand);
+        if (operation.Operand.Type?.SpecialType == SpecialType.System_String)
+            values = HelperInvocation(JavaScriptHelper.LinqValues, [values]);
+        if (operation.ElementConversion.IsIdentity || operation.ElementConversion.IsReference
+            || elementType?.SpecialType == SpecialType.System_Object) return values;
+        if (elementType is null || operation.ElementType is null || operation.ElementConversion.IsUserDefined)
+            throw Unsupported("WRK108", operation.Syntax);
+        var converted = ConvertValue(operation.ElementType, elementType, "value", operation.Syntax);
+        return $"Array.from({values}, value => {converted})";
     }
 
 }

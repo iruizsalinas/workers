@@ -2,6 +2,105 @@ namespace Workers.Compiler.Tests;
 
 public sealed class CompilerCommandTests
 {
+    [Theory]
+    [InlineData("/checked+", "return Response.Json(Add(1));", "WRK108")]
+    [InlineData("/nullable:enable /warnaserror+", "string value = 1; return Response.Text(value);", "CS0029")]
+    [InlineData("/nullable:enable /warnaserror+", "string value = null; return Response.Text(value);", "", 0)]
+    [InlineData("/langversion:9", "int[] values = [1]; return Response.Json(values);", "error CS")]
+    public void CompilerArgumentsPreserveProjectSemantics(string flags, string body, string diagnostic, int expectedCode = 1)
+    {
+        var root = Directory.CreateTempSubdirectory("workers compiler ");
+        try
+        {
+            var arguments = Path.Combine(root.FullName, "compiler.rsp");
+            var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+                .Append(typeof(global::Workers.Response).Assembly.Location);
+            File.WriteAllLines(arguments, references.Select(path => $"/reference:\"{path}\"")
+                .Prepend(flags).Prepend("Worker.cs").Prepend("/target:library"));
+            File.WriteAllText(Path.Combine(root.FullName, "Worker.cs"), $$"""
+                using Workers;
+                public static class Worker
+                {
+                    [Fetch]
+                    public static Response Fetch(Request request, Env env, Context context) { {{body}} }
+                    private static int Add(int value) => value + 1;
+                }
+                """);
+            using var error = new StringWriter();
+            var output = Path.Combine(root.FullName, "worker.js");
+            var code = global::CompilerCommand.Run([
+                "--project", root.FullName, "--output", output, "--compiler-arguments", arguments
+            ], error: error);
+            Assert.Equal(expectedCode, code);
+            if (expectedCode == 1)
+            {
+                Assert.Contains(diagnostic, error.ToString());
+                Assert.False(File.Exists(output));
+            }
+            else
+            {
+                Assert.Empty(error.ToString());
+                Assert.True(File.Exists(output));
+            }
+        }
+        finally { root.Delete(recursive: true); }
+    }
+
+    [Theory]
+    [InlineData("Dependency.Value", 0, "Response.json(42)")]
+    [InlineData("Dependency.Get()", 1, "WRK105")]
+    [InlineData("new Dependency()", 1, "WRK105")]
+    public void CompilerArgumentsUseProjectReferencesAndPreprocessorSymbols(string expression, int expectedCode, string expected)
+    {
+        var root = Directory.CreateTempSubdirectory("workers compiler ");
+        try
+        {
+            var dependency = Path.Combine(root.FullName, "Dependency.dll");
+            var compilation = global::WorkerCompiler.CreateCompilation([
+                Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText("public sealed class Dependency { public const int Value = 42; public static int Get() => 42; }")
+            ]);
+            using (var file = File.Create(dependency)) Assert.True(compilation.Emit(file).Success);
+            var arguments = Path.Combine(root.FullName, "compiler.rsp");
+            var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+                .Append(typeof(global::Workers.Response).Assembly.Location).Append(dependency);
+            File.WriteAllLines(arguments, references.Select(path => $"/reference:\"{path}\"")
+                .Prepend("Worker.cs").Prepend("/target:library /define:PROJECT_CONFIGURATION"));
+            File.WriteAllText(Path.Combine(root.FullName, "Worker.cs"), $$"""
+                using Workers;
+                public static class Worker
+                {
+                    [Fetch]
+                    public static Response Fetch(Request request, Env env, Context context)
+                    {
+                #if PROJECT_CONFIGURATION
+                        return Response.Json({{expression}});
+                #else
+                        return MissingConfiguration;
+                #endif
+                    }
+                }
+                """);
+            using var error = new StringWriter();
+            var output = Path.Combine(root.FullName, "worker.js");
+            var code = global::CompilerCommand.Run([
+                "--project", root.FullName, "--output", output, "--compiler-arguments", arguments
+            ], error: error);
+            Assert.Equal(expectedCode, code);
+            if (expectedCode == 0)
+            {
+                Assert.Empty(error.ToString());
+                Assert.Contains(expected, File.ReadAllText(output));
+            }
+            else
+            {
+                Assert.Contains(expected, error.ToString());
+                Assert.DoesNotContain("error CS", error.ToString());
+                Assert.False(File.Exists(output));
+            }
+        }
+        finally { root.Delete(recursive: true); }
+    }
+
     [Fact]
     public void HelpDescribesTheLongFormCommandLine()
     {
