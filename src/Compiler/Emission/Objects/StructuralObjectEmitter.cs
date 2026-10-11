@@ -8,7 +8,16 @@ internal sealed partial class JavaScriptEmitter
         IMethodSymbol? constructor,
         ArgumentSyntax[] arguments)
     {
-        var properties = CryptoFixedProperties(_model.GetTypeInfo(value).Type?.ToDisplayString() ?? "").ToList();
+        var type = _model.GetTypeInfo(value).Type?.ToDisplayString() ?? "";
+        var assigned = value.Initializer?.Expressions
+            .Select(expression => (expression as AssignmentExpressionSyntax)?.Left)
+            .OfType<IdentifierNameSyntax>()
+            .Select(name => LowerFirst(name.Identifier.ValueText))
+            .ToHashSet() ?? [];
+        var properties = CryptoFixedProperties(type).ToList();
+        properties.AddRange(StructuralDefaultProperties(type)
+            .Where(property => !assigned.Contains(property.Name))
+            .Select(property => $"{property.Name}: {property.Value}"));
         properties.AddRange(arguments.Select((argument, index) =>
         {
             var parameter = ArgumentParameter(constructor!, argument, index);
@@ -18,6 +27,13 @@ internal sealed partial class JavaScriptEmitter
             properties.AddRange(value.Initializer.Expressions.Select(StructuralInitializerProperty));
         return "{ " + string.Join(", ", properties) + " }";
     }
+
+    // Property initializers of option types, which object literals would otherwise drop.
+    internal static IEnumerable<(string Name, string Value)> StructuralDefaultProperties(string type) => type switch
+    {
+        "Workers.CookieOptions" => [("path", "\"/\""), ("httpOnly", "true"), ("secure", "true"), ("sameSite", "0"), ("partitioned", "false")],
+        _ => []
+    };
 
     private string RecordObject(
         BaseObjectCreationExpressionSyntax source,

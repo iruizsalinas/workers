@@ -15,6 +15,7 @@ public sealed class Request
     public AbortSignal Signal => WorkerApi.NotExecutable<AbortSignal>();
 
     public QueryParameters QueryParameters => WorkerApi.NotExecutable<QueryParameters>();
+    public Cookies Cookies => WorkerApi.NotExecutable<Cookies>();
 
     public Task<string> TextAsync() => WorkerApi.NotExecutable<Task<string>>();
     public Task<byte[]> BytesAsync() => WorkerApi.NotExecutable<Task<byte[]>>();

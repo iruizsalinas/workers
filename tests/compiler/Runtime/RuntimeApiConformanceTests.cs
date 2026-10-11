@@ -135,6 +135,7 @@ public sealed partial class RuntimeApiConformanceTests
     private static readonly HashSet<string> ComputedProperties =
     [
         "Workers.Request.Path", "Workers.Request.PathAndQuery", "Workers.Request.QueryParameters", "Workers.Request.Url",
+        "Workers.Request.Cookies",
         "Workers.QueueMessageBatch<T>.Count", "Workers.QueueMessageBatch<T>.Item",
         "Workers.Headers.Count", "Workers.ScheduledEvent.ScheduledTime"
     ];

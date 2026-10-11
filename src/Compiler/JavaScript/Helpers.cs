@@ -1,6 +1,6 @@
 internal enum JavaScriptHelper
 {
-    WithHeader, TaskWhenAll, StreamFrom, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
+    WithHeader, RequestCookies, SetCookie, TaskWhenAll, StreamFrom, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
     SetAdd, QueueStack, RpcArguments, JsonExpect, TryCall, CollectionMembers, StringReplace,
     StringOrdinal,
     Router,
@@ -35,6 +35,8 @@ internal static class JavaScriptHelperExtensions
     public static string EntryPoint(this JavaScriptHelper helper) => helper switch
     {
         JavaScriptHelper.WithHeader => "withHeader",
+        JavaScriptHelper.RequestCookies => "requestCookies",
+        JavaScriptHelper.SetCookie => "setCookie",
         JavaScriptHelper.TaskWhenAll => "taskWhenAll",
         JavaScriptHelper.StreamFrom => "streamFrom",
         JavaScriptHelper.SequenceIndex => "sequenceIndex",

@@ -7,6 +7,7 @@ import {
 } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
 import "../support.js";
+import cookies from "../../../examples/Cookies/dist/worker.js";
 import requestPolicy from "../../../examples/RequestPolicy/dist/worker.js";
 import telemetryPipeline from "../../../examples/TelemetryPipeline/dist/worker.js";
 
@@ -24,6 +25,38 @@ const jsonRequest = (payload) => {
 };
 
 describe("examples", () => {
+  it("reads request cookies and sets hardened response cookies", async () => {
+    const response = await cookies.fetch(
+      new Request("https://worker.test/?theme=dark%3B%20Domain%3Devil", {
+        headers: { cookie: "theme=light; __Host-session=abc" },
+      }),
+      {},
+      createExecutionContext(),
+    );
+
+    expect(await response.json()).toEqual({ theme: "dark; Domain=evil", signedIn: true });
+    expect(response.headers.getSetCookie()).toEqual([
+      "theme=dark%3B%20Domain%3Devil; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Strict",
+    ]);
+
+    const remembered = await cookies.fetch(
+      new Request("https://worker.test/", { headers: { cookie: response.headers.getSetCookie()[0].split(";")[0] } }),
+      {},
+      createExecutionContext(),
+    );
+    expect(await remembered.json()).toEqual({ theme: "dark; Domain=evil", signedIn: false });
+  });
+
+  it("expires a cookie while keeping the redirect", async () => {
+    const response = await cookies.fetch(new Request("https://worker.test/logout"), {}, createExecutionContext());
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/");
+    expect(response.headers.getSetCookie()).toEqual([
+      "__Host-session=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax",
+    ]);
+  });
+
   it("validates, sanitizes, and forwards an unrelated JSON contract", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       Response.json({ stored: true }, { status: 202 }),

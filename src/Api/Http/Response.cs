@@ -21,6 +21,9 @@ public sealed class Response
     public Response WithHeader(string name, string value) => WorkerApi.NotExecutable<Response>();
     public Response AppendHeader(string name, string value) => WorkerApi.NotExecutable<Response>();
     public Response WithoutHeader(string name) => WorkerApi.NotExecutable<Response>();
+    public Response WithCookie(string name, string value, CookieOptions? options = null) => WorkerApi.NotExecutable<Response>();
+    /// <summary>Expires the cookie. Path, domain and prefix attributes must match the ones it was set with.</summary>
+    public Response WithoutCookie(string name, CookieOptions? options = null) => WorkerApi.NotExecutable<Response>();
     public Response Clone() => WorkerApi.NotExecutable<Response>();
     public Task<string> TextAsync() => WorkerApi.NotExecutable<Task<string>>();
     public Task<byte[]> BytesAsync() => WorkerApi.NotExecutable<Task<byte[]>>();

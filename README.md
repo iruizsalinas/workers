@@ -78,6 +78,20 @@ private static async Task<Response> GetUserAsync(Request request, RouteContext r
 
 Patterns are checked when the Worker is built. A parameter fills a whole segment: `{id:int}` matches signed 32-bit integers and `{id:uuid}` matches canonical hyphenated UUIDs. A final `{*path}` matches the rest of the path. The most specific route wins, `GET` routes also answer `HEAD`, a path that matches with another method gets `405` with an `Allow` header, and other requests go to `Fallback` or receive `404`.
 
+## Cookies
+
+`request.Cookies` reads the `Cookie` header, and `WithCookie` and `WithoutCookie` add `Set-Cookie` headers to a response.
+
+```csharp
+var session = request.Cookies.Get("session");
+
+return Response.Json(user)
+    .WithCookie("session", token, new CookieOptions { MaxAgeSeconds = 3600 })
+    .WithoutCookie("legacy");
+```
+
+Cookies are `HttpOnly`, `Secure`, `SameSite=Lax` and `Path=/` unless options say otherwise. Values are percent-encoded on write and decoded on read, so a value can never add attributes. An invalid cookie throws instead of being silently dropped by the browser: a malformed name, path or domain, `SameSite=None` or `Partitioned` without `Secure`, a `__Secure-`, `__Host-` or `__Http-` prefix whose rules are not met, or more than 4096 bytes. To delete a cookie, pass `WithoutCookie` the same path, domain and `Secure` setting it was set with.
+
 ## Runtime APIs
 
 JSON, dates, regular expressions, cancellation, streams, logging and number utilities live in `Workers` and follow JavaScript/Web behavior, as do the Cloudflare bindings. No additional package or `System.*` import is needed.

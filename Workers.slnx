@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/examples/">
     <Project Path="examples/CacheApi/CacheApi.csproj" />
+    <Project Path="examples/Cookies/Cookies.csproj" />
     <Project Path="examples/CorsHeaders/CorsHeaders.csproj" />
     <Project Path="examples/HelloWorld/HelloWorld.csproj" />
     <Project Path="examples/JsonApi/JsonApi.csproj" />

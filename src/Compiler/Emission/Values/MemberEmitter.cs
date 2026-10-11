@@ -96,6 +96,8 @@ internal sealed partial class JavaScriptEmitter
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "PathAndQuery")
             return $"(value => value.pathname + value.search)(new URL({Expression(member.Expression)}.url))";
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "QueryParameters") return $"new URL({Expression(member.Expression)}.url).searchParams";
+        if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Cookies")
+            return HelperInvocation(JavaScriptHelper.RequestCookies, [Expression(member.Expression)]);
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Url")
             return $"new URL({Expression(member.Expression)}.url)";
         if (property?.ContainingType.ToDisplayString() == "Workers.Url")

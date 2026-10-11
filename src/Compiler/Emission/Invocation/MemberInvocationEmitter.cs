@@ -28,6 +28,8 @@ internal sealed partial class JavaScriptEmitter
         if (type == "Workers.TcpSocket" && name == "Connect") return SocketConnect(method, arguments);
         if (type == "Workers.Router" && method is not null) return RouterInvocation(invocation, method, receiver, arguments);
         if (type == "Workers.RouteContext" && name == "Parameter") return RouteParameterInvocation(receiver, arguments);
+        if (type == "Workers.Cookies" && name is "Get" or "GetAll" or "Contains")
+            return $"{receiver}.{(name == "Contains" ? "has" : LowerFirst(name))}({arguments[0]})";
         if (type == "Workers.Crypto") receiver = "globalThis.crypto";
         if (type == "Workers.SubtleCrypto" && method?.IsStatic == true) receiver = "globalThis.SubtleCrypto";
         if (method is not null && BindingIntrinsicRegistry.TryGet(method, out var intrinsic)) return EmitBindingIntrinsic(receiver, invocation, method, intrinsic);
@@ -63,8 +65,16 @@ internal sealed partial class JavaScriptEmitter
         "WithHeader" => HeaderMutation(invocation, arguments, "set", receiverOverride),
         "AppendHeader" => HeaderMutation(invocation, arguments, "append", receiverOverride),
         "WithoutHeader" => HeaderMutation(invocation, arguments, "delete", receiverOverride),
+        "WithCookie" => CookieMutation(invocation, [arguments[0], arguments[1], OptionalArgument(arguments, 2)], receiverOverride),
+        "WithoutCookie" => CookieMutation(invocation, [arguments[0], "\"\"", OptionalArgument(arguments, 1), "true"], receiverOverride),
         _ => ""
     };
+
+    private string CookieMutation(InvocationExpressionSyntax invocation, string[] cookie, string? receiverOverride) =>
+        HeaderMutation(invocation, ["\"set-cookie\"", HelperInvocation(JavaScriptHelper.SetCookie, cookie)], "append", receiverOverride);
+
+    private static string OptionalArgument(string[] arguments, int index) =>
+        index < arguments.Length ? arguments[index] : "undefined";
 
     private string HeaderMutation(
         InvocationExpressionSyntax invocation,

@@ -23,7 +23,7 @@ internal static class BindingClassification
         "Workers.MlDsaParams", "Workers.MlKemParams", "Workers.AesKeyParams", "Workers.HmacKeyParams",
         "Workers.RsaKeyGenParams", "Workers.RsaKeyImportParams", "Workers.EcKeyParams", "Workers.Pbkdf2KeyParams",
         "Workers.HkdfKeyParams", "Workers.Pbkdf2Params", "Workers.HkdfParams", "Workers.EcdhKeyDeriveParams",
-        "Workers.JsonWebKey", "Workers.RsaOtherPrimesInfo", "Workers.DigestStreamOptions"
+        "Workers.JsonWebKey", "Workers.RsaOtherPrimesInfo", "Workers.DigestStreamOptions", "Workers.CookieOptions"
     ];
 
     private static readonly HashSet<(string Type, string Method)> SpecialMethods =
@@ -49,7 +49,8 @@ internal static class BindingClassification
         Key("Workers.Response", "FromBody"), Key("Workers.Response", "WithHeader"), Key("Workers.Response", "AppendHeader"),
         Key("Workers.Response", "FromStream"),
         Key("Workers.Response", "WebSocket"),
-        Key("Workers.Response", "WithoutHeader"),
+        Key("Workers.Response", "WithoutHeader"), Key("Workers.Response", "WithCookie"), Key("Workers.Response", "WithoutCookie"),
+        Key("Workers.Cookies", "Get"), Key("Workers.Cookies", "GetAll"), Key("Workers.Cookies", "Contains"),
         Key("Workers.Router", "Get"), Key("Workers.Router", "Post"), Key("Workers.Router", "Put"),
         Key("Workers.Router", "Patch"), Key("Workers.Router", "Delete"), Key("Workers.Router", "Options"),
         Key("Workers.Router", "Any"), Key("Workers.Router", "Fallback"), Key("Workers.Router", "HandleAsync"),
@@ -137,7 +138,7 @@ internal static class BindingClassification
     [
         Key("Workers.QueueMessageBatch<T>", "GetEnumerator"), Key("Workers.TailEvent", "GetEnumerator"),
         Key("Workers.Headers", "GetEnumerator"), Key("Workers.QueryParameters", "GetEnumerator"),
-        Key("Workers.FormData", "GetEnumerator")
+        Key("Workers.FormData", "GetEnumerator"), Key("Workers.Cookies", "GetEnumerator")
     ];
 
     // Handler base classes are subclassed by Workers code and emitted as JavaScript classes.
