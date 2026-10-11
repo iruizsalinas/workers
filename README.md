@@ -26,7 +26,7 @@ dotnet publish -c Release
 
 The generated `dist/worker.js` is a native ES module ready for Wrangler. Configure bindings, routes, and deployment settings in your Wrangler configuration.
 
-Workers uses a focused C# profile and native JavaScript/Web APIs. The full .NET BCL and arbitrary NuGet packages are not supported; unsupported APIs produce compiler diagnostics. Versions before `0.3.0` used .NET on WebAssembly.
+Workers uses a focused C# profile and native JavaScript/Web APIs. The full .NET BCL and arbitrary NuGet packages are not supported; unsupported APIs produce compiler diagnostics. Versions before `0.3.0` used .NET on WebAssembly. Version `0.6.0` includes breaking changes.
 
 ## Examples
 
