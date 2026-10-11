@@ -93,8 +93,6 @@ Log.Info(timestamp);
 
 The compiler retains a small C# foundation for primitives, strings, collections, LINQ and async/await; string methods map to their JavaScript equivalents. It does not implement the .NET BCL. Unsupported APIs produce compiler diagnostics.
 
-See the [Workers profile](./PROFILE.md) for behavior and supported language features, and [migration guide](./MIGRATION.md) for the breaking changes in 0.5.
-
 ## Databases
 
 D1 and Durable Object SQLite storage are built in, and typed reads map rows to classes and records. Hyperdrive bindings expose connection details and a TCP socket. External database clients such as PostgreSQL, MySQL and MongoDB are not provided yet.

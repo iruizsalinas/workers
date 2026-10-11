@@ -31,13 +31,30 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.JsonWebKey"] = "JsonWebKey",
         ["Workers.EncapsulatedBits"] = "SubtleCryptoEncapsulatedBits",
         ["Workers.EncapsulatedKey"] = "SubtleCryptoEncapsulatedKey",
-        ["Workers.CryptoAlgorithm"] = "SubtleCryptoHashAlgorithm",
-        ["Workers.CryptoEncryptAlgorithm"] = "SubtleCryptoEncryptAlgorithm",
-        ["Workers.CryptoSignAlgorithm"] = "SubtleCryptoSignAlgorithm",
-        ["Workers.CryptoSecretKeyAlgorithm"] = "SubtleCryptoGenerateKeyAlgorithm",
-        ["Workers.CryptoKeyPairAlgorithm"] = "SubtleCryptoGenerateKeyAlgorithm",
-        ["Workers.CryptoImportAlgorithm"] = "SubtleCryptoImportKeyAlgorithm",
-        ["Workers.CryptoDeriveAlgorithm"] = "SubtleCryptoDeriveKeyAlgorithm",
+        ["Workers.AesGcmParams"] = "SubtleCryptoEncryptAlgorithm",
+        ["Workers.AesCbcParams"] = "SubtleCryptoEncryptAlgorithm",
+        ["Workers.AesCtrParams"] = "SubtleCryptoEncryptAlgorithm",
+        ["Workers.AesKwParams"] = "SubtleCryptoEncryptAlgorithm",
+        ["Workers.RsaOaepParams"] = "SubtleCryptoEncryptAlgorithm",
+        ["Workers.HmacParams"] = "SubtleCryptoSignAlgorithm",
+        ["Workers.RsaPkcs1Params"] = "SubtleCryptoSignAlgorithm",
+        ["Workers.RsaPssParams"] = "SubtleCryptoSignAlgorithm",
+        ["Workers.EcdsaParams"] = "SubtleCryptoSignAlgorithm",
+        ["Workers.Ed25519Params"] = "SubtleCryptoSignAlgorithm",
+        ["Workers.NodeEd25519Params"] = "SubtleCryptoSignAlgorithm",
+        ["Workers.MlDsaParams"] = "SubtleCryptoSignAlgorithm",
+        ["Workers.X25519Params"] = "SubtleCryptoImportKeyAlgorithm",
+        ["Workers.MlKemParams"] = "SubtleCryptoImportKeyAlgorithm",
+        ["Workers.AesKeyParams"] = "SubtleCryptoImportKeyAlgorithm",
+        ["Workers.HmacKeyParams"] = "SubtleCryptoImportKeyAlgorithm",
+        ["Workers.RsaKeyGenParams"] = "SubtleCryptoGenerateKeyAlgorithm",
+        ["Workers.RsaKeyImportParams"] = "SubtleCryptoImportKeyAlgorithm",
+        ["Workers.EcKeyParams"] = "SubtleCryptoImportKeyAlgorithm",
+        ["Workers.Pbkdf2KeyParams"] = "SubtleCryptoImportKeyAlgorithm",
+        ["Workers.HkdfKeyParams"] = "SubtleCryptoImportKeyAlgorithm",
+        ["Workers.Pbkdf2Params"] = "SubtleCryptoDeriveKeyAlgorithm",
+        ["Workers.HkdfParams"] = "SubtleCryptoDeriveKeyAlgorithm",
+        ["Workers.EcdhKeyDeriveParams"] = "SubtleCryptoDeriveKeyAlgorithm",
         ["Workers.DigestStreamOptions"] = "DigestStreamOptions",
         ["Workers.TcpSocket"] = "Socket",
         ["Workers.WebSocket"] = "WebSocket",
@@ -99,7 +116,7 @@ public sealed partial class RuntimeApiConformanceTests
         BindingIntrinsicKind.DurableObjectGet, BindingIntrinsicKind.CacheMatch, BindingIntrinsicKind.DictionaryObject,
         BindingIntrinsicKind.RateLimit, BindingIntrinsicKind.DateResult, BindingIntrinsicKind.IteratorArray,
         BindingIntrinsicKind.QueryNames, BindingIntrinsicKind.CryptoBytesResult,
-        BindingIntrinsicKind.CryptoImportKey, BindingIntrinsicKind.CryptoExportJwk, BindingIntrinsicKind.CryptoGenerateKey
+        BindingIntrinsicKind.CryptoImportKey, BindingIntrinsicKind.CryptoExportJwk
     ];
 
     // Receivers whose members are not a fixed runtime interface.
@@ -111,7 +128,7 @@ public sealed partial class RuntimeApiConformanceTests
         ["Workers.HtmlElement.NamespaceUri"] = "namespaceURI",
         ["Workers.JsonWebKey.KeyOps"] = "key_ops",
         // Runtime declarations retain the C++ identifier, but the JS dictionary field is public.
-        ["Workers.CryptoDeriveAlgorithm.Public"] = "$public"
+        ["Workers.EcdhKeyDeriveParams.Public"] = "$public"
     };
 
     // Properties the compiler computes instead of reading a runtime member of the same name.

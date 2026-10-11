@@ -17,9 +17,13 @@ internal static class BindingClassification
         "Workers.VectorizeQueryOptions",
         "Workers.DurableObjectStorageListOptions", "Workers.DurableObjectKvListOptions", "Workers.ContainerStartOptions",
         "Workers.ContainerExecOptions", "Workers.TcpSocketAddress", "Workers.TcpSocketOptions",
-        "Workers.CryptoAlgorithm", "Workers.CryptoEncryptAlgorithm", "Workers.CryptoSignAlgorithm",
-        "Workers.CryptoSecretKeyAlgorithm", "Workers.CryptoKeyPairAlgorithm", "Workers.CryptoImportAlgorithm",
-        "Workers.CryptoDeriveAlgorithm", "Workers.JsonWebKey", "Workers.RsaOtherPrimesInfo", "Workers.DigestStreamOptions"
+        "Workers.AesGcmParams", "Workers.AesCbcParams", "Workers.AesCtrParams", "Workers.AesKwParams",
+        "Workers.RsaOaepParams", "Workers.HmacParams", "Workers.RsaPkcs1Params", "Workers.RsaPssParams",
+        "Workers.EcdsaParams", "Workers.Ed25519Params", "Workers.NodeEd25519Params", "Workers.X25519Params",
+        "Workers.MlDsaParams", "Workers.MlKemParams", "Workers.AesKeyParams", "Workers.HmacKeyParams",
+        "Workers.RsaKeyGenParams", "Workers.RsaKeyImportParams", "Workers.EcKeyParams", "Workers.Pbkdf2KeyParams",
+        "Workers.HkdfKeyParams", "Workers.Pbkdf2Params", "Workers.HkdfParams", "Workers.EcdhKeyDeriveParams",
+        "Workers.JsonWebKey", "Workers.RsaOtherPrimesInfo", "Workers.DigestStreamOptions"
     ];
 
     private static readonly HashSet<(string Type, string Method)> SpecialMethods =

@@ -141,8 +141,8 @@ public static class Worker
         {
             var uuid = Crypto.RandomUuid();
             var random = Crypto.RandomBytes(16);
-            var digest = await Crypto.DigestTextAsync(DigestAlgorithm.Sha256, "hello");
-            var digestStream = Crypto.CreateDigestStream(DigestAlgorithm.Sha256);
+            var digest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, "hello");
+            var digestStream = Crypto.CreateDigestStream(DigestStreamAlgorithm.Sha256);
             var writer = digestStream.GetWriter();
             await writer.WriteAsync(TextCodec.EncodeUtf8("hel"));
             await writer.WriteAsync(TextCodec.EncodeUtf8("lo"));

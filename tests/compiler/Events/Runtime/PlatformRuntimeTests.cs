@@ -67,7 +67,7 @@ public sealed class PlatformRuntimeTests
                     var writer = socket.Writable.GetWriter();
                     await writer.WriteAsync(TextCodec.EncodeUtf8("hello"));
                     var info = await socket.Opened;
-                    var digest = Crypto.CreateDigestStream(DigestAlgorithm.Sha256);
+                    var digest = Crypto.CreateDigestStream(DigestStreamAlgorithm.Sha256);
                     await stream.PipeToAsync(digest);
                     var hash = TextCodec.EncodeHex(await digest.DigestAsync());
                     return Response.FromBody(Body.Text(hash));

@@ -85,9 +85,9 @@ internal sealed partial class JavaScriptEmitter
         return property.ContainingType.ToDisplayString() switch
         {
             "Workers.Crypto" when property.Name == "Subtle" => "globalThis.crypto.subtle",
-            "Workers.DigestStream" when property.Name == "Digest" => $"{receiver}.digest.then(value => new Uint8Array(value))",
             "Workers.DigestStream" when property.Name == "BytesWritten" => $"Number({receiver}.bytesWritten)",
             "Workers.JsonWebKey" when property.Name == "KeyOps" => $"{receiver}.key_ops",
+            "Workers.CryptoKeyAlgorithm" when property.Name == "Hash" => $"({receiver}.hash?.name ?? null)",
             "Workers.CryptoKeyAlgorithm" when property.Name == "PublicExponent" => $"(value => value == null ? null : new Uint8Array(value))({receiver}.publicExponent)",
             "Workers.EncapsulatedBits" => $"new Uint8Array({receiver}.{LowerFirst(property.Name)})",
             "Workers.EncapsulatedKey" when property.Name == "Ciphertext" => $"new Uint8Array({receiver}.ciphertext)",

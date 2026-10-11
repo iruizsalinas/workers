@@ -4,10 +4,15 @@ namespace Workers;
 public sealed class CryptoKey
 {
     private CryptoKey() { }
-    public string Type => WorkerApi.NotExecutable<string>();
+    public CryptoKeyType Type => WorkerApi.NotExecutable<CryptoKeyType>();
     public bool Extractable => WorkerApi.NotExecutable<bool>();
     public CryptoKeyAlgorithm Algorithm => WorkerApi.NotExecutable<CryptoKeyAlgorithm>();
     public IReadOnlyList<CryptoKeyUsage> Usages => WorkerApi.NotExecutable<IReadOnlyList<CryptoKeyUsage>>();
+}
+
+public enum CryptoKeyType
+{
+    Secret, Public, Private
 }
 
 public sealed class CryptoKeyPair
@@ -22,7 +27,7 @@ public sealed class CryptoKeyAlgorithm
 {
     private CryptoKeyAlgorithm() { }
     public string Name => WorkerApi.NotExecutable<string>();
-    public CryptoKeyAlgorithm? Hash => WorkerApi.NotExecutable<CryptoKeyAlgorithm?>();
+    public DigestAlgorithm? Hash => WorkerApi.NotExecutable<DigestAlgorithm?>();
     public int? Length => WorkerApi.NotExecutable<int?>();
     public int? ModulusLength => WorkerApi.NotExecutable<int?>();
     public byte[]? PublicExponent => WorkerApi.NotExecutable<byte[]?>();

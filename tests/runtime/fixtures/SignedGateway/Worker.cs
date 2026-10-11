@@ -53,7 +53,7 @@ public static class Worker
             var prefix = TextCodec.EncodeUtf8($"{request.Method}\n{url.Path}{url.Query}\n");
             var body = request.Method == "GET" || request.Method == "HEAD" ? [] : await request.Clone().BytesAsync();
             byte[] payload = [.. prefix, .. body];
-            return await Crypto.VerifyHmacSha256Async(secret, TextCodec.DecodeHex(value), payload);
+            return await Crypto.VerifyHmacAsync(DigestAlgorithm.Sha256, secret, TextCodec.DecodeHex(value), payload);
         }
         catch (Exception)
         {

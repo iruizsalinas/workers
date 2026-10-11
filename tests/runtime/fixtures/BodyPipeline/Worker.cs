@@ -69,7 +69,7 @@ public static class Worker
         var emptyDigest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, Body.Empty);
         var calls = new int[2];
         var generatedDigest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, CreateBody(calls));
-        var byteDigest = await Crypto.DigestBytesAsync(DigestAlgorithm.Sha256, CreateBytes(calls));
+        var byteDigest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, CreateBytes(calls));
         return Response.Json(new
         {
             sha256 = TextCodec.EncodeHex(digest),
@@ -125,7 +125,7 @@ public static class Worker
     {
         var payload = await request.BytesAsync();
         var signature = TextCodec.DecodeHex(request.Headers.Get("x-signature") ?? "");
-        var pending = Crypto.VerifyHmacSha256Async("body-signing-secret", signature, payload);
+        var pending = Crypto.VerifyHmacAsync(DigestAlgorithm.Sha256, "body-signing-secret", signature, payload);
         signature = new byte[signature.Length];
         payload = TextCodec.EncodeUtf8("changed");
         return Response.Json(new { valid = await pending });

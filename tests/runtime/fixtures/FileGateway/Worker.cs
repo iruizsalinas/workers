@@ -60,7 +60,7 @@ public static class Worker
 
     private static async Task<string> DigestAsync(ReadableStream body)
     {
-        var digestStream = Crypto.CreateDigestStream(DigestAlgorithm.Sha256);
+        var digestStream = Crypto.CreateDigestStream(DigestStreamAlgorithm.Sha256);
         await body.PipeToAsync(digestStream);
         var digest = await digestStream.DigestAsync();
         return TextCodec.EncodeHex(digest).ToLowerInvariant();

@@ -35,7 +35,8 @@ describe("native Web Crypto bindings", () => {
   it.each(["HMAC", "RSASSA-PKCS1-v1_5", "RSA-PSS", "ECDSA", "Ed25519", "NODE-ED25519", "ML-DSA-44", "ML-DSA-65", "ML-DSA-87"])(
     "signs, verifies, and round-trips JWK and binary keys with %s", async algorithm => {
       const result = await json("/sign", algorithm);
-      expect(result).toMatchObject({ valid: true, invalid: false, importedValid: true, binaryValid: true, extractable: true });
+      expect(result).toMatchObject({ valid: true, invalid: false, importedValid: true, binaryValid: true, extractable: true, hashMatches: true });
+      expect(result.type).toBe(algorithm === "HMAC" ? "secret" : "private");
       expect(result.jwk.key_ops).toContain("verify");
       const key = await crypto.subtle.importKey("jwk", result.jwk,
         { name: algorithm, hash: "SHA-256", namedCurve: algorithm === "NODE-ED25519" ? "NODE-ED25519" : "P-256" }, true, ["verify"]);
@@ -80,7 +81,7 @@ describe("native Web Crypto bindings", () => {
 
   it.each(["ML-KEM-768", "ML-KEM-1024"])("encapsulates bits and keys with %s", async algorithm => {
     const result = await json("/kem", algorithm);
-    expect(result).toMatchObject({ sameBits: true, sameKey: true, publicType: "public", supported: true, supportedKey: true, unsupported: false, supportedDigest: true });
+    expect(result).toMatchObject({ sameBits: true, sameKey: true, publicType: "public", isPublic: true, supported: true, supportedKey: true, unsupported: false, supportedDigest: true });
     expect(result.jwk.kty).toBe("AKP");
     expect(result.jwk.pub).toBeTypeOf("string");
   });
@@ -106,7 +107,7 @@ describe("native Web Crypto bindings", () => {
     expect(await response.text()).toContain("65537");
   });
 
-  it.each(["usage", "export", "timing", "family"])("rejects invalid %s operations", async scenario => {
+  it.each(["usage", "export", "timing", "iv"])("rejects invalid %s operations", async scenario => {
     const response = await worker.fetch(new Request(`https://worker.test/errors?case=${scenario}`), {}, createExecutionContext());
     expect(response.status).toBe(400);
     expect(await response.text()).not.toBe("");

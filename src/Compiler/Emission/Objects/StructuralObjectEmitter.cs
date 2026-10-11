@@ -8,11 +8,12 @@ internal sealed partial class JavaScriptEmitter
         IMethodSymbol? constructor,
         ArgumentSyntax[] arguments)
     {
-        var properties = arguments.Select((argument, index) =>
+        var properties = CryptoFixedProperties(_model.GetTypeInfo(value).Type?.ToDisplayString() ?? "").ToList();
+        properties.AddRange(arguments.Select((argument, index) =>
         {
             var parameter = ArgumentParameter(constructor!, argument, index);
             return $"{JavaScriptObjectKey(LowerFirst(parameter.Name))}: {OptionalValue(argument.Expression)}";
-        }).ToList();
+        }));
         if (value.Initializer is not null)
             properties.AddRange(value.Initializer.Expressions.Select(StructuralInitializerProperty));
         return "{ " + string.Join(", ", properties) + " }";

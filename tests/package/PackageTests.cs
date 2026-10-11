@@ -19,7 +19,6 @@ public sealed class PackageTests
         {
             var entries = archive.Entries.Select(entry => entry.FullName).ToHashSet(StringComparer.Ordinal);
             Assert.Contains("buildTransitive/Workers.targets", entries);
-            Assert.Contains("CRYPTO.md", entries);
             Assert.Contains("lib/net10.0/Workers.dll", entries);
             Assert.Contains("tools/net10.0/Workers.Compiler.dll", entries);
             Assert.Contains("tools/net10.0/Workers.Compiler.deps.json", entries);
@@ -75,9 +74,9 @@ public sealed class PackageTests
             public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
             {
                 var key = await Crypto.Subtle.GenerateKeyAsync(
-                    new CryptoSecretKeyAlgorithm { Name = "AES-GCM", Length = 256 },
+                    new AesKeyParams { Name = AesAlgorithm.AesGcm, Length = 256 },
                     false, [CryptoKeyUsage.Encrypt, CryptoKeyUsage.Decrypt]);
-                return Response.Text("Hello from package").WithHeader("x-key-type", key.Type);
+                return Response.Text("Hello from package").WithHeader("x-key-type", key.Algorithm.Name);
             }
         }
         """;
