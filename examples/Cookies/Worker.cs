@@ -13,11 +13,15 @@ public static class Worker
         Context context)
     {
         if (request.Path == "/logout")
-            return Task.FromResult(Response.Redirect("/").WithoutCookie("__Host-session"));
+        {
+            var response = Response.Redirect("/");
+            response.Cookies.Delete("__Host-session");
+            return Task.FromResult(response);
+        }
 
         var theme = request.QueryParameters.Get("theme") ?? request.Cookies.Get("theme") ?? "light";
-        return Task.FromResult(
-            Response.Json(new { theme, signedIn = request.Cookies.Contains("__Host-session") })
-                .WithCookie("theme", theme, new CookieOptions { MaxAgeSeconds = OneYear, SameSite = SameSite.Strict }));
+        var result = Response.Json(new { theme, signedIn = request.Cookies.Contains("__Host-session") });
+        result.Cookies.Set("theme", theme, new CookieOptions { MaxAgeSeconds = OneYear, SameSite = SameSite.Strict });
+        return Task.FromResult(result);
     }
 }

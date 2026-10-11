@@ -65,7 +65,7 @@ internal static partial class HelperSource
           } else {
             if (maxAgeSeconds != null) {
               if (!Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds < 0)
-                throw new RangeError("Cookie MaxAgeSeconds must be a non-negative integer; use WithoutCookie to delete a cookie.");
+                throw new RangeError("Cookie MaxAgeSeconds must be a non-negative integer; use response.Cookies.Delete to delete a cookie.");
               attributes.push(`Max-Age=${maxAgeSeconds}`);
             }
             if (expires != null) {

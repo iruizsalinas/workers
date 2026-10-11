@@ -8,7 +8,7 @@ public static class Worker
     public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
     {
         if (request.Method != "GET" || request.Path != "/health")
-            return Response.Text("Not found", 404);
+            return new Response("Not found") { Status = 404 };
 
         var row = await environment.D1("DB")
             .Prepare("SELECT COUNT(*) AS pending FROM readings WHERE processed_at IS NULL")

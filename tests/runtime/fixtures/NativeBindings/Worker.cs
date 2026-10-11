@@ -41,7 +41,7 @@ public static class Worker
         {
             var key = $"object-{Crypto.RandomUuid()}.txt";
             var bucket = environment.R2("BUCKET");
-            await bucket.PutAsync(key, Body.Text("r2-value"), new R2PutOptions
+            await bucket.PutAsync(key, "r2-value", new R2PutOptions
             {
                 HttpMetadata = new R2HttpMetadata(ContentType: "text/custom")
             });
@@ -117,7 +117,7 @@ public sealed class EchoObject
     }
 
     public Response FetchAsync(Request request) =>
-        Response.Text($"durable:{request.Path}");
+        new Response($"durable:{request.Path}");
 
     public string Greet(string name) => $"Hello, {name}";
 

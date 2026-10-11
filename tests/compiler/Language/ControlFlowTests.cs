@@ -34,8 +34,8 @@ public sealed class ControlFlowTests
                 public static Response Fetch(Request request, Env env, Context context)
                 {
                     try { throw new InvalidOperationException(); }
-                    catch (InvalidOperationException) { return Response.Text("specific"); }
-                    catch (Exception) { return Response.Text("general"); }
+                    catch (InvalidOperationException) { return new Response("specific"); }
+                    catch (Exception) { return new Response("general"); }
                 }
             }
             """));
@@ -47,7 +47,7 @@ public sealed class ControlFlowTests
                 public static Response Fetch(Request request, Env env, Context context)
                 {
                     try { throw new InvalidOperationException(); }
-                    catch (InvalidOperationException) { return Response.Text("specific"); }
+                    catch (InvalidOperationException) { return new Response("specific"); }
                 }
             }
             """));
@@ -72,13 +72,13 @@ public sealed class ControlFlowTests
                         do { count = count + 1; } while (count < 1);
                         switch (request.Method)
                         {
-                            case "GET": return Response.Text("ok");
+                            case "GET": return new Response("ok");
                             default: throw new InvalidOperationException("bad method");
                         }
                     }
                     catch (Exception exception)
                     {
-                        return Response.Text(exception.Message, 500);
+                        return new Response(exception.Message) { Status = 500 };
                     }
                 }
             }

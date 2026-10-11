@@ -44,7 +44,6 @@ internal sealed partial class JavaScriptEmitter
             throw UnsupportedSymbol(symbol, source);
     }
 
-    private static string Response(string[] arguments) => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})";
     private static bool IsMethodGroup(ExpressionSyntax syntax)
     {
         var target = syntax.Parent is MemberAccessExpressionSyntax access && access.Name == syntax ? access : syntax;
@@ -89,20 +88,4 @@ internal sealed partial class JavaScriptEmitter
             unsigned.ToString(CultureInfo.InvariantCulture),
         _ => throw Unsupported("WRK108", source)
     };
-
-    private static string ResponseInit(
-        string[] arguments,
-        int statusIndex,
-        int? statusTextIndex = null,
-        string? headers = null)
-    {
-        if (arguments.Length <= statusIndex && headers is null) return "";
-        var properties = new List<string>();
-        if (arguments.Length > statusIndex) properties.Add($"status: {arguments[statusIndex]}");
-        if (statusTextIndex is { } textIndex && arguments.Length > textIndex)
-            properties.Add($"statusText: {arguments[textIndex]} ?? undefined");
-        if (headers is not null) properties.Add($"headers: {headers}");
-        return $", {{ {string.Join(", ", properties)} }}";
-    }
-
 }

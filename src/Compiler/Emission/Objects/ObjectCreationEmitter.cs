@@ -18,15 +18,15 @@ internal sealed partial class JavaScriptEmitter
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>"
             && constructor?.Parameters.Length == 2 && value.Initializer is null)
             return PositionalObjectCreation(value, constructor, arguments, values => $"[{values[0]}, {values[1]}]");
-        if (typeName is "Workers.Request" or "Workers.Response")
-            return PositionalObjectCreation(value, constructor, arguments,
-                values => $"new {type!.Name}({string.Join(", ", values)})");
+        if (typeName == "Workers.Response") return ResponseObject(operation, value, constructor, arguments);
+        if (typeName is "Workers.Request" or "Workers.Headers")
+            return NativeObjectInitializer(operation, PositionalObjectCreation(value, constructor, arguments,
+                values => $"new {type!.Name}({string.Join(", ", values)})"));
         if (typeName == "Workers.HtmlRewriter") return "new HTMLRewriter()";
         if (typeName == "Workers.Router") return CreateRouter();
         if (typeName == "Workers.HttpError")
             return PositionalObjectCreation(value, constructor, arguments,
                 values => $"new {_helpers.Require(JavaScriptHelper.HttpError)}({string.Join(", ", values)})");
-        if (typeName == "Workers.Headers") return "new Headers()";
         if (typeName == "Workers.WebSocketAutoResponse")
             return PositionalObjectCreation(value, constructor, arguments,
                 values => $"new WebSocketRequestResponsePair({string.Join(", ", values)})");
@@ -81,6 +81,87 @@ internal sealed partial class JavaScriptEmitter
         if (type is not null && IsUserInstanceType(type))
             return UserObject(value, constructor, type, arguments);
         throw UnsupportedSymbol(constructor, value);
+    }
+
+    private string ResponseObject(IObjectCreationOperation operation, BaseObjectCreationExpressionSyntax syntax,
+        IMethodSymbol? constructor, ArgumentSyntax[] arguments) =>
+        PositionalObjectCreation(syntax, constructor, arguments, values =>
+        {
+            if (constructor?.Parameters is [{ Type: var only }] && only.ToDisplayString() == "Workers.Response")
+                return CopyResponse(values[0]);
+            if (operation.Initializer is null) return $"new Response({string.Join(", ", values)})";
+            var body = values.Count > 0 ? values[0] : "null";
+            if (values.Count == 1 || values.Count == 0) return Create(body, null);
+            // Capture the source once: its native properties are inherited, then initializers override them.
+            var key = $"response:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
+            var capturedBody = _names.Get(key + ":body", "body");
+            var source = _names.Get(key + ":source", "source");
+            var creation = Create(capturedBody, source);
+            return ContainsAwait(operation.Initializer)
+                ? $"(await (async ({capturedBody}, {source}) => {creation})({body}, {values[1]}))"
+                : $"(({capturedBody}, {source}) => {creation})({body}, {values[1]})";
+
+            // The source supplies both the body and the settings, so it is evaluated once unless it is a plain variable.
+            string CopyResponse(string value)
+            {
+                if (operation.Initializer is null
+                    && _model.GetSymbolInfo(arguments[0].Expression).Symbol is ILocalSymbol or IParameterSymbol)
+                    return $"new Response({value}.body, {value})";
+                var key = $"response:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
+                var source = _names.Get(key + ":source", "source");
+                var creation = operation.Initializer is null ? $"new Response({source}.body, {source})" : Create($"{source}.body", source);
+                return operation.Initializer is not null && ContainsAwait(operation.Initializer)
+                    ? $"(await (async ({source}) => {creation})({value}))"
+                    : $"(({source}) => {creation})({value})";
+            }
+
+            string Create(string bodyValue, string? source)
+            {
+                var settings = source is null ? new List<string>()
+                    : new List<string> { $"status: {source}.status", $"statusText: {source}.statusText", $"headers: {source}.headers", $"webSocket: {source}.webSocket", $"cf: {source}.cf" };
+                foreach (var item in operation.Initializer.Initializers)
+                {
+                    switch (item)
+                    {
+                        case ISimpleAssignmentOperation { Target: IPropertyReferenceOperation property } assignment
+                            when property.Property.ContainingType.ToDisplayString() == "Workers.Response":
+                            settings.Add($"{LowerFirst(property.Property.Name)}: {Expression(assignment.Value)}");
+                            break;
+                        case IMemberInitializerOperation { InitializedMember: IPropertyReferenceOperation { Property.Name: "Headers" } } headers:
+                            settings.Add($"headers: {NativeObjectInitializer(headers.Initializer, source is null ? "new Headers()" : $"new Headers({source}.headers)")}");
+                            break;
+                        default: throw Unsupported("WRK106", item.Syntax);
+                    }
+                }
+                return $"new Response({bodyValue}, {{ {string.Join(", ", settings)} }})";
+            }
+        }, operation.Initializer is not null && ContainsAwait(operation.Initializer));
+
+    private string NativeObjectInitializer(IObjectCreationOperation operation, string creation)
+    {
+        if (operation.Initializer is null) return creation;
+        return NativeObjectInitializer(operation.Initializer, creation);
+    }
+
+    private string NativeObjectInitializer(IObjectOrCollectionInitializerOperation initializer, string creation)
+    {
+        var source = initializer.Syntax;
+        var receiver = _names.Get($"initializer:{source.SyntaxTree.FilePath}:{source.SpanStart}", "value");
+        var statements = Initialize(initializer, receiver);
+        return ContainsAwait(initializer)
+            ? $"(await (async ({receiver}) => {{ {statements}return {receiver}; }})({creation}))"
+            : $"(({receiver}) => {{ {statements}return {receiver}; }})({creation})";
+
+        string Initialize(IObjectOrCollectionInitializerOperation initializer, string target) =>
+            string.Concat(initializer.Initializers.Select(item => item switch
+            {
+                IMemberInitializerOperation { InitializedMember: IPropertyReferenceOperation property } nested
+                    when property.Property.Name == "Headers" => Initialize(nested.Initializer, $"{target}.headers"),
+                ISimpleAssignmentOperation { Target: IPropertyReferenceOperation property } assignment
+                    when property.Property.IsIndexer && property.Property.ContainingType.ToDisplayString() == "Workers.Headers" =>
+                    $"{target}.set({Expression(property.Arguments.Single().Value)}, {Expression(assignment.Value)}); ",
+                _ => throw Unsupported("WRK106", item.Syntax)
+            }));
     }
 
     private string FrameworkException(IMethodSymbol? constructor, INamedTypeSymbol type, ArgumentSyntax[] arguments)

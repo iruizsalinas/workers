@@ -4,7 +4,7 @@ public interface IR2Bucket : IBinding
 {
     Task<R2Object?> HeadAsync(string key);
     Task<R2ObjectBody?> GetAsync(string key, R2GetOptions? options = null);
-    Task<R2Object?> PutAsync(string key, Body body, R2PutOptions? options = null);
+    Task<R2Object?> PutAsync(string key, BodyInit body, R2PutOptions? options = null);
     Task<R2MultipartUpload> CreateMultipartUploadAsync(string key, R2MultipartUploadOptions? options = null);
     R2MultipartUpload ResumeMultipartUpload(string key, string uploadId);
     Task DeleteAsync(string key);
@@ -86,7 +86,7 @@ public sealed class R2MultipartUpload
     public string UploadId => WorkerApi.NotExecutable<string>();
 
     public Task<R2UploadedPart> UploadPartAsync(
-        int partNumber, Body body) =>
+        int partNumber, BodyInit body) =>
         WorkerApi.NotExecutable<Task<R2UploadedPart>>();
     public Task<R2Object> CompleteAsync(
         IEnumerable<R2UploadedPart> parts) =>

@@ -9,10 +9,10 @@ public static class Worker
     {
         var origin = request.Headers.Get("origin") ?? "*";
         if (request.Method == "OPTIONS")
-            return Cors(Response.Empty(204), origin);
+            return Cors(new Response { Status = 204 }, origin);
 
         if (!await VerifyAsync(request, environment.Secret("SIGNING_SECRET")))
-            return Cors(Response.Json(new { error = "Invalid signature" }, 401), origin);
+            return Cors(Response.Json(new { error = "Invalid signature" }, status: 401), origin);
 
         try
         {
@@ -21,7 +21,7 @@ public static class Worker
         catch (Exception exception)
         {
             Log.Error(exception.Message);
-            return Cors(Response.Json(new { error = "Bad gateway" }, 502), origin);
+            return Cors(Response.Json(new { error = "Bad gateway" }, status: 502), origin);
         }
     }
 
@@ -68,7 +68,7 @@ public static class Worker
         upstream.Path = canonical.Path;
         upstream.Query = canonical.Query;
 
-        var headers = request.Headers.Clone();
+        var headers = new Headers(request.Headers);
         headers.Delete("host");
         headers.Delete("x-signature");
         headers.Set("x-request-id", Crypto.RandomUuid());
@@ -79,41 +79,43 @@ public static class Worker
         {
             var hit = await CacheStorage.Default.MatchAsync(cacheKey);
             if (hit is not null)
-                return hit.Clone().WithHeader("x-edge-cache", "HIT");
+                return new Response(hit) { Headers = { ["x-edge-cache"] = "HIT" } };
         }
 
-        var response = await Http.FetchAsync(upstream.ToString(), new FetchOptions
+        var upstreamResponse = await Http.FetchAsync(upstream.ToString(), new FetchOptions
         {
             Method = request.Method,
             Headers = headers,
-            Body = request.Method == "GET" || request.Method == "HEAD" ? null : Body.FromStream(request.Body!),
+            Body = request.Method == "GET" || request.Method == "HEAD" ? null : request.Body!,
             Redirect = RedirectMode.Manual,
             Signal = AbortSignal.Timeout(3000)
         });
+        var response = new Response(upstreamResponse);
 
         if (!response.Headers.Contains("etag") && response.Body is not null)
         {
-            var digest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, Body.FromStream(response.Clone().Body!));
-            response = response.WithHeader("etag", $"\"{TextCodec.EncodeHex(digest)}\"");
+            var digest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, response.Clone().Body!);
+            response.Headers["etag"] = $"\"{TextCodec.EncodeHex(digest)}\"";
         }
         var etag = response.Headers.Get("etag");
         if (etag is not null && request.Headers.Get("if-none-match") == etag)
-            return Response.Empty(304).WithHeader("etag", etag);
+            return new Response { Status = 304, Headers = { ["etag"] = etag } };
 
-        response = response.WithHeader("x-edge-cache", "MISS");
+        response.Headers["x-edge-cache"] = "MISS";
         if (request.Method == "GET" && response.Status == 200 && !response.Headers.Contains("set-cookie"))
         {
-            var cached = response.Clone().WithHeader("cache-control", "public, max-age=30");
+            var cached = response.Clone();
+            cached.Headers["cache-control"] = "public, max-age=30";
             context.WaitUntil(CacheStorage.Default.PutAsync(cacheKey, cached.Clone()));
             return cached;
         }
         return response;
     }
 
-    private static Response Cors(Response response, string origin) => response
-        .WithHeader("access-control-allow-origin", origin)
-        .WithHeader("access-control-allow-methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS")
-        .WithHeader("access-control-allow-headers", "content-type, authorization, x-signature")
-        .WithHeader("access-control-max-age", "86400")
-        .WithAppendedHeader("vary", "Origin");
+    private static Response Cors(Response response, string origin)
+    {
+        var result = new Response(response) { Headers = { ["access-control-allow-origin"] = origin, ["access-control-allow-methods"] = "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS", ["access-control-allow-headers"] = "content-type, authorization, x-signature", ["access-control-max-age"] = "86400" }};
+        result.Headers.Append("vary", "Origin");
+        return result;
+    }
 }

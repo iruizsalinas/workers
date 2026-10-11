@@ -4,8 +4,8 @@ public sealed class CompilerCommandTests
 {
     [Theory]
     [InlineData("/checked+", "return Response.Json(Add(1));", "WRK108")]
-    [InlineData("/nullable:enable /warnaserror+", "string value = 1; return Response.Text(value);", "CS0029")]
-    [InlineData("/nullable:enable /warnaserror+", "string value = null; return Response.Text(value);", "", 0)]
+    [InlineData("/nullable:enable /warnaserror+", "string value = 1; return new Response(value);", "CS0029")]
+    [InlineData("/nullable:enable /warnaserror+", "string value = null; return new Response(value);", "", 0)]
     [InlineData("/langversion:9", "int[] values = [1]; return Response.Json(values);", "error CS")]
     public void CompilerArgumentsPreserveProjectSemantics(string flags, string body, string diagnostic, int expectedCode = 1)
     {
@@ -188,7 +188,7 @@ public sealed class CompilerCommandTests
                 {
                     [Fetch]
                     public static Response Fetch(Request request, Env env, Context context) =>
-                        Response.Text("linked");
+                        new Response("linked");
                 }
                 """);
             File.WriteAllText(Path.Combine(project, "Excluded.cs"), "this is deliberately not valid C#");

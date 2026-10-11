@@ -49,7 +49,7 @@ public sealed class DurableObjectTests
                 public CounterObject(DurableObjectState state, Env env) { }
 
                 public Task<Response> FetchAsync(Request request) =>
-                    Task.FromResult(Response.Text("durable"));
+                    Task.FromResult(new Response("durable"));
 
                 public ValueTask<int> AddAsync(int left, int right) =>
                     ValueTask.FromResult(left + right);

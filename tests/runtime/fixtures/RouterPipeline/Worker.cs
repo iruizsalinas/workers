@@ -26,9 +26,9 @@ public static class Worker
                     case "/config/status-high": throw new HttpError(600, "invalid");
                     case "/config/duplicate": new Router().OnError(FormatError).OnError(FormatError); break;
                 }
-                return Response.Text("accepted");
+                return new Response("accepted");
             }
-            catch (Exception exception) { return Response.Text(exception.Message, 400); }
+            catch (Exception exception) { return new Response(exception.Message) { Status = 400 }; }
         }
 
         var trace = "";
@@ -42,14 +42,14 @@ public static class Worker
                 trace += "outer>";
                 var response = await next();
                 trace += "<outer";
-                return response.WithHeader("x-trace", trace).WithHeader("x-hits", hits.ToString());
+                return new Response(response) { Headers = { ["x-trace"] = trace, ["x-hits"] = hits.ToString() }};
             })
             .Use(async (request, route, next) =>
             {
                 trace += "inner>";
                 if (request.Path == "/private" && request.Headers.Get("authorization") != "Bearer good")
                     throw new HttpError(401, "Unauthorized");
-                if (request.Path == "/short") return Response.Text("short", 202);
+                if (request.Path == "/short") return new Response("short") { Status = 202 };
                 var response = await next();
                 if (request.Path == "/double-next") await next();
                 trace += "<inner";
@@ -58,11 +58,11 @@ public static class Worker
             .Get("/ok/{id}", (request, route) =>
             {
                 trace += route.Parameter("id");
-                return Response.Text("ok").WithHeader("vary", "Accept-Encoding, origin");
+                return new Response("ok") { Headers = { ["vary"] = "Accept-Encoding, origin" } };
             })
-            .Get("/wildcard", (request, route) => Response.Text("wildcard"))
-            .Get("/private", (request, route) => Response.Text("private"))
-            .Get("/double-next", (request, route) => { hits++; return Response.Text("once"); })
+            .Get("/wildcard", (request, route) => new Response("wildcard"))
+            .Get("/private", (request, route) => new Response("private"))
+            .Get("/double-next", (request, route) => { hits++; return new Response("once"); })
             .Get("/http-error", Fail)
             .Get("/unexpected", Fail)
             .Get("/custom", Fail)
@@ -75,29 +75,28 @@ public static class Worker
                 await request.TextAsync();
                 return Response.Json(await request.JsonAsync<Input>());
             })
-            .Get("/response-json", async (request, route) => Response.Json(await Response.Text("{").JsonAsync<Input>()))
+            .Get("/response-json", async (request, route) => Response.Json(await new Response("{").JsonAsync<Input>()))
             .Get("/internal-json", (request, route) => Response.Json(Json.Parse<Input>("{")))
             .Get("/caught", (request, route) =>
             {
                 try { throw new HttpError(418, "teapot"); }
-                catch (HttpError error) { return Response.Text(error.Message, error.Status); }
+                catch (HttpError error) { return new Response(error.Message) { Status = error.Status }; }
             })
             .Get("/pattern", (request, route) =>
             {
                 Exception error = new HttpError(418, "teapot");
-                return error is HttpError http ? Response.Text(http.Message, http.Status) : Response.Empty(500);
+                return error is HttpError http ? new Response(http.Message) { Status = http.Status } : new Response { Status = 500 };
             })
-            .Get("/downstream-cors", (request, route) => Response.Text("ok")
-                .WithHeader("access-control-allow-origin", "*").WithHeader("access-control-allow-credentials", "true"))
-            .Get("/stream", (request, route) => Response.FromStream(ReadableStream.FromAsyncEnumerable(Chunks())))
-            .Options("/options", (request, route) => Response.Text("ordinary options"));
+            .Get("/downstream-cors", (request, route) => new Response("ok") { Headers = { ["access-control-allow-origin"] = "*", ["access-control-allow-credentials"] = "true" }})
+            .Get("/stream", (request, route) => new Response(ReadableStream.FromAsyncEnumerable(Chunks())))
+            .Options("/options", (request, route) => new Response("ordinary options"));
 
         if (request.Path is "/custom" or "/custom-unexpected") router.OnError(FormatError);
         if (request.Path == "/broken-error-handler") router.OnError(BrokenFormatter);
         if (request.Path == "/async-error-handler") router.OnError(async (error, request, route) =>
         {
             await Timers.WaitAsync(1);
-            return Response.Json(new { error = error.Message }, error.Status).WithHeader("x-async", "true");
+            return Response.Json(new { error = error.Message }, status: error.Status, headers: new Headers { ["x-async"] = "true" });
         });
         return await router.HandleAsync(request, env, context);
     }
@@ -105,7 +104,7 @@ public static class Worker
     private static Response FormatError(RouterError error, Request request, RouteContext route)
     {
         Log.Error(error.Exception.Message);
-        return Response.Json(new { error = error.Message, path = request.Path }, error.Status);
+        return Response.Json(new { error = error.Message, path = request.Path }, status: error.Status);
     }
 
     private static Response Fail(Request request, RouteContext route) => request.Path switch

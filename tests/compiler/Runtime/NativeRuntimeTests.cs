@@ -78,7 +78,7 @@ public sealed class NativeRuntimeTests
                 public static async Task<Response> Fetch(Request request, Env env, Context context)
                 {
                     await Timers.WaitAsync(1, request.Signal);
-                    return Response.Text("ok");
+                    return new Response("ok");
                 }
             }
             """);

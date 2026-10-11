@@ -1,9 +1,9 @@
 internal enum JavaScriptHelper
 {
-    WithHeader, RequestCookies, SetCookie, TaskWhenAll, StreamFrom, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
+    RequestCookies, SetCookie, TaskWhenAll, StreamFrom, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
     SetAdd, QueueStack, RpcArguments, JsonExpect, TryCall, CollectionMembers, StringReplace,
     StringOrdinal,
-    Router, HttpError, Cors, BoundedBody,
+    Router, HttpError, Cors, BoundedBody, Redirect,
     NumericParse, LinqValues, LinqWhere, LinqSelect, LinqSelectMany, LinqAppend, LinqPrepend, LinqSkip, LinqTake,
     LinqSkipWhile, LinqTakeWhile, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains, LinqDistinct,
     LinqDistinctBy, LinqSequenceEqual, LinqOrder, LinqGroupBy, LinqToDictionary, LinqToLookup,
@@ -19,7 +19,6 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
     {
         _required.Add(helper);
         if (helper is JavaScriptHelper.Router) _required.Add(JavaScriptHelper.HttpError);
-        if (helper is JavaScriptHelper.Cors) _required.Add(JavaScriptHelper.WithHeader);
         if (helper is JavaScriptHelper.BoundedBody) _required.Add(JavaScriptHelper.HttpError);
         if (helper is JavaScriptHelper.CollectionMembers or JavaScriptHelper.QueueStack)
             _required.Add(JavaScriptHelper.LinqValues);
@@ -37,7 +36,6 @@ internal static class JavaScriptHelperExtensions
 {
     public static string EntryPoint(this JavaScriptHelper helper) => helper switch
     {
-        JavaScriptHelper.WithHeader => "withHeader",
         JavaScriptHelper.RequestCookies => "requestCookies",
         JavaScriptHelper.SetCookie => "setCookie",
         JavaScriptHelper.TaskWhenAll => "taskWhenAll",
@@ -56,6 +54,7 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.HttpError => "HttpError",
         JavaScriptHelper.Cors => "corsAllow",
         JavaScriptHelper.BoundedBody => "requestBytes",
+        JavaScriptHelper.Redirect => "redirect",
         JavaScriptHelper.NumericParse => "numericParse",
         JavaScriptHelper.LinqValues => "linqValues",
         JavaScriptHelper.LinqWhere => "linqWhere",

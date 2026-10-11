@@ -23,12 +23,20 @@ internal sealed partial class JavaScriptEmitter
             ("string", _) when method?.IsStatic == true => StringStaticInvocation(invocation, method, name!, arguments),
             ("Workers.Timers", "SetTimeout") => $"setTimeout({arguments[0]}, {arguments[1]})",
             ("Workers.Timers", "ClearTimeout") => $"clearTimeout({arguments[0]})",
-            ("Workers.Body", "Text" or "FromBytes" or "FromStream" or "FromFormData" or "FromQueryParameters") => arguments[0],
-            ("Workers.Body", "Json") => $"JSON.stringify({arguments[0]})",
-            ("Workers.Response", _) => ResponseInvocation(invocation, method!, name!, arguments, receiverOverride),
+            ("Workers.Response", "Json") => JsonResponse(arguments),
+            ("Workers.Response", "Redirect") => HelperInvocation(JavaScriptHelper.Redirect, arguments),
             _ => ""
         };
         return result.Length != 0;
+    }
+
+    private static string JsonResponse(string[] arguments)
+    {
+        var settings = new[] { "status", "headers", "statusText" }
+            .Take(arguments.Length - 1)
+            .Select((name, index) => $"{name}: {arguments[index + 1]}{(index > 0 ? " ?? undefined" : "")}");
+        return arguments.Length == 1 ? $"Response.json({arguments[0]})"
+            : $"Response.json({arguments[0]}, {{ {string.Join(", ", settings)} }})";
     }
 
     private static bool HasParameters(IMethodSymbol? method, params SpecialType[] types) =>

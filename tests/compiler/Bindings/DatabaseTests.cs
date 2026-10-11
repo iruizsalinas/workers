@@ -49,7 +49,7 @@ public sealed class DatabaseTests
                     {
                         Log.Info("working");
                     }
-                    return Response.Text("done");
+                    return new Response("done");
                 }
             }
             """).ReplaceLineEndings("\n");
@@ -88,7 +88,7 @@ public sealed class DatabaseTests
                 {
                     using var lease = new Lease();
                     Log.Info("working");
-                    return Response.Text("ok");
+                    return new Response("ok");
                 }
             }
             """).ReplaceLineEndings("\n");
@@ -168,7 +168,7 @@ public sealed class DatabaseTests
                     var hyperdrive = env.Hyperdrive("HYPERDRIVE");
                     var socket = hyperdrive.Connect();
                     await socket.CloseAsync();
-                    return Response.Text($"{hyperdrive.Host}:{hyperdrive.Port}/{hyperdrive.Database}");
+                    return new Response($"{hyperdrive.Host}:{hyperdrive.Port}/{hyperdrive.Database}");
                 }
             }
             """);

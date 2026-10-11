@@ -63,7 +63,8 @@ internal sealed partial class JavaScriptEmitter
         SyntaxNode source,
         IMethodSymbol? constructor,
         ArgumentSyntax[] arguments,
-        Func<IReadOnlyList<string>, string> emit)
+        Func<IReadOnlyList<string>, string> emit,
+        bool isAsync = false)
     {
         var values = arguments.Select(ArgumentValue).ToArray();
         if (constructor is null || arguments.Length == 0)
@@ -79,7 +80,9 @@ internal sealed partial class JavaScriptEmitter
         var ordered = Enumerable.Repeat("undefined", ordinals.Max() + 1).ToArray();
         for (var index = 0; index < ordinals.Length; index++)
             ordered[ordinals[index]] = temporaries[index];
-        return $"(({string.Join(", ", temporaries)}) => {emit(ordered)})({string.Join(", ", values)})";
+        return isAsync
+            ? $"(await (async ({string.Join(", ", temporaries)}) => {emit(ordered)})({string.Join(", ", values)}))"
+            : $"(({string.Join(", ", temporaries)}) => {emit(ordered)})({string.Join(", ", values)})";
     }
 
     private string StructuralInitializerProperty(ExpressionSyntax expression) => expression switch

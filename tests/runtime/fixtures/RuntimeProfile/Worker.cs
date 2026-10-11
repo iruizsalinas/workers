@@ -107,7 +107,7 @@ public static class Worker
             queue.Enqueue(10);
             return Response.Json(new { sorted, sum = numbers.Sum(), specialKey = dictionary["__proto__"], tasks, queued = queue.Dequeue() });
         }
-        return Response.Text("Not found", 404);
+        return new Response("Not found") { Status = 404 };
     }
 
     private static async Task<int> ComputeAsync(int value)

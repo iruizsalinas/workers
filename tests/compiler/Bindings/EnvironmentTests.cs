@@ -36,7 +36,7 @@ public sealed class EnvironmentTests
                 public static Response Fetch(Request request, Env env, Context ctx)
                 {
                     var binding = env.{{accessor}}("BINDING");
-                    return Response.Text("ok");
+                    return new Response("ok");
                 }
             }
             """);

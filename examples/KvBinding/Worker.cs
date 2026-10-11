@@ -14,7 +14,7 @@ public static class Worker
         var value = await environment.Kv("KV").GetTextAsync(key);
 
         return value is null
-            ? Response.Text("Not found", status: 404)
-            : Response.Text(value);
+            ? new Response("Not found") { Status = 404 }
+            : new Response(value);
     }
 }

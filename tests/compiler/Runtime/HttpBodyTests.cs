@@ -13,9 +13,9 @@ public sealed class HttpBodyTests
                 public static async Task<Response> Fetch(Request request, Env env, Context context)
                 {
                     var form = await request.FormDataAsync();
-                    var response = Response.FromBody(Body.FromFormData(form));
-                    var streamResponse = Response.FromBody(Body.FromStream(request.Body!));
-                    var queryResponse = Response.FromBody(Body.FromQueryParameters(request.QueryParameters));
+                    var response = new Response(form);
+                    var streamResponse = new Response(request.Body!);
+                    var queryResponse = new Response(request.QueryParameters);
                     var used = response.BodyUsed;
                     var parsed = await response.FormDataAsync();
                     return Response.Json(new { used, parsed, streamResponse, queryResponse });
@@ -34,15 +34,11 @@ public sealed class HttpBodyTests
     }
 
     [Fact]
-    public void ExposesOnlyOpaqueSynchronousBodyState()
+    public void BodyInputsExposeOnlyNativeConversions()
     {
-        Assert.Equal(
-            ["Empty", "IsEmpty"],
-            typeof(global::Workers.Body).GetProperties().Select(property => property.Name).Order().ToArray());
-        Assert.Equal(
-            ["FromBytes", "FromFormData", "FromQueryParameters", "FromStream", "Json", "Text"],
-            typeof(global::Workers.Body).GetMethods()
-                .Where(method => method.DeclaringType == typeof(global::Workers.Body) && !method.IsSpecialName)
-                .Select(method => method.Name).Order().ToArray());
+        Assert.Empty(typeof(global::Workers.BodyInit).GetProperties());
+        Assert.All(typeof(global::Workers.BodyInit).GetMethods()
+            .Where(method => method.DeclaringType == typeof(global::Workers.BodyInit)),
+            method => Assert.Equal("op_Implicit", method.Name));
     }
 }

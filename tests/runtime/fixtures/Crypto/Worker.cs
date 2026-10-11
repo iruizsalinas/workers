@@ -25,10 +25,10 @@ public static class Worker
                 "/format" => await FormatAsync(algorithm, request.QueryParameters.Get("format") ?? "pkcs8"),
                 "/stream-text" => await StreamTextAsync(),
                 "/stream-error" => await StreamErrorAsync(request.QueryParameters.Get("case") ?? "abort"),
-                _ => Response.Empty(404)
+                _ => new Response { Status = 404 }
             };
         }
-        catch (Exception error) { return Response.Text(error.Message, 400); }
+        catch (Exception error) { return new Response(error.Message) { Status = 400 }; }
     }
 
     private static async Task<Response> DigestAsync(string algorithm, byte[] data)

@@ -5,12 +5,16 @@ namespace Routing;
 public static class Worker
 {
     private static readonly Router Routes = new Router()
-        .Use(async (request, route, next) => (await next()).WithHeader("x-router", "csharp"))
-        .Get("/", (request, route) => Response.Text("Notes API"))
+        .Use(async (request, route, next) =>
+        {
+            var response = await next();
+            return new Response(response) { Headers = { ["x-router"] = "csharp" } };
+        })
+        .Get("/", (request, route) => new Response("Notes API") { Headers = { ["x-example"] = "value" } })
         .Get("/notes/{id:uuid}", GetNoteAsync)
         .Put("/notes/{id:uuid}", SaveNoteAsync)
         .Delete("/notes/{id:uuid}", DeleteNoteAsync)
-        .Get("/files/{*path}", (request, route) => Response.Text($"File: {route.Parameter("path")}"))
+        .Get("/files/{*path}", (request, route) => new Response($"File: {route.Parameter("path")}"))
         .Fallback((request, route) => Response.Json(new { error = "Not found" }, status: 404));
 
     [Fetch]
@@ -38,7 +42,7 @@ public static class Worker
     private static async Task<Response> DeleteNoteAsync(Request request, RouteContext route)
     {
         await route.Env.Kv("NOTES").DeleteAsync(NoteKey(route));
-        return Response.Empty(204);
+        return new Response { Status = 204 };
     }
 
     // UUID paths use the canonical hyphenated format; keys normalize their case.

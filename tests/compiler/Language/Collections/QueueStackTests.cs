@@ -81,7 +81,7 @@ public sealed class QueueStackTests
                     var queue = new Queue<int>();
                     var value = 0;
                     {{operation}};
-                    return Response.Empty();
+                    return new Response();
                 }
             }
             """));

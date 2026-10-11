@@ -27,7 +27,8 @@ internal static partial class HelperSource
             if (!existing.includes("*"))
               for (const value of values)
                 if (!existing.some(item => item.toLowerCase() === value.toLowerCase())) existing.push(value);
-            return {{name("withHeader")}}(response, "vary", existing.join(", "));
+            response.headers.set("vary", existing.join(", "));
+            return response;
           };
           return async (request, route, next) => {
             const origin = request.headers.get("origin");
@@ -49,9 +50,12 @@ internal static partial class HelperSource
               response.headers.set("access-control-allow-methods", allowedMethods.join(", "));
               if (allowedHeaders.length) response.headers.set("access-control-allow-headers", allowedHeaders.join(", "));
               if (maxAge > 0) response.headers.set("access-control-max-age", String(maxAge));
-            } else response = await next();
+            } else {
+              response = await next();
+              response = new Response(response.body, response);
+            }
             // Clone response headers without buffering streams; overwrite downstream CORS grants.
-            response = {{name("withHeader")}}(response, "access-control-allow-origin", undefined, "delete");
+            response.headers.delete("access-control-allow-origin");
             for (const header of ["access-control-allow-credentials", "access-control-expose-headers", "access-control-allow-methods", "access-control-allow-headers", "access-control-max-age"])
               if (!preflight) response.headers.delete(header);
             response = vary(response, ["Origin"]);

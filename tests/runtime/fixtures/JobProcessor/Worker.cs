@@ -71,7 +71,7 @@ public static class Worker
             .Bind(job.Id, job.CallbackUrl, Json.Stringify(job.Payload), job.CreatedAt)
             .RunAsync();
         await environment.Queue("JOBS").SendJsonAsync(job);
-        return Response.Json(new { id = job.Id, status = "queued" }, 202);
+        return Response.Json(new { id = job.Id, status = "queued" }, status: 202);
     }
 
     private static async Task ProcessJobAsync(Job job, Env environment)
@@ -80,14 +80,12 @@ public static class Worker
             .Prepare("UPDATE jobs SET status = 'processing', attempts = attempts + 1 WHERE id = ?")
             .Bind(job.Id)
             .RunAsync();
-        var headers = new Headers()
-            .Set("content-type", "application/json")
-            .Set("x-job-id", job.Id);
+        var headers = new Headers { ["content-type"] = "application/json", ["x-job-id"] = job.Id };
         var response = await Http.FetchAsync(job.CallbackUrl, new FetchOptions
         {
             Method = "POST",
             Headers = headers,
-            Body = Body.Json(job.Payload)
+            Body = Json.Stringify(job.Payload)
         });
         if (!response.Ok)
             throw new InvalidOperationException($"Callback failed with {response.Status}");
@@ -107,7 +105,7 @@ public static class Worker
             .RunAsync();
     }
 
-    private static Response Error(string message, int status) => Response.Json(new { error = message }, status);
+    private static Response Error(string message, int status) => Response.Json(new { error = message }, status: status);
 }
 
 public sealed record CreateJobInput(string CallbackUrl, JsonValue Payload);

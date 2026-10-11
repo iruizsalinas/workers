@@ -29,7 +29,7 @@ public static class Worker
                     case "DELETE":
                         return await DeleteUserAsync(id, environment);
                     default:
-                        return Error("Method not allowed", 405).WithHeader("allow", "GET, DELETE");
+                        return Response.Json(new { error = "Method not allowed" }, status: 405, headers: new Headers { ["allow"] = "GET, DELETE" });
                 }
             }
 
@@ -81,7 +81,7 @@ public static class Worker
         context.WaitUntil(environment.Kv("USERS").PutJsonAsync(
             CacheKey(user.Id), user, new KvPutOptions { ExpirationTtl = CacheTtlSeconds }));
 
-        return Response.Json(user, 201).WithHeader("location", $"/users/{user.Id}");
+        return Response.Json(user, status: 201, headers: new Headers { ["location"] = $"/users/{user.Id}" });
     }
 
     private static async Task<Response> DeleteUserAsync(string id, Env environment)
@@ -93,11 +93,11 @@ public static class Worker
 
         await database.Prepare("DELETE FROM users WHERE id = ?").Bind(id).RunAsync();
         await environment.Kv("USERS").DeleteAsync(CacheKey(id));
-        return Response.Empty(204);
+        return new Response { Status = 204 };
     }
 
     private static string CacheKey(string id) => $"user:{id}";
-    private static Response Error(string message, int status) => Response.Json(new { error = message }, status);
+    private static Response Error(string message, int status) => Response.Json(new { error = message }, status: status);
 }
 
 public sealed record CreateUserInput(string Name, string Email);

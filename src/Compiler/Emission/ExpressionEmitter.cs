@@ -121,6 +121,18 @@ internal sealed partial class JavaScriptEmitter
         }
         if (operation.Target is IPropertyReferenceOperation { Property.IsIndexer: true } property)
         {
+            if (property.Property.ContainingType.ToDisplayString() == "Workers.Headers")
+            {
+                var receiver = Expression(property.Instance!);
+                var name = Expression(property.Arguments.Single().Value);
+                if (operation.Parent is IExpressionStatementOperation)
+                    return $"{receiver}.set({name}, {right})";
+                var key = $"header-assignment:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}";
+                var headers = _names.Get(key + ":headers", "headers");
+                var header = _names.Get(key + ":name", "name");
+                var value = _names.Get(key + ":value", "value");
+                return $"(({headers}, {header}, {value}) => {{ {headers}.set({header}, {value}); return {value}; }})({receiver}, {name}, {right})";
+            }
             if (IsSequenceType(property.Instance?.Type))
             {
                 _helpers.Require(JavaScriptHelper.SequenceIndex);

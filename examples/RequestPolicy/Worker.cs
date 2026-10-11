@@ -28,7 +28,7 @@ public static class Worker
         var upstream = new Url(route.Env.Variable("ORIGIN"));
         upstream.Path = "/v1/readings";
 
-        var headers = request.Headers.Clone();
+        var headers = new Headers(request.Headers);
         headers.Delete("authorization");
         headers.Delete("cookie");
         headers.Delete("content-length");
@@ -41,13 +41,14 @@ public static class Worker
             {
                 Method = "POST",
                 Headers = headers,
-                Body = Body.Json(input),
+                Body = Json.Stringify(input),
                 Redirect = RedirectMode.Manual,
                 Signal = AbortSignal.Timeout(3000)
             });
-            return response.Clone()
-                .WithHeader("x-policy", "validated")
-                .WithHeader("x-upstream-host", upstream.Hostname);
+            return new Response(response)
+            {
+                Headers = { ["x-policy"] = "validated", ["x-upstream-host"] = upstream.Hostname }
+            };
         }
         catch (Exception exception)
         {
@@ -71,7 +72,7 @@ public static class Worker
     }
 
     private static Response Error(string message, int status) =>
-        Response.Json(new { error = message, requestId = Crypto.RandomUuid() }, status);
+        Response.Json(new { error = message, requestId = Crypto.RandomUuid() }, status: status);
 }
 
 public sealed record ReadingInput(string DeviceId, double Value, IReadOnlyList<string> Tags);

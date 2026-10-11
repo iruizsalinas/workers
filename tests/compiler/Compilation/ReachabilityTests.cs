@@ -12,7 +12,7 @@ public sealed class ReachabilityTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context ctx) =>
-                    Response.Text(Formatting.Render(3));
+                    new Response(Formatting.Render(3));
             }
             """,
             """
@@ -48,7 +48,7 @@ public sealed class ReachabilityTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context ctx) =>
-                    Response.Text(Helper.Value(1) + Helper.Value("x"));
+                    new Response(Helper.Value(1) + Helper.Value("x"));
             }
             """);
 

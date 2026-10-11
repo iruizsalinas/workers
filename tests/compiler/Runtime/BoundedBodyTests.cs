@@ -14,8 +14,8 @@ public sealed class BoundedBodyTests
                 public static async Task<Response> Fetch(Request request, Env env, Context context)
                 {
                     var limit = int.Parse(request.QueryParameters.Get("limit") ?? "4096");
-                    if (request.Path == "/text") return Response.Text(await request.TextAsync(maxBytes: limit));
-                    if (request.Path == "/bytes") return Response.FromBody(Body.FromBytes(await request.BytesAsync(limit)));
+                    if (request.Path == "/text") return new Response(await request.TextAsync(maxBytes: limit));
+                    if (request.Path == "/bytes") return new Response(await request.BytesAsync(limit));
                     return Response.Json(await request.JsonAsync<Input>(maxBytes: limit));
                 }
             }
@@ -39,8 +39,8 @@ public sealed class BoundedBodyTests
                 [Fetch]
                 public static async Task<Response> Fetch(Request request, Env env, Context context)
                 {
-                    if (request.Path == "/text") return Response.Text(await request.TextAsync());
-                    if (request.Path == "/bytes") return Response.FromBody(Body.FromBytes(await request.BytesAsync()));
+                    if (request.Path == "/text") return new Response(await request.TextAsync());
+                    if (request.Path == "/bytes") return new Response(await request.BytesAsync());
                     return Response.Json(await request.JsonAsync<object>());
                 }
             }

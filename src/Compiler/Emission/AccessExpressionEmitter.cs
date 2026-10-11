@@ -37,6 +37,8 @@ internal sealed partial class JavaScriptEmitter
         var receiver = Expression(operation.Instance);
         var arguments = operation.Arguments.Select(argument => Expression(argument.Value)).ToArray();
         var type = operation.Instance.Type;
+        if (type?.ToDisplayString() == "Workers.Headers")
+            return $"{receiver}.get({arguments.Single()})";
         if (type is INamedTypeSymbol lookup && lookup.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>")
             return $"{receiver}.get({string.Join(", ", arguments)})";
         if (BindingIntrinsicRegistry.IsQueueMessageBatch(type)) receiver += ".messages";

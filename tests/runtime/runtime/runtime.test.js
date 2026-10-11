@@ -12,6 +12,30 @@ describe("runtime intrinsics", () => {
     );
   };
 
+  it("reconstructs writable headers and preserves native body ownership", async () => {
+    const upstream = Response.redirect("https://example.test/", 307);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(upstream);
+    try {
+      const response = await invoke("/response-ownership");
+      expect(await response.json()).toEqual({
+        immutable: true,
+        cloneImmutable: true,
+        status: 307,
+        location: "https://example.test/",
+        copied: "copied",
+        original: null,
+        text: "shared",
+        bodyUsed: true,
+        independentText: "shared",
+        snapshot: "initial",
+        contentType: "application/json",
+        cookies: ["first=1", "second=2"],
+      });
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
   it("reads native request bodies, methods, paths, and headers", async () => {
     const response = await invoke("/request", {
       method: "POST",

@@ -27,7 +27,7 @@ public static class Crypto
     /// <summary>Hashes the UTF-8 encoding of the text.</summary>
     public static Task<byte[]> DigestAsync(DigestAlgorithm algorithm, string value) => WorkerApi.NotExecutable<Task<byte[]>>();
     /// <summary>Buffers the complete body before hashing. Use a DigestStream for incremental hashing.</summary>
-    public static Task<byte[]> DigestAsync(DigestAlgorithm algorithm, Body body) => WorkerApi.NotExecutable<Task<byte[]>>();
+    public static Task<byte[]> DigestAsync(DigestAlgorithm algorithm, BodyInit body) => WorkerApi.NotExecutable<Task<byte[]>>();
 
     /// <summary>Computes an HMAC with a raw key. A string key is UTF-8 encoded.</summary>
     public static Task<byte[]> SignHmacAsync(DigestAlgorithm hash, string key, ReadOnlyMemory<byte> payload) =>

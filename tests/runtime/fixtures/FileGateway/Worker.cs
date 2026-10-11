@@ -15,7 +15,7 @@ public static class Worker
         }
 
         if (!request.Path.StartsWith("/files/"))
-            return Response.Text("Not found", 404);
+            return new Response("Not found") { Status = 404 };
 
         var key = Url.DecodeComponent(request.Path.Substring("/files/".Length));
         switch (request.Method)
@@ -28,10 +28,9 @@ public static class Worker
                 return await HeadAsync(bucket, key);
             case "DELETE":
                 await bucket.DeleteAsync(key);
-                return Response.Empty(204);
+                return new Response { Status = 204 };
             default:
-                return Response.Text("Method not allowed", 405)
-                    .WithHeader("allow", "GET, HEAD, PUT, DELETE");
+                return new Response("Method not allowed") { Status = 405, Headers = { ["allow"] = "GET, HEAD, PUT, DELETE" } };
         }
     }
 
@@ -39,11 +38,11 @@ public static class Worker
     {
         var body = request.Body;
         if (body is null)
-            return Response.Text("Missing body", 400);
+            return new Response("Missing body") { Status = 400 };
 
         var streams = body.Tee();
         var digestTask = DigestAsync(streams[1]);
-        var uploadTask = bucket.PutAsync(key, Body.FromStream(streams[0]), new R2PutOptions
+        var uploadTask = bucket.PutAsync(key, streams[0], new R2PutOptions
         {
             HttpMetadata = new R2HttpMetadata(
                 ContentType: request.Headers.Get("content-type") ?? "application/octet-stream"),
@@ -70,27 +69,31 @@ public static class Worker
     {
         var item = await bucket.GetAsync(key);
         if (item is null)
-            return Response.Text("Not found", 404);
+            return new Response("Not found") { Status = 404 };
 
         var headers = new Headers();
         item.WriteHttpMetadata(headers);
-        var response = Response.FromStream(item.Body, headers)
-            .WithHeader("etag", item.HttpEtag)
-            .WithHeader("x-r2-key", item.Key)
-            .WithHeader("x-uploaded-at", item.Uploaded.ToIsoString());
+        var response = new Response(item.Body)
+        {
+            Headers = new Headers(headers)
+            {
+                ["etag"] = item.HttpEtag,
+                ["x-r2-key"] = item.Key,
+                ["x-uploaded-at"] = item.Uploaded.ToIsoString()
+            }
+        };
         var uploadedBy = item.CustomMetadata["uploadedBy"];
-        return response.WithHeader("x-uploaded-by", uploadedBy);
+        response.Headers["x-uploaded-by"] = uploadedBy;
+        return response;
     }
 
     private static async Task<Response> HeadAsync(IR2Bucket bucket, string key)
     {
         var item = await bucket.HeadAsync(key);
         if (item is null)
-            return Response.Empty(404);
+            return new Response { Status = 404 };
 
-        return Response.Empty()
-            .WithHeader("etag", item.HttpEtag)
-            .WithHeader("content-length", item.Size.ToString());
+        return new Response { Headers = { ["etag"] = item.HttpEtag, ["content-length"] = item.Size.ToString() } };
     }
 
     private static async Task<IReadOnlyList<FileItem>> ListAllAsync(IR2Bucket bucket, string prefix)

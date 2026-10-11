@@ -27,8 +27,8 @@ public sealed class WorkerEntrypointTests
             [WorkerEntrypoint("Names")]
             public sealed class Names : WorkerEntrypoint
             {
-                public Response Asyncify(string value) => Response.Text(value);
-                public Task<Response> ResolveAsync(string value) => Task.FromResult(Response.Text(value));
+                public Response Asyncify(string value) => new Response(value);
+                public Task<Response> ResolveAsync(string value) => Task.FromResult(new Response(value));
             }
             """);
 

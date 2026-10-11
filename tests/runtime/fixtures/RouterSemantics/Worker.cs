@@ -12,32 +12,32 @@ public static class Worker
             try
             {
                 new Router()
-                    .Get("/users/{id}", (request, route) => Response.Text("first"))
-                    .Get("/users/{name}", (request, route) => Response.Text("second"));
-                return Response.Text("registered");
+                    .Get("/users/{id}", (request, route) => new Response("first"))
+                    .Get("/users/{name}", (request, route) => new Response("second"));
+                return new Response("registered");
             }
             catch (Exception exception)
             {
-                return Response.Text(exception.Message, 500);
+                return new Response(exception.Message) { Status = 500 };
             }
         }
 
         var prefix = environment.Variable("PREFIX");
         return await new Router()
-            .Get("/users/me", (request, route) => Response.Text($"{prefix}:me"))
-            .Get("/users/{id:int}", (request, route) => Response.Text($"{prefix}:int:{int.Parse(route.Parameter("id")) + 1}"))
-            .Get("/users/{id}", (request, route) => Response.Text($"{prefix}:name:{route.Parameter("id")}"))
+            .Get("/users/me", (request, route) => new Response($"{prefix}:me"))
+            .Get("/users/{id:int}", (request, route) => new Response($"{prefix}:int:{int.Parse(route.Parameter("id")) + 1}"))
+            .Get("/users/{id}", (request, route) => new Response($"{prefix}:name:{route.Parameter("id")}"))
             .Delete("/users/{id}", async (request, route) =>
             {
                 await Timers.WaitAsync(1);
-                return Response.Text($"deleted:{route.Parameter("id")}");
+                return new Response($"deleted:{route.Parameter("id")}");
             })
-            .Get("/items/{id:uuid}", (request, route) => Response.Text(route.Parameter("id").ToLowerInvariant()))
-            .Any("/proxy/{*path}", (request, route) => Response.Text($"{request.Method}:{route.Parameter("path")}"))
-            .Get("/proxy/status", (request, route) => Response.Text("status"))
-            .Post("/echo", async (request, route) => Response.Text(await request.TextAsync(), 201))
-            .Get("/", (request, route) => Response.Text("root"))
-            .Fallback((request, route) => Response.Text($"fallback:{request.Path}", 404))
+            .Get("/items/{id:uuid}", (request, route) => new Response(route.Parameter("id").ToLowerInvariant()))
+            .Any("/proxy/{*path}", (request, route) => new Response($"{request.Method}:{route.Parameter("path")}"))
+            .Get("/proxy/status", (request, route) => new Response("status"))
+            .Post("/echo", async (request, route) => new Response(await request.TextAsync()) { Status = 201 })
+            .Get("/", (request, route) => new Response("root"))
+            .Fallback((request, route) => new Response($"fallback:{request.Path}") { Status = 404 })
             .HandleAsync(request, environment, context);
     }
 }

@@ -23,7 +23,7 @@ public static class Worker
             return await VerifyAsync(request);
         if (request.Path == "/stream")
             return Stream(request);
-        return Response.Text("Not found", 404);
+        return new Response("Not found") { Status = 404 };
     }
 
     private static async Task<Response> InspectFormAsync(Request request)
@@ -59,14 +59,14 @@ public static class Worker
     {
         var body = request.Body;
         if (body is null)
-            return Response.Text("Missing body", 400);
-        return Response.Json(new { decompressed = await Response.FromStream(body.Decompress(CompressionFormat.Gzip)).TextAsync() });
+            return new Response("Missing body") { Status = 400 };
+        return Response.Json(new { decompressed = await new Response(body.Decompress(CompressionFormat.Gzip)).TextAsync() });
     }
 
     private static async Task<Response> FingerprintAsync(Request request)
     {
-        var digest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, Body.FromStream(request.Body!));
-        var emptyDigest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, Body.Empty);
+        var digest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, request.Body!);
+        var emptyDigest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, (BodyInit)null!);
         var calls = new int[2];
         var generatedDigest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, CreateBody(calls));
         var byteDigest = await Crypto.DigestAsync(DigestAlgorithm.Sha256, CreateBytes(calls));
@@ -81,10 +81,10 @@ public static class Worker
         });
     }
 
-    private static Body CreateBody(int[] calls)
+    private static BodyInit CreateBody(int[] calls)
     {
         calls[0] = calls[0] + 1;
-        return Body.Text("generated");
+        return "generated";
     }
 
     private static byte[] CreateBytes(int[] calls)
@@ -97,7 +97,7 @@ public static class Worker
     {
         var stream = request.Body;
         if (stream is null)
-            return Response.Text("Missing body", 400);
+            return new Response("Missing body") { Status = 400 };
         var reader = stream.GetReader();
         var first = await reader.ReadAsync();
         await reader.CancelAsync("preview complete");
@@ -108,7 +108,7 @@ public static class Worker
     {
         var stream = request.Body;
         if (stream is null)
-            return Response.Text("Missing body", 400);
+            return new Response("Missing body") { Status = 400 };
         var reader = stream.GetReader();
         var first = await reader.ReadAsync();
         var remainder = "";
@@ -137,13 +137,13 @@ public static class Worker
         var count = (int)Numbers.Min(Numbers.Max(int.Parse(value), 1), 100);
         var stream = ReadableStream.FromAsyncEnumerable(CreateLines(count));
         if ((request.Headers.Get("accept-encoding") ?? "").Contains("gzip"))
-            return Response.FromStream(stream.Compress(CompressionFormat.Gzip))
-                .WithHeader("content-type", "application/x-ndjson; charset=utf-8")
-                .WithHeader("content-encoding", "gzip")
-                .WithAppendedHeader("vary", "Accept-Encoding");
-        return Response.FromStream(stream)
-            .WithHeader("content-type", "application/x-ndjson; charset=utf-8")
-            .WithHeader("cache-control", "no-store");
+            return new Response(stream.Compress(CompressionFormat.Gzip)) { EncodeBody = ResponseBodyEncoding.Manual, Headers =
+                {
+                    ["content-type"] = "application/x-ndjson; charset=utf-8",
+                    ["content-encoding"] = "gzip",
+                    ["vary"] = "Accept-Encoding"
+                } };
+        return new Response(stream) { Headers = { ["content-type"] = "application/x-ndjson; charset=utf-8", ["cache-control"] = "no-store" }};
     }
 
     private static async IAsyncEnumerable<ReadOnlyMemory<byte>> CreateLines(int count)

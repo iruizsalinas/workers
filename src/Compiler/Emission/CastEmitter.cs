@@ -11,12 +11,13 @@ internal sealed partial class JavaScriptEmitter
         var cast = conversion.Syntax;
         var operand = conversion.Operand;
         var target = conversion.Type ?? throw Unsupported("WRK101", cast);
-        if (conversion.OperatorMethod is not null && !IsByteViewConversion(conversion))
+        var bodyInput = conversion.OperatorMethod?.ContainingType.ToDisplayString() == "Workers.BodyInit";
+        if (conversion.OperatorMethod is not null && !IsByteViewConversion(conversion) && !bodyInput)
             throw UnsupportedSymbol(conversion.OperatorMethod, cast);
         var value = Expression(operand);
         var source = operand.Type;
         if (source is null) return value;
-        if (IsByteViewConversion(conversion)) return value;
+        if (IsByteViewConversion(conversion) || bodyInput) return value;
         if (conversion.Conversion.IsIdentity || source.IsValueType && target.SpecialType == SpecialType.System_Object
             || conversion.Conversion.IsImplicit && conversion.Conversion.IsReference
             || conversion.IsImplicit && target.SpecialType == SpecialType.System_Object)

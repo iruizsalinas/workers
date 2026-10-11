@@ -13,6 +13,17 @@ public sealed class Cookies : IEnumerable<Cookie>
 
 public sealed record Cookie(string Name, string Value);
 
+/// <summary>Writes cookies to a response's headers. Mutation follows the headers' runtime guard.</summary>
+public sealed class ResponseCookies
+{
+    private ResponseCookies() { }
+
+    /// <summary>Appends a Set-Cookie header without replacing other cookies.</summary>
+    public void Set(string name, string value, CookieOptions? options = null) => WorkerApi.NotExecutable();
+    /// <summary>Appends an expired cookie. Its path, domain and prefix attributes must match the original cookie.</summary>
+    public void Delete(string name, CookieOptions? options = null) => WorkerApi.NotExecutable();
+}
+
 /// <summary>
 /// Attributes of a <c>Set-Cookie</c> header. The defaults are the safe choice for session cookies:
 /// <c>HttpOnly</c>, <c>Secure</c>, <c>SameSite=Lax</c> and <c>Path=/</c>.

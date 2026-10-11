@@ -9,7 +9,7 @@ public static class Worker
     {
         var parts = request.Path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 2 || parts[0] != "rooms")
-            return Task.FromResult(Response.Text("Use /rooms/<room>", 404));
+            return Task.FromResult(new Response("Use /rooms/<room>") { Status = 404 });
 
         return environment.DurableObject("ROOMS")
             .GetByName(parts[1])
@@ -32,7 +32,7 @@ public sealed class ChatRoom
     {
         var upgrade = request.Headers.Get("upgrade");
         if (upgrade is null || upgrade.ToLowerInvariant() != "websocket")
-            return Response.Text("Expected WebSocket", 426);
+            return new Response("Expected WebSocket") { Status = 426 };
 
         var name = request.QueryParameters.Get("name") ?? "anonymous";
         var pair = WebSocketPair.Create();
@@ -42,7 +42,7 @@ public sealed class ChatRoom
         _state.AcceptWebSocket(server, [$"user:{name}"]);
         server.SendJson(new { type = "welcome", name, online = _state.GetWebSockets().Count });
         Broadcast(new { type = "join", name }, server);
-        return Response.WebSocket(client);
+        return new Response { Status = 101, WebSocket = client };
     }
 
     public void WebSocketMessageAsync(WebSocket socket, WebSocketMessage message)

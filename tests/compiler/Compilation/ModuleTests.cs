@@ -11,7 +11,7 @@ public sealed class ModuleTests
             {
                 [Fetch]
                 public static Task<Response> Fetch(Request request, Env env, Context ctx) =>
-                    Task.FromResult(Response.Text("Hello"));
+                    Task.FromResult(new Response("Hello"));
             }
             """);
 
@@ -32,7 +32,7 @@ public sealed class ModuleTests
                 public static Response Fetch(Request request, Env env, Context ctx)
                 {
                     lock (request) { }
-                    return Response.Empty();
+                    return new Response();
                 }
             }
             """));
@@ -51,7 +51,7 @@ public sealed class ModuleTests
                 public static async Task<Response> Fetch(Request request, Env env, Context ctx)
                 {
                     var value = await UserApi.GetAsync("key");
-                    return Response.Text(value);
+                    return new Response(value);
                 }
             }
 

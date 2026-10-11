@@ -43,7 +43,7 @@ public sealed class PlatformBindingTests
                 public static async Task<Response> Fetch(Request request, Env env, Context ctx)
                 {
                     var cached = await CacheStorage.Default.MatchAsync(request);
-                    return cached is not null ? cached : Response.Text("miss");
+                    return cached is not null ? cached : new Response("miss");
                 }
             }
             """);

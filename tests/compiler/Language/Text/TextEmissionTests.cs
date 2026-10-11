@@ -14,7 +14,7 @@ public sealed class TextEmissionTests
                 {
                     var text = """raw ` ${ value } text""";
                     var number = 1.5f;
-                    return Response.Text($"{text}:{number}");
+                    return new Response($"{text}:{number}");
                 }
             }
             """");
@@ -36,7 +36,7 @@ public sealed class TextEmissionTests
                 public static Response Fetch(Request request, Env env, Context ctx)
                 {
                     string? value = null;
-                    return Response.Text($"literal ${{ marker }} ` slash \\ {value}");
+                    return new Response($"literal ${{ marker }} ` slash \\ {value}");
                 }
             }
             """);
@@ -56,7 +56,7 @@ public sealed class TextEmissionTests
                 public static Response Fetch(Request @default, Env env, Context ctx)
                 {
                     var @delete = @default.Path;
-                    return Response.Text(@delete);
+                    return new Response(@delete);
                 }
             }
             """);

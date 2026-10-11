@@ -11,8 +11,8 @@ public static class Worker
         Context context)
     {
         if (request.Path == "/")
-            return Task.FromResult(Response.Text("Hello from C# on Cloudflare Workers."));
+            return Task.FromResult(new Response("Hello from C# on Cloudflare Workers."));
 
-        return Task.FromResult(Response.Text("Not found", status: 404));
+        return Task.FromResult(new Response("Not found") { Status = 404 });
     }
 }

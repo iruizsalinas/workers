@@ -29,7 +29,7 @@ public sealed class QueueTests
                         metrics.BacklogCount,
                         metrics.BacklogBytes,
                         metrics.OldestMessageTimestamp
-                    }, 202);
+                    }, status: 202);
                 }
             }
             public sealed record Message(string Id);

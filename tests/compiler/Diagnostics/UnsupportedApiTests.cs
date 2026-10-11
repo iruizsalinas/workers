@@ -10,12 +10,12 @@ public sealed class UnsupportedApiTests
             public static class First
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => Response.Text("first");
+                public static Response Fetch(Request request, Env env, Context context) => new Response("first");
             }
             public static class Second
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => Response.Text("second");
+                public static Response Fetch(Request request, Env env, Context context) => new Response("second");
             }
             """));
 
@@ -30,7 +30,7 @@ public sealed class UnsupportedApiTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => Response.Text("ok");
+                public static Response Fetch(Request request, Env env, Context context) => new Response("ok");
             }
             [WorkerEntrypoint]
             public sealed class Rpc : WorkerEntrypoint
@@ -98,7 +98,7 @@ public sealed class UnsupportedApiTests
                 public static Response Fetch(Request request, Env env, Context ctx)
                 {
                     var values = request.Headers.GetEnumerator();
-                    return Response.Text("ok");
+                    return new Response("ok");
                 }
             }
             """));
@@ -114,7 +114,7 @@ public sealed class UnsupportedApiTests
                 public static Response Fetch(Request request, Env env, Context ctx)
                 {
                     var values = request.QueryParameters.As<object>();
-                    return Response.Text("ok");
+                    return new Response("ok");
                 }
             }
             """));

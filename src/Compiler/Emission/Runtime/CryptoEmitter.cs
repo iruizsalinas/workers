@@ -10,7 +10,7 @@ internal sealed partial class JavaScriptEmitter
         var data = arguments[1].Value;
         return method.Parameters[1].Type.SpecialType == SpecialType.System_String
             ? $"{receiver}.subtle.digest({algorithm}, new TextEncoder().encode({data})).then(value => new Uint8Array(value))"
-            : method.Parameters[1].Type.ToDisplayString() == "Workers.Body"
+            : method.Parameters[1].Type.ToDisplayString() == "Workers.BodyInit"
                 ? $"((crypto, algorithm, body) => new Response(body).arrayBuffer().then(value => crypto.subtle.digest(algorithm, value)).then(value => new Uint8Array(value)))({receiver}, {algorithm}, {data})"
                 : $"{receiver}.subtle.digest({algorithm}, {data}).then(value => new Uint8Array(value))";
     }

@@ -19,7 +19,7 @@ public sealed class WebPlatformProfileTests
                     byte[] payload = [2];
                     var valid = await Crypto.VerifyHmacAsync(DigestAlgorithm.Sha256, "secret", signature, payload);
                     var stream = request.Body!.Compress(CompressionFormat.Gzip);
-                    return Response.FromStream(stream).WithHeader("x-valid", valid.ToString());
+                    return new Response(stream) { Headers = { ["x-valid"] = valid.ToString() } };
                 }
             }
             """);
@@ -45,7 +45,7 @@ public sealed class WebPlatformProfileTests
                         var file = entry.Value.File;
                         if (file is not null) return Response.Json(await file.SliceBytesAsync(0, 8));
                     }
-                    return Response.Empty(204);
+                    return new Response { Status = 204 };
                 }
             }
             """);
@@ -71,7 +71,7 @@ public sealed class WebPlatformProfileTests
                         var text = Pass(entry.Value).Text;
                         return Response.Json(new { file = file is not null, text });
                     }
-                    return Response.Empty(204);
+                    return new Response { Status = 204 };
                 }
 
                 private static FormEntry Pass(FormEntry entry) => entry;

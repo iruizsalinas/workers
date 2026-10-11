@@ -6,13 +6,17 @@ public static class Worker
 {
     private static readonly Router Routes = new Router()
         .Use(Cors.Allow(["https://app.example"], methods: ["POST"], headers: ["content-type"]))
-        .Use(async (request, route, next) => (await next()).WithHeader("x-body-policy", "bounded"))
+        .Use(async (request, route, next) =>
+        {
+            var response = await next();
+            return new Response(response) { Headers = { ["x-body-policy"] = "bounded" } };
+        })
         .Post("/json/{limit:int}", async (request, route) =>
             Response.Json(await request.JsonAsync<Input>(maxBytes: int.Parse(route.Parameter("limit")))))
         .Post("/text/{limit:int}", async (request, route) =>
-            Response.Text(await request.TextAsync(maxBytes: int.Parse(route.Parameter("limit")))))
+            new Response(await request.TextAsync(maxBytes: int.Parse(route.Parameter("limit")))))
         .Post("/bytes/{limit:int}", async (request, route) =>
-            Response.FromBody(Body.FromBytes(await request.BytesAsync(int.Parse(route.Parameter("limit"))))))
+            new Response(await request.BytesAsync(int.Parse(route.Parameter("limit")))))
         .Post("/invalid/{kind}/{limit:int}", InvalidLimitAsync)
         .Post("/twice/{kind}/{limit:int}", TwiceAsync);
 
@@ -23,8 +27,8 @@ public static class Worker
     private static async Task<Response> ReadAsync(Request request, string kind, int limit) => kind switch
     {
         "json" => Response.Json(await request.JsonAsync<Input>(limit)),
-        "text" => Response.Text(await request.TextAsync(limit)),
-        _ => Response.FromBody(Body.FromBytes(await request.BytesAsync(maxBytes: limit)))
+        "text" => new Response(await request.TextAsync(limit)),
+        _ => new Response(await request.BytesAsync(maxBytes: limit))
     };
 
     private static async Task<Response> InvalidLimitAsync(Request request, RouteContext route)

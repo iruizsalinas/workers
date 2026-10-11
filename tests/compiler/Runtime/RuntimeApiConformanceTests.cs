@@ -136,9 +136,9 @@ public sealed partial class RuntimeApiConformanceTests
     private static readonly HashSet<string> ComputedProperties =
     [
         "Workers.Request.Path", "Workers.Request.PathAndQuery", "Workers.Request.QueryParameters", "Workers.Request.Url",
-        "Workers.Request.Cookies",
+        "Workers.Request.Cookies", "Workers.Response.Cookies",
         "Workers.QueueMessageBatch<T>.Count", "Workers.QueueMessageBatch<T>.Item",
-        "Workers.Headers.Count", "Workers.ScheduledEvent.ScheduledTime"
+        "Workers.Headers.Count", "Workers.Headers.Item", "Workers.ScheduledEvent.ScheduledTime"
     ];
 
     [Fact]
@@ -162,6 +162,7 @@ public sealed partial class RuntimeApiConformanceTests
             .Where(type => RuntimeTypeNames.ContainsKey(type.Name))
             .SelectMany(type => type.Type
                 .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .Where(property => property.CanRead)
                 .Select(property => (type.Name, Property: property.Name)))
             .Where(item => !ComputedProperties.Contains($"{item.Name}.{item.Property}"))
             .Where(item => !HasRuntimeMember(item.Name, RenamedProperties.GetValueOrDefault($"{item.Name}.{item.Property}")

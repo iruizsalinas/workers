@@ -81,7 +81,7 @@ public sealed class CollectionControlFlowTests
                 public static async Task<Response> Fetch(Request request, Env env, Context context)
                 {
                     await Timers.WaitAsync(-1);
-                    return Response.Text("unreachable");
+                    return new Response("unreachable");
                 }
             }
             """);

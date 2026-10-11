@@ -51,7 +51,7 @@ public sealed class PackageTests
         Assert.True(File.Exists(compilerArguments), "An incremental build must recover a missing compiler argument manifest.");
         Assert.True(File.Exists(module));
 
-        File.WriteAllText(Path.Combine(consumer, "Worker.cs"), Source.Replace("Response.Text", "Response.DoesNotExist", StringComparison.Ordinal));
+        File.WriteAllText(Path.Combine(consumer, "Worker.cs"), Source.Replace("new Response", "new MissingResponse", StringComparison.Ordinal));
         RunDotNetFailure(consumer, "build", "-c", "Release", "--packages", packages);
         Assert.False(File.Exists(module), "A failed compilation must not leave the previous Worker artifact deployable.");
 
@@ -89,7 +89,7 @@ public sealed class PackageTests
                 var key = await Crypto.Subtle.GenerateKeyAsync(
                     new AesKeyParams { Name = AesAlgorithm.AesGcm, Length = 256 },
                     false, [CryptoKeyUsage.Encrypt, CryptoKeyUsage.Decrypt]);
-                return Response.Text("Hello from package").WithHeader("x-key-type", key.Algorithm.Name);
+                return new Response("Hello from package") { Headers = { ["x-key-type"] = key.Algorithm.Name } };
             }
         }
         """;

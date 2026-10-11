@@ -10,6 +10,39 @@ public static class Worker
         Env environment,
         Context context)
     {
+        if (request.Path == "/response-ownership")
+        {
+            var upstream = await Http.FetchAsync("https://upstream.test/");
+            var immutable = false;
+            var cloneImmutable = false;
+            try { upstream.Headers["x-example"] = "original"; }
+            catch (Exception) { immutable = true; }
+            try { upstream.Clone().Headers.Set("x-example", "clone"); }
+            catch (Exception) { cloneImmutable = true; }
+            var response = new Response(upstream) { Headers = { ["x-example"] = "copied" } };
+            var source = new Response("shared");
+            var independent = source.Clone();
+            var shared = new Response(source.Body, source);
+            var text = await shared.TextAsync();
+            var headers = new Headers { ["x-value"] = "initial" };
+            var json = Response.Json(new { ok = true }, status: 201, headers: headers);
+            headers["x-value"] = "later";
+            json.Headers.Append("set-cookie", "first=1");
+            json.Headers.Append("set-cookie", "second=2");
+            return Response.Json(new
+            {
+                immutable, cloneImmutable, response.Status,
+                location = response.Headers["location"],
+                copied = response.Headers["x-example"],
+                original = upstream.Headers["x-example"],
+                text, source.BodyUsed,
+                independentText = await independent.TextAsync(),
+                snapshot = json.Headers["x-value"],
+                contentType = json.Headers["content-type"],
+                cookies = json.Headers.GetSetCookie()
+            });
+        }
+
         if (request.Path == "/request")
         {
             var text = await request.TextAsync();
@@ -24,7 +57,7 @@ public static class Worker
 
         if (request.Path == "/response")
         {
-            var original = Response.Text("response-body", 201).WithHeader("x-generated", "yes");
+            var original = new Response("response-body") { Status = 201, Headers = { ["x-generated"] = "yes" } };
             var clone = original.Clone();
             var text = await clone.TextAsync();
             return Response.Json(new
@@ -38,10 +71,10 @@ public static class Worker
         if (request.Path == "/http-semantics")
         {
             var original = request.Headers;
-            var clone = original.Clone();
+            var clone = new Headers(original);
             clone.Set("x-cloned", "yes");
             clone.Delete("x-remove");
-            var responseHeaders = Response.Text("cookies").Headers;
+            var responseHeaders = new Response("cookies").Headers;
             responseHeaders.Append("set-cookie", "first=1");
             responseHeaders.Append("set-cookie", "second=2");
             return Response.Json(new
@@ -96,8 +129,7 @@ public static class Worker
         {
             var cache = await CacheStorage.OpenAsync("runtime-intrinsics");
             var key = $"https://cache.test/{Crypto.RandomUuid()}";
-            var cacheable = Response.Text("cached")
-                .WithHeader("cache-control", "public, max-age=60");
+            var cacheable = new Response("cached") { Headers = { ["cache-control"] = "public, max-age=60" } };
             await cache.PutAsync(key, cacheable);
             var found = await cache.MatchAsync(key);
             var deleted = await cache.DeleteAsync(key);
@@ -111,11 +143,11 @@ public static class Worker
         }
 
         if (request.Path == "/body")
-            return Response.FromBody(Body.Text("body-value"));
+            return new Response("body-value");
 
         if (request.Path == "/body-form")
         {
-            var response = Response.FromBody(Body.FromFormData(await request.FormDataAsync()));
+            var response = new Response(await request.FormDataAsync());
             var usedBefore = response.BodyUsed;
             var form = await response.FormDataAsync();
             var usedAfter = response.BodyUsed;
@@ -126,10 +158,10 @@ public static class Worker
         }
 
         if (request.Path == "/body-stream")
-            return Response.FromBody(Body.FromStream(request.Body!));
+            return new Response(request.Body!);
 
         if (request.Path == "/body-query")
-            return Response.FromBody(Body.FromQueryParameters(request.QueryParameters));
+            return new Response(request.QueryParameters);
 
         if (request.Path == "/stream")
         {
@@ -163,7 +195,7 @@ public static class Worker
         if (request.Path == "/timer")
         {
             await Timers.WaitAsync(1);
-            return Response.Text("delayed");
+            return new Response("delayed");
         }
 
         if (request.Path == "/request-cancellation")
@@ -186,7 +218,7 @@ public static class Worker
             var pair = WebSocketPair.Create();
             pair.Server.Accept();
             pair.Server.SendText("hello");
-            return Response.Text("websocket-sent");
+            return new Response("websocket-sent");
         }
 
         if (request.Path == "/websocket-events")
@@ -199,7 +231,7 @@ public static class Worker
                 server.SendText(message.IsText ? message.AsText() : "binary");
                 server.Close(1000, "done");
             });
-            return Response.WebSocket(pair.Client);
+            return new Response { Status = 101, WebSocket = pair.Client };
         }
 
         if (request.Path == "/websocket-close")
@@ -213,12 +245,12 @@ public static class Worker
                 reason = close.Reason,
                 clean = close.WasClean
             })));
-            return Response.WebSocket(pair.Client);
+            return new Response { Status = 101, WebSocket = pair.Client };
         }
 
         if (request.Path == "/html")
         {
-            var response = Response.Html("<main><p>hello</p></main>");
+            var response = new Response("<main><p>hello</p></main>") { Headers = new Headers { ["content-type"] = "text/html; charset=utf-8" } };
             return new HtmlRewriter()
                 .On("p", new ParagraphHandler())
                 .Transform(response);
@@ -228,7 +260,7 @@ public static class Worker
         {
             var socket = TcpSocket.Connect("example.com:80");
             await socket.CloseAsync();
-            return Response.Text("socket-closed");
+            return new Response("socket-closed");
         }
 
         if (request.Path == "/helpers")
@@ -243,7 +275,7 @@ public static class Worker
             });
         }
 
-        return Response.Text("Not found", status: 404);
+        return new Response("Not found") { Status = 404 };
     }
 }
 

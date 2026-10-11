@@ -18,11 +18,11 @@ internal static partial class HelperSource
 
         """;
 
-    private static string WithHeader(Func<string, string> name) => $$"""
-        function {{name("withHeader")}}(response, name, value, operation = "set") {
-          const copy = new Response(response.body, response);
-          copy.headers[operation](name, value);
-          return copy;
+    // Response.redirect only accepts absolute URLs and returns immutable headers, while Location may be relative.
+    private static string Redirect(Func<string, string> name) => $$"""
+        function {{name("redirect")}}(location, status = 302) {
+          if (![301, 302, 303, 307, 308].includes(status)) throw new RangeError(`Invalid redirect status: ${status}`);
+          return new Response(null, { status, headers: { location } });
         }
 
         """;

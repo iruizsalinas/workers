@@ -109,7 +109,6 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.CacheMatch => $"{receiver}.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))}).then(value => value ?? null)",
             BindingIntrinsicKind.ServiceRpc => EmitServiceRpc(receiver, arguments),
             BindingIntrinsicKind.Property => $"{receiver}.{intrinsic.JavascriptName}",
-            BindingIntrinsicKind.HeadersClone => $"new Headers({receiver})",
             BindingIntrinsicKind.Fluent => $"(value => {{ value.{intrinsic.JavascriptName}({string.Join(", ", arguments.Select(item => item.Value))}); return value; }})({receiver})",
             BindingIntrinsicKind.Dispose => $"{receiver}[Symbol.dispose]()",
             BindingIntrinsicKind.RateLimit => $"{receiver}.{intrinsic.JavascriptName}({{ key: {arguments.Single(item => item.Parameter.Name == "key").Value} }})",

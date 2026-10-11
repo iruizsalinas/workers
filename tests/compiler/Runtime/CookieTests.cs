@@ -5,6 +5,91 @@ namespace Workers.Compiler.Tests;
 public sealed class CookieTests
 {
     [Fact]
+    public void ResponseCookieWritersShareHeadersAndRespectTheirMutability()
+    {
+        var result = JavaScriptRunner.FetchJson("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                {
+                    var source = await Http.FetchAsync("data:text/plain,source");
+                    var rejected = false;
+                    try { source.Cookies.Set("session", "value"); }
+                    catch (Exception) { rejected = true; }
+                    var response = new Response(source);
+                    response.Headers.Append("set-cookie", "raw=1");
+                    var cookies = response.Cookies;
+                    cookies.Set("session", "first", new CookieOptions { Path = "/app" });
+                    response.Cookies.Set("theme", "dark");
+                    cookies.Delete("session", new CookieOptions { Path = "/app" });
+                    return Response.Json(new
+                    {
+                        rejected,
+                        cookies = response.Headers.GetSetCookie(),
+                        sourceCookies = source.Headers.GetSetCookie(),
+                        response.Status
+                    });
+                }
+            }
+            """);
+
+        Assert.True(result.GetProperty("rejected").GetBoolean());
+        Assert.Equal(
+        [
+            "raw=1",
+            "session=first; Path=/app; HttpOnly; Secure; SameSite=Lax",
+            "theme=dark; Path=/; HttpOnly; Secure; SameSite=Lax",
+            "session=; Path=/app; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax"
+        ], Strings(result.GetProperty("cookies")));
+        Assert.Empty(Strings(result.GetProperty("sourceCookies")));
+        Assert.Equal(200, result.GetProperty("status").GetInt32());
+    }
+
+    [Fact]
+    public void NamedCookieArgumentsEvaluateTheReceiverAndValuesOnceInSourceOrder()
+    {
+        var result = JavaScriptRunner.FetchJson("""
+            using Workers;
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request, Env env, Context context)
+                {
+                    var response = new Response();
+                    var events = new List<string>();
+                    GetCookies(response, events).Set(value: Record(events, "value"), name: Record(events, "name"));
+                    GetCookies(response, events).Delete(options: new CookieOptions { Path = Record(events, "/app") }, name: Record(events, "name"));
+                    return Response.Json(new { events, cookies = response.Headers.GetSetCookie() });
+                }
+                private static ResponseCookies GetCookies(Response response, List<string> events) { events.Add("receiver"); return response.Cookies; }
+                private static string Record(List<string> events, string value) { events.Add(value); return value; }
+            }
+            """);
+
+        Assert.Equal(["receiver", "value", "name", "receiver", "/app", "name"], Strings(result.GetProperty("events")));
+        Assert.Equal(
+        [
+            "name=value; Path=/; HttpOnly; Secure; SameSite=Lax",
+            "name=; Path=/app; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax"
+        ], Strings(result.GetProperty("cookies")));
+    }
+
+    [Fact]
+    public void ExposesCookieWritesOnlyThroughTheResponseCookieApi()
+    {
+        Assert.Null(typeof(global::Workers.Headers).GetMethod("SetCookie"));
+        Assert.Null(typeof(global::Workers.Headers).GetMethod("DeleteCookie"));
+        Assert.Null(typeof(global::Workers.Cookies).GetMethod("Set"));
+        Assert.Null(typeof(global::Workers.Cookies).GetMethod("Delete"));
+        Assert.Empty(typeof(global::Workers.ResponseCookies).GetConstructors());
+        Assert.Equal(["Delete", "Set"], typeof(global::Workers.ResponseCookies).GetMethods()
+            .Where(method => method.DeclaringType == typeof(global::Workers.ResponseCookies))
+            .Select(method => method.Name).Order().ToArray());
+    }
+
+    [Fact]
     public void RequestCookiesParseDecodeAndKeepDuplicates()
     {
         var result = JavaScriptRunner.FetchJson(""""
@@ -16,7 +101,7 @@ public sealed class CookieTests
                 {
                     var incoming = new Request("https://worker.test/", new FetchOptions
                     {
-                        Headers = new Headers().Set("cookie", "session=a%20b; theme=\"dark\"; session=outer; flag; =empty; bad=%E0%A4%A")
+                        Headers = new Headers { ["cookie"] = "session=a%20b; theme=\"dark\"; session=outer; flag; =empty; bad=%E0%A4%A" }
                     });
                     var cookies = incoming.Cookies;
                     var names = new List<string>();
@@ -52,14 +137,13 @@ public sealed class CookieTests
     public void SetCookieUsesSecureDefaultsAndEncodesValues()
     {
         var cookies = SetCookies("""
-            Response.Empty()
-                .WithCookie("session", "a; Domain=evil.test\r\nx")
-                .WithCookie("prefs", "dark", new CookieOptions
+            response.Cookies.Set("session", "a; Domain=evil.test\r\nx");
+            response.Cookies.Set("prefs", "dark", new CookieOptions
                 {
                     Path = "/app", Domain = "example.com", MaxAgeSeconds = 3600, Expires = new Date(0),
                     HttpOnly = false, SameSite = SameSite.Strict
-                })
-                .WithCookie("__Host-id", "1", new CookieOptions { SameSite = SameSite.None, Partitioned = true })
+            });
+            response.Cookies.Set("__Host-id", "1", new CookieOptions { SameSite = SameSite.None, Partitioned = true });
             """);
 
         Assert.Equal(
@@ -71,10 +155,10 @@ public sealed class CookieTests
     }
 
     [Fact]
-    public void WithoutCookieExpiresTheMatchingCookie()
+    public void DeleteCookieExpiresTheMatchingCookie()
     {
         var cookies = SetCookies("""
-            Response.Empty().WithoutCookie("prefs", new CookieOptions { Path = "/app", MaxAgeSeconds = 60 })
+            response.Cookies.Delete("prefs", new CookieOptions { Path = "/app", MaxAgeSeconds = 60 });
             """);
 
         Assert.Equal(["prefs=; Path=/app; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax"], cookies);
@@ -118,23 +202,23 @@ public sealed class CookieTests
     }
 
     [Theory]
-    [InlineData("""WithCookie("bad name", "v")""", "Invalid cookie name")]
-    [InlineData("""WithCookie("a;b", "v")""", "Invalid cookie name")]
-    [InlineData("""WithCookie("", "v")""", "Invalid cookie name")]
-    [InlineData("""WithCookie("a", "v", new CookieOptions { Path = "/x; Domain=evil" })""", "Invalid cookie path")]
-    [InlineData("""WithCookie("a", "v", new CookieOptions { Path = "relative" })""", "Invalid cookie path")]
-    [InlineData("""WithCookie("a", "v", new CookieOptions { Domain = "evil.test; Secure" })""", "Invalid cookie domain")]
-    [InlineData("""WithCookie("a", "v", new CookieOptions { MaxAgeSeconds = -1 })""", "non-negative integer")]
-    [InlineData("""WithCookie("a", "v", new CookieOptions { Expires = new Date("not a date") })""", "not a valid date")]
-    [InlineData("""WithCookie("a", "v", new CookieOptions { SameSite = (SameSite)7 })""", "Invalid cookie SameSite")]
-    [InlineData("""WithCookie("a", "v", new CookieOptions { Secure = false, SameSite = SameSite.None })""", "requires Secure")]
-    [InlineData("""WithCookie("a", "v", new CookieOptions { Secure = false, Partitioned = true })""", "requires Secure")]
-    [InlineData("""WithCookie("__Secure-a", "v", new CookieOptions { Secure = false })""", "requires Secure")]
-    [InlineData("""WithCookie("__host-a", "v", new CookieOptions { Secure = false })""", "requires Secure")]
-    [InlineData("""WithCookie("__Host-a", "v", new CookieOptions { Domain = "example.com" })""", "requires Path=/ and no Domain")]
-    [InlineData("""WithCookie("__Host-a", "v", new CookieOptions { Path = "/app" })""", "requires Path=/ and no Domain")]
-    [InlineData("""WithCookie("__Http-a", "v", new CookieOptions { HttpOnly = false })""", "requires HttpOnly")]
-    [InlineData("""WithCookie("a", "".PadRight(4096, 'x'))""", "4096 byte limit")]
+    [InlineData("""Set("bad name", "v")""", "Invalid cookie name")]
+    [InlineData("""Set("a;b", "v")""", "Invalid cookie name")]
+    [InlineData("""Set("", "v")""", "Invalid cookie name")]
+    [InlineData("""Set("a", "v", new CookieOptions { Path = "/x; Domain=evil" })""", "Invalid cookie path")]
+    [InlineData("""Set("a", "v", new CookieOptions { Path = "relative" })""", "Invalid cookie path")]
+    [InlineData("""Set("a", "v", new CookieOptions { Domain = "evil.test; Secure" })""", "Invalid cookie domain")]
+    [InlineData("""Set("a", "v", new CookieOptions { MaxAgeSeconds = -1 })""", "non-negative integer")]
+    [InlineData("""Set("a", "v", new CookieOptions { Expires = new Date("not a date") })""", "not a valid date")]
+    [InlineData("""Set("a", "v", new CookieOptions { SameSite = (SameSite)7 })""", "Invalid cookie SameSite")]
+    [InlineData("""Set("a", "v", new CookieOptions { Secure = false, SameSite = SameSite.None })""", "requires Secure")]
+    [InlineData("""Set("a", "v", new CookieOptions { Secure = false, Partitioned = true })""", "requires Secure")]
+    [InlineData("""Set("__Secure-a", "v", new CookieOptions { Secure = false })""", "requires Secure")]
+    [InlineData("""Set("__host-a", "v", new CookieOptions { Secure = false })""", "requires Secure")]
+    [InlineData("""Set("__Host-a", "v", new CookieOptions { Domain = "example.com" })""", "requires Path=/ and no Domain")]
+    [InlineData("""Set("__Host-a", "v", new CookieOptions { Path = "/app" })""", "requires Path=/ and no Domain")]
+    [InlineData("""Set("__Http-a", "v", new CookieOptions { HttpOnly = false })""", "requires HttpOnly")]
+    [InlineData("""Set("a", "".PadRight(4096, 'x'))""", "4096 byte limit")]
     public void InvalidCookiesAreRejectedInsteadOfSilentlyDropped(string call, string message)
     {
         var result = JavaScriptRunner.FetchJson($$"""
@@ -146,7 +230,8 @@ public sealed class CookieTests
                 {
                     try
                     {
-                        var response = Response.Empty().{{call}};
+                        var response = new Response();
+                        response.Cookies.{{call}};
                         return Response.Json(new { error = "", cookies = response.Headers.GetSetCookie() });
                     }
                     catch (Exception exception)
@@ -167,7 +252,8 @@ public sealed class CookieTests
             [Fetch]
             public static Response Fetch(Request request, Env env, Context context)
             {
-                var response = {{response}};
+                var response = new Response();
+                {{response}}
                 return Response.Json(response.Headers.GetSetCookie());
             }
         }

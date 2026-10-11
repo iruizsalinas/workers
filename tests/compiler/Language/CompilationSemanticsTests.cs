@@ -11,7 +11,7 @@ public sealed class CompilationSemanticsTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context) =>
-                    Response.Text(Pair(b: (int)Numbers.Max(left: 1, right: 2), a: 3));
+                    new Response(Pair(b: (int)Numbers.Max(left: 1, right: 2), a: 3));
 
                 private static string Pair(int a = 10, int b = 20) => $"{a}:{b}";
             }
@@ -29,7 +29,7 @@ public sealed class CompilationSemanticsTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => Response.Text(Pair(b: 2));
+                public static Response Fetch(Request request, Env env, Context context) => new Response(Pair(b: 2));
                 private static string Pair(int a = 10, int b = 20) => $"{a}:{b}";
             }
             """);

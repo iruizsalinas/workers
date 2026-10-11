@@ -32,14 +32,14 @@ public static class Worker
         {
             environment.Analytics("ANALYTICS").WriteDataPoint(
                 new AnalyticsEngineDataPoint(["tenant-a"], [1.5], ["request"]));
-            return Response.Text("written");
+            return new Response("written");
         }
 
         if (request.Path == "/email")
         {
             var result = await environment.Email("EMAIL").SendAsync(
                 new SendEmailMessage("from@example.test", ["to@example.test"], "Subject", "Body"));
-            return Response.Text(result.MessageId);
+            return new Response(result.MessageId);
         }
 
         if (request.Path == "/metadata")
@@ -51,7 +51,7 @@ public static class Worker
         if (request.Path == "/ai")
         {
             var result = await environment.Ai("AI").RunAsync<object, string>("model-a", new { prompt = "hello" });
-            return Response.Text(result ?? "missing");
+            return new Response(result ?? "missing");
         }
 
         if (request.Path == "/workflow")
@@ -74,7 +74,7 @@ public static class Worker
                 .Input(request.Body!)
                 .Transform(new { width = 320 })
                 .Output(new MediaOutputOptions { Mode = "video", Format = "mp4" });
-            return Response.Text(await output.ContentTypeAsync());
+            return new Response(await output.ContentTypeAsync());
         }
 
         if (request.Path == "/vectorize")
@@ -88,7 +88,7 @@ public static class Worker
         if (request.Path == "/secret")
         {
             var secret = await environment.SecretStore("SECRET").GetAsync();
-            return Response.Text(secret ?? "missing");
+            return new Response(secret ?? "missing");
         }
 
         if (request.Path == "/hyperdrive")
@@ -98,6 +98,6 @@ public static class Worker
         }
 
         var greeting = await environment.Service("SERVICE").InvokeAsync<string>("greet", ["Ada"]);
-        return Response.Text(greeting ?? "missing");
+        return new Response(greeting ?? "missing");
     }
 }

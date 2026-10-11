@@ -11,6 +11,6 @@ public static class Worker
         Context context)
     {
         var response = await Http.FetchAsync("https://example.com");
-        return response.WithHeader("x-proxied-by", "Workers");
+        return new Response(response) { Headers = { ["x-proxied-by"] = "Workers" } };
     }
 }

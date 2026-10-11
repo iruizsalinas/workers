@@ -17,7 +17,7 @@ public sealed class LoopControlFlowTests
                         index = 1;
                         break;
                     }
-                    return Response.Text("ok");
+                    return new Response("ok");
                 }
             }
             """);
@@ -57,19 +57,19 @@ public sealed class LoopControlFlowTests
     [Fact]
     public void ParenthesizesLogicalNegation()
     {
-        var module = Compile("""
+        var result = JavaScriptRunner.FetchJson("""
             using Workers;
             public static class Worker
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context)
                 {
-                    var body = Body.Text(request.Method);
-                    return Response.Json(new { present = !body.IsEmpty });
+                    var body = request.Method;
+                    return Response.Json(new { present = !(body is null) });
                 }
             }
             """);
 
-        Assert.Contains("!(body === null)", module);
+        Assert.True(result.GetProperty("present").GetBoolean());
     }
 }

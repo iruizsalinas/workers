@@ -16,10 +16,10 @@ public sealed class RuntimeValueTests
                     Func<string, Task<Response>> oneArgument = async value => await BuildAsync(value);
                     Task completed = Task.CompletedTask;
                     context.WaitUntil(completed);
-                    return Response.Text("ok");
+                    return new Response("ok");
                 }
 
-                private static Task<Response> BuildAsync(string value) => Task.FromResult(Response.Text(value));
+                private static Task<Response> BuildAsync(string value) => Task.FromResult(new Response(value));
             }
             """);
 
@@ -81,7 +81,7 @@ public sealed class RuntimeValueTests
                 public static Response Fetch(Request request, Env env, Context context)
                 {
                     string? value = "present";
-                    return Response.Text(value!);
+                    return new Response(value!);
                 }
             }
             """);

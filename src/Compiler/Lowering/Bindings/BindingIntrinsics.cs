@@ -12,7 +12,6 @@ internal enum BindingIntrinsicKind
     CacheMatch,
     ServiceRpc,
     Property,
-    HeadersClone,
     Fluent,
     Dispose,
     RateLimit,

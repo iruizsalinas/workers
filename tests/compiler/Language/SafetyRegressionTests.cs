@@ -16,7 +16,7 @@ public sealed class SafetyRegressionTests
                     bool? missing = null;
                     total++;
                     await foreach (var value in Values()) total += value;
-                    return Response.Text($"{total}:{true}:{missing}");
+                    return new Response($"{total}:{true}:{missing}");
                 }
                 private static async IAsyncEnumerable<int> Values()
                 {
@@ -76,7 +76,7 @@ public sealed class SafetyRegressionTests
                 public static Response Fetch(Request request, Env env, Context context)
                 {
                     using IDisposable lease = new Lease();
-                    return Response.Text("ok");
+                    return new Response("ok");
                 }
             }
             """));
@@ -97,7 +97,7 @@ public sealed class SafetyRegressionTests
                 public static Response Fetch(Request request, Env env, Context context)
                 {
                     var value = {{expression}};
-                    return Response.Text("ok");
+                    return new Response("ok");
                 }
             }
             """));

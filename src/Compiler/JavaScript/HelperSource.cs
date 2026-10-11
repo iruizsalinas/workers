@@ -2,7 +2,6 @@ internal static partial class HelperSource
 {
     public static string Emit(JavaScriptHelper helper, Func<string, string> name) => helper switch
     {
-        JavaScriptHelper.WithHeader => WithHeader(name),
         JavaScriptHelper.RequestCookies => RequestCookies(name),
         JavaScriptHelper.SetCookie => SetCookie(name),
         JavaScriptHelper.TaskWhenAll => TaskWhenAll(name),
@@ -21,6 +20,7 @@ internal static partial class HelperSource
         JavaScriptHelper.HttpError => HttpError(name),
         JavaScriptHelper.Cors => Cors(name),
         JavaScriptHelper.BoundedBody => BoundedBody(name),
+        JavaScriptHelper.Redirect => Redirect(name),
         JavaScriptHelper.NumericParse => NumericParse(name),
         JavaScriptHelper.LinqValues => LinqValues(name),
         JavaScriptHelper.LinqWhere => LinqWhere(name),

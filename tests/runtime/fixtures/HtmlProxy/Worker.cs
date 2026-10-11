@@ -8,13 +8,13 @@ public static class Worker
     public static async Task<Response> FetchAsync(Request request, Env environment, Context context)
     {
         if (request.Method != "GET")
-            return Response.Text("Only GET is supported", 405).WithHeader("allow", "GET");
+            return new Response("Only GET is supported") { Status = 405, Headers = { ["allow"] = "GET" } };
 
         var cache = CacheStorage.Default;
         var cacheKey = request.Url.ToString();
         var cached = await cache.MatchAsync(cacheKey);
         if (cached is not null)
-            return cached.WithHeader("x-edge-cache", "HIT");
+            return new Response(cached) { Headers = { ["x-edge-cache"] = "HIT" } };
 
         var origin = environment.Variable("ORIGIN_BASE");
         var originResponse = await Http.FetchAsync(origin + request.PathAndQuery);
@@ -27,9 +27,7 @@ public static class Worker
             .On("body", new BannerHandler(environment.Kv("CONTENT")))
             .Transform(originResponse);
 
-        var response = Response.FromStream(transformed.Body!)
-            .WithHeader("cache-control", "public, max-age=60")
-            .WithHeader("x-edge-cache", "MISS");
+        var response = new Response(transformed.Body!) { Headers = { ["cache-control"] = "public, max-age=60", ["x-edge-cache"] = "MISS" }};
         context.WaitUntil(cache.PutAsync(cacheKey, response.Clone()));
         return response;
     }

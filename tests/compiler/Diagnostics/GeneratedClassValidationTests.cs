@@ -76,7 +76,7 @@ public sealed class GeneratedClassValidationTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context) =>
-                    new HtmlRewriter().On("p", new Handler()).Transform(Response.Html("<p>x</p>"));
+                    new HtmlRewriter().On("p", new Handler()).Transform(new Response("<p>x</p>") { Headers = new Headers { ["content-type"] = "text/html; charset=utf-8" } });
             }
             """));
 
@@ -97,7 +97,7 @@ public sealed class GeneratedClassValidationTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context) =>
-                    new HtmlRewriter().On("p", new Handler()).Transform(Response.Html("<p>x</p>"));
+                    new HtmlRewriter().On("p", new Handler()).Transform(new Response("<p>x</p>") { Headers = new Headers { ["content-type"] = "text/html; charset=utf-8" } });
             }
             """));
 
@@ -186,7 +186,7 @@ public sealed class GeneratedClassValidationTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context) =>
-                    new HtmlRewriter().On("p", new Handler()).Transform(Response.Html("<p>x</p>"));
+                    new HtmlRewriter().On("p", new Handler()).Transform(new Response("<p>x</p>") { Headers = new Headers { ["content-type"] = "text/html; charset=utf-8" } });
             }
             """));
 

@@ -14,7 +14,7 @@ public sealed class FormFile
 {
     public string FileName => WorkerApi.NotExecutable<string>();
     public string ContentType => WorkerApi.NotExecutable<string>();
-    public Body Body => WorkerApi.NotExecutable<Body>();
+    public BodyInit Body => WorkerApi.NotExecutable<BodyInit>();
     public long Size => WorkerApi.NotExecutable<long>();
     public long LastModified => WorkerApi.NotExecutable<long>();
     public Task<byte[]> SliceBytesAsync(int start, int end) =>

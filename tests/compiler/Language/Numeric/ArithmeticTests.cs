@@ -74,7 +74,7 @@ public sealed class ArithmeticTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context ctx) =>
-                    Response.Text($"{Remainder(7, 2)}");
+                    new Response($"{Remainder(7, 2)}");
 
                 private static int Remainder(int left, int right) => left % right;
             }
@@ -146,7 +146,7 @@ public sealed class ArithmeticTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context ctx) =>
-                    Response.Text($"{Calculate(7, 2)}");
+                    new Response($"{Calculate(7, 2)}");
 
                 private static int Calculate(int left, int right) =>
                     (left / right) + (left * right);
@@ -169,7 +169,7 @@ public sealed class ArithmeticTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context ctx) =>
-                    Response.Text(Join(null, "value"));
+                    new Response(Join(null, "value"));
 
                 private static string Join(string? left, string? right) => left + right;
             }
@@ -188,7 +188,7 @@ public sealed class ArithmeticTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context ctx) =>
-                    Response.Text($"{Add(0.1f, 0.2f)}");
+                    new Response($"{Add(0.1f, 0.2f)}");
 
                 private static float Add(float left, float right) => left + right;
             }
@@ -225,7 +225,7 @@ public sealed class ArithmeticTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context ctx) => Response.Text(Negate(1u).ToString());
+                public static Response Fetch(Request request, Env env, Context ctx) => new Response(Negate(1u).ToString());
                 private static long Negate(uint value) => -value;
             }
             """));
@@ -265,7 +265,7 @@ public sealed class ArithmeticTests
                 {
                     var code = 66;
                     var ratio = 2.75;
-                    return Response.Text(((char)65).ToString() + (char)code + (int)ratio + (byte)code);
+                    return new Response(((char)65).ToString() + (char)code + (int)ratio + (byte)code);
                 }
             }
             """);

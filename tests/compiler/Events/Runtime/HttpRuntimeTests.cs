@@ -48,12 +48,11 @@ public sealed class HttpRuntimeTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context) =>
-                    Response.Text(status: 404, body: "missing");
+                    new Response(body: "missing") { Status = 404 };
             }
             """);
 
-        Assert.Contains("new Response($workers$arg2, { status: $workers$arg1 })", module);
-        Assert.Contains(")(404, \"missing\")", module);
+        Assert.Contains("new Response(\"missing\", { status: 404 })", module);
     }
 
     [Fact]
@@ -67,21 +66,22 @@ public sealed class HttpRuntimeTests
                 public static Response Fetch(Request request, Env env, Context context)
                 {
                     var events = new List<string>();
-                    return GetResponse(events).WithHeader(
+                    GetResponse(events).Headers.Set(
                         value: GetValue(events),
                         name: GetName(events));
+                    return Response.Json(events);
                 }
 
-                private static Response GetResponse(List<string> events) { events.Add("receiver"); return Response.Empty(); }
+                private static Response GetResponse(List<string> events) { events.Add("receiver"); return new Response(); }
                 private static string GetValue(List<string> events) { events.Add("value"); return "set"; }
                 private static string GetName(List<string> events) { events.Add("name"); return "x-order"; }
             }
             """);
 
         Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) =>", module);
-        Assert.Contains("$workers$withHeader($workers$receiver, $workers$arg2, $workers$arg1)", module);
+        Assert.Contains("$workers$receiver.set($workers$arg2, $workers$arg1)", module);
         Assert.Matches(
-            @"\)\(\$workers\$cs\$Worker\$GetResponse\$\d+\(events\), \$workers\$cs\$Worker\$GetValue\$\d+\(events\), \$workers\$cs\$Worker\$GetName\$\d+\(events\)\)",
+            @"\)\(\$workers\$cs\$Worker\$GetResponse\$\d+\(events\).headers, \$workers\$cs\$Worker\$GetValue\$\d+\(events\), \$workers\$cs\$Worker\$GetName\$\d+\(events\)\)",
             module);
     }
 
@@ -94,11 +94,11 @@ public sealed class HttpRuntimeTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context context) =>
-                    Response.FromBody(Body.Text("missing"), 404, "Not Found");
+                    new Response("missing") { Status = 404, StatusText = "Not Found" };
             }
             """);
 
-        Assert.Contains("new Response(\"missing\", { status: 404, statusText: \"Not Found\" ?? undefined })", module);
+        Assert.Contains("new Response(\"missing\", { status: 404, statusText: \"Not Found\" })", module);
     }
 
     [Fact]
@@ -143,17 +143,22 @@ public sealed class HttpRuntimeTests
     [Fact]
     public void PassesJsonResponseStatusAndStatusTextToResponseJson()
     {
-        var module = Compile("""
+        var result = JavaScriptRunner.FetchJson("""
             using Workers;
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) =>
-                    Response.Json(new { ok = true }, 201, "Created");
+                public static async Task<Response> Fetch(Request request, Env env, Context context)
+                {
+                    var response = Response.Json(new { ok = true }, status: 201, statusText: "Created");
+                    return Response.Json(new { response.Status, response.StatusText, text = await response.TextAsync() });
+                }
             }
             """);
 
-        Assert.Contains("Response.json({ ok: true }, { status: 201, statusText: \"Created\" ?? undefined })", module);
+        Assert.Equal(201, result.GetProperty("status").GetInt32());
+        Assert.Equal("Created", result.GetProperty("statusText").GetString());
+        Assert.Equal("{\"ok\":true}", result.GetProperty("text").GetString());
     }
 
     [Fact]
@@ -169,7 +174,7 @@ public sealed class HttpRuntimeTests
                     var socket = WebSocketPair.Create().Server;
                     socket.Close(reason: "done", code: 1000);
                     env.Kv("DATA").PutTextAsync(value: "hello", key: "message");
-                    return Response.Empty();
+                    return new Response();
                 }
             }
             """);

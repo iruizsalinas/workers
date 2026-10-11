@@ -12,8 +12,7 @@ public static class Worker
         var allowed = await environment.RateLimiter("RATE").LimitAsync(RateLimitKey(request));
 
         if (!allowed.Success)
-            return Record(environment, request, metadata, Response.Json(new { error = "Rate limit exceeded" }, 429), "rate_limited", started)
-                .WithHeader("retry-after", "60");
+            return Record(environment, request, metadata, Response.Json(new { error = "Rate limit exceeded" }, status: 429, headers: new Headers { ["retry-after"] = "60" }), "rate_limited", started);
 
         if (request.Path == "/api/version")
             return Record(environment, request, metadata,
@@ -25,20 +24,24 @@ public static class Worker
                 "api_echo", started);
 
         if (request.Method != "GET" && request.Method != "HEAD")
-            return Record(environment, request, metadata, Response.Text("Method not allowed", 405), "method_rejected", started)
-                .WithHeader("allow", "GET, HEAD");
+            return Record(environment, request, metadata, new Response("Method not allowed") { Status = 405, Headers = new Headers { ["allow"] = "GET, HEAD" } }, "method_rejected", started);
 
         var asset = await environment.Assets("ASSETS").FetchAsync(request);
-        var response = asset.Clone()
-            .WithHeader("x-content-type-options", "nosniff")
-            .WithHeader("referrer-policy", "strict-origin-when-cross-origin")
-            .WithHeader("permissions-policy", "camera=(), microphone=(), geolocation=()")
-            .WithHeader("cross-origin-opener-policy", "same-origin")
-            .WithHeader("x-worker-version", metadata.Id);
+        var response = new Response(asset)
+        {
+            Headers =
+            {
+                ["x-content-type-options"] = "nosniff",
+                ["referrer-policy"] = "strict-origin-when-cross-origin",
+                ["permissions-policy"] = "camera=(), microphone=(), geolocation=()",
+                ["cross-origin-opener-policy"] = "same-origin",
+                ["x-worker-version"] = metadata.Id
+            }
+        };
         if (metadata.Tag is not null)
-            response = response.WithHeader("x-worker-version-tag", metadata.Tag);
+            response.Headers["x-worker-version-tag"] = metadata.Tag;
         if (asset.Status >= 200 && asset.Status < 300)
-            response = response.WithAppendedHeader("cache-control", "public, max-age=300");
+            response.Headers.Append("cache-control", "public, max-age=300");
 
         return Record(environment, request, metadata, response,
             asset.Status == 404 ? "asset_missing" : "asset_served", started);

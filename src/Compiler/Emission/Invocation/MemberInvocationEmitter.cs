@@ -31,6 +31,8 @@ internal sealed partial class JavaScriptEmitter
         if (type == "Workers.Cors" && name == "Allow") return HelperInvocation(JavaScriptHelper.Cors, arguments);
         if (type == "Workers.Cookies" && name is "Get" or "GetAll" or "Contains")
             return $"{receiver}.{(name == "Contains" ? "has" : LowerFirst(name))}({arguments[0]})";
+        if (type == "Workers.ResponseCookies" && name is "Set" or "Delete")
+            return ResponseCookieInvocation(receiver, name, arguments);
         if (type == "Workers.Crypto") receiver = "globalThis.crypto";
         if (type == "Workers.SubtleCrypto" && method?.IsStatic == true) receiver = "globalThis.SubtleCrypto";
         if (method is not null && BindingIntrinsicRegistry.TryGet(method, out var intrinsic)) return EmitBindingIntrinsic(receiver, invocation, method, intrinsic);
@@ -45,52 +47,12 @@ internal sealed partial class JavaScriptEmitter
         throw UnsupportedSymbol(method, invocation);
     }
 
-    private string ResponseInvocation(
-        InvocationExpressionSyntax invocation,
-        IMethodSymbol? method,
-        string name,
-        string[] arguments,
-        string? receiverOverride) => name switch
+    private string ResponseCookieInvocation(string receiver, string name, string[] arguments)
     {
-        "Text" => Response(arguments),
-        "Html" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2, "{ \"content-type\": \"text/html; charset=utf-8\" }")})",
-        "Json" => $"Response.json({arguments[0]}{ResponseInit(arguments, 1, 2)})",
-        "Empty" => $"new Response(null{ResponseInit(arguments, 0, 1)})",
-        "Redirect" when arguments.Length > 2 => $"new Response(null{ResponseInit(arguments, 1, 2, $"{{ location: {arguments[0]} }}")})",
-        // Response.redirect only accepts absolute URLs, while Location may be relative.
-        "Redirect" => $"new Response(null, {{ status: {(arguments.Length > 1 ? arguments[1] : "302")}, headers: {{ location: {arguments[0]} }} }})",
-        "FromBody" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})",
-        "FromStream" when method?.Parameters.Length >= 2 && method.Parameters[1].Type.ToDisplayString() == "Workers.Headers" => $"new Response({arguments[0]}, {{ status: {(arguments.Length > 2 ? arguments[2] : "200")}, headers: {arguments[1]} }})",
-        "FromStream" => $"new Response({arguments[0]}{ResponseInit(arguments, 1, 2)})",
-        "WebSocket" => $"new Response(null, {{ status: 101, webSocket: {arguments[0]} }})",
-        "WithHeader" => HeaderMutation(invocation, arguments, "set", receiverOverride),
-        "WithAppendedHeader" => HeaderMutation(invocation, arguments, "append", receiverOverride),
-        "WithoutHeader" => HeaderMutation(invocation, arguments, "delete", receiverOverride),
-        "WithCookie" => CookieMutation(invocation, [arguments[0], arguments[1], OptionalArgument(arguments, 2)], receiverOverride),
-        "WithoutCookie" => CookieMutation(invocation, [arguments[0], "\"\"", OptionalArgument(arguments, 1), "true"], receiverOverride),
-        _ => ""
-    };
-
-    private string CookieMutation(InvocationExpressionSyntax invocation, string[] cookie, string? receiverOverride) =>
-        HeaderMutation(invocation, ["\"set-cookie\"", HelperInvocation(JavaScriptHelper.SetCookie, cookie)], "append", receiverOverride);
-
-    private static string OptionalArgument(string[] arguments, int index) =>
-        index < arguments.Length ? arguments[index] : "undefined";
-
-    private string HeaderMutation(
-        InvocationExpressionSyntax invocation,
-        string[] arguments,
-        string operation,
-        string? receiverOverride)
-    {
-        var helper = _helpers.Require(JavaScriptHelper.WithHeader);
-        var receiver = receiverOverride ?? Expression(((MemberAccessExpressionSyntax)invocation.Expression).Expression);
-        return operation switch
-        {
-            "set" => $"{helper}({receiver}, {arguments[0]}, {arguments[1]})",
-            "append" => $"{helper}({receiver}, {arguments[0]}, {arguments[1]}, \"append\")",
-            _ => $"{helper}({receiver}, {arguments[0]}, undefined, \"delete\")"
-        };
+        var cookie = name == "Set"
+            ? new[] { arguments[0], arguments[1], arguments.Length > 2 ? arguments[2] : "undefined" }
+            : new[] { arguments[0], "\"\"", arguments.Length > 1 ? arguments[1] : "undefined", "true" };
+        return $"{receiver}.append(\"set-cookie\", {HelperInvocation(JavaScriptHelper.SetCookie, cookie)})";
     }
 
     private string SocketConnect(IMethodSymbol? method, string[] arguments)

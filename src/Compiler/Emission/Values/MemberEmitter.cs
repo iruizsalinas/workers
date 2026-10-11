@@ -52,7 +52,7 @@ internal sealed partial class JavaScriptEmitter
                 _ => throw Unsupported("WRK108", member)
             };
         if (symbol is IFieldSymbol { ContainingType: { } redirectType } redirect
-            && redirectType.ToDisplayString() == "Workers.RedirectMode")
+            && redirectType.ToDisplayString() is "Workers.RedirectMode" or "Workers.ResponseBodyEncoding")
             return JsonSerializer.Serialize(LowerFirst(redirect.Name));
         if (symbol is IFieldSymbol { ContainingType: { } transportType } transport
             && transportType.ToDisplayString() == "Workers.TcpSecureTransport")
@@ -83,9 +83,6 @@ internal sealed partial class JavaScriptEmitter
             && taskType.ToDisplayString() is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask")
             return "Promise.resolve()";
         if (property?.ContainingType.ToDisplayString() == "Workers.WebSocketPair") return $"{Receiver()}[{(property.Name == "Client" ? 0 : 1)}]";
-        if (property?.ContainingType.ToDisplayString() == "Workers.Body" && property.Name == "Empty") return "null";
-        if (property?.ContainingType.ToDisplayString() == "Workers.Body" && property.Name == "IsEmpty")
-            return $"{Receiver()} === null";
         if (property?.ContainingType.ToDisplayString() == "Workers.TailRequest" && property.Name == "Headers")
             return $"new Headers({Receiver()}.headers)";
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Signal")
@@ -101,6 +98,8 @@ internal sealed partial class JavaScriptEmitter
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "QueryParameters") return $"new URL({Receiver()}.url).searchParams";
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Cookies")
             return HelperInvocation(JavaScriptHelper.RequestCookies, [Receiver()]);
+        if (property?.ContainingType.ToDisplayString() == "Workers.Response" && property.Name == "Cookies")
+            return $"{Receiver()}.headers";
         if (property?.ContainingType.ToDisplayString() == "Workers.Request" && property.Name == "Url")
             return $"new URL({Receiver()}.url)";
         if (property?.ContainingType.ToDisplayString() == "Workers.Url")

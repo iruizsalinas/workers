@@ -18,8 +18,8 @@ public static class Gateway
             var input = await request.JsonAsync<CreateUserInput>();
             var result = await environment.Service("ADMIN").InvokeAsync<CreateUserResult>("createUser", [input]);
             return result!.Error is null
-                ? Response.Json(result.User, 201)
-                : Response.Json(new { error = result.Error }, 400);
+                ? Response.Json(result.User, status: 201)
+                : Response.Json(new { error = result.Error }, status: 400);
         }
         if (request.Method == "GET" && request.Path == "/users")
         {
@@ -31,14 +31,14 @@ public static class Gateway
         {
             var id = request.Path.Substring(7);
             var user = await environment.Service("USERS").InvokeAsync<User>("getUser", [id]);
-            return user is null ? Response.Json(new { error = "Not found" }, 404) : Response.Json(user);
+            return user is null ? Response.Json(new { error = "Not found" }, status: 404) : Response.Json(user);
         }
         if (request.Method == "GET" && request.Path.StartsWith("/assets/"))
         {
             var asset = await environment.Service("USERS").InvokeAsync<Response>("getAsset", [request.Path.Substring(7)]);
-            return asset is null ? Response.Text("Missing asset", 502) : asset.WithHeader("x-served-via", "rpc");
+            return asset is null ? new Response("Missing asset") { Status = 502 } : new Response(asset) { Headers = { ["x-served-via"] = "rpc" } };
         }
-        return Response.Json(new { error = "Not found" }, 404);
+        return Response.Json(new { error = "Not found" }, status: 404);
     }
 }
 
@@ -95,7 +95,7 @@ public sealed class CoreService : WorkerEntrypoint
     public Health Health() => new(true, "core", new Date().ToIsoString());
     public Response FetchAsync(Request request) => request.Path == "/internal/health"
         ? Response.Json(Health())
-        : Response.Text("Not found", 404);
+        : new Response("Not found") { Status = 404 };
 }
 
 public sealed record CreateUserInput(string Username);

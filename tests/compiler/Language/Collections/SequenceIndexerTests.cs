@@ -35,7 +35,7 @@ public sealed class SequenceIndexerTests
             public static class Worker
             {
                 [Fetch]
-                public static Response Fetch(Request request, Env env, Context context) => Response.Text("ok");
+                public static Response Fetch(Request request, Env env, Context context) => new Response("ok");
             }
             """);
 

@@ -34,7 +34,7 @@ public sealed class Accumulator
         {
             var input = await request.JsonAsync<AddInput>();
             if (input is null || input.Amount == 0)
-                return Response.Json(new { error = "amount must be a non-zero integer" }, 400);
+                return Response.Json(new { error = "amount must be a non-zero integer" }, status: 400);
             var id = Crypto.RandomUuid();
             _state.Storage.TransactionSync(() =>
             {
@@ -43,7 +43,7 @@ public sealed class Accumulator
             });
             if (await _state.Storage.GetAlarmAsync() is null)
                 await _state.Storage.SetAlarmAsync(new Date(Date.Now() + 1000));
-            return Response.Json(new { id, queued = true }, 202);
+            return Response.Json(new { id, queued = true }, status: 202);
         }
 
         if (request.Method == "GET" && request.Path == "/state")
@@ -73,9 +73,9 @@ public sealed class Accumulator
                 _sql.Exec<object>("UPDATE totals SET total = 0, batches = 0 WHERE id = 1");
             });
             await _state.Storage.DeleteAlarmAsync();
-            return Response.Empty(204);
+            return new Response { Status = 204 };
         }
-        return Response.Text("Not found", 404);
+        return new Response("Not found") { Status = 404 };
     }
 
     public async Task AlarmAsync()

@@ -70,7 +70,7 @@ public sealed class PlatformRuntimeTests
                     var digest = Crypto.CreateDigestStream(DigestStreamAlgorithm.Sha256);
                     await stream.PipeToAsync(digest);
                     var hash = TextCodec.EncodeHex(await digest.DigestAsync());
-                    return Response.FromBody(Body.Text(hash));
+                    return new Response(hash);
                 }
             }
             """);
@@ -110,7 +110,7 @@ public sealed class PlatformRuntimeTests
                 {
                     var socket = TcpSocket.Connect("example.com", 443,
                         new TcpSocketOptions { SecureTransport = TcpSecureTransport.{{option}} });
-                    return Response.Empty();
+                    return new Response();
                 }
             }
             """);
@@ -142,7 +142,7 @@ public sealed class PlatformRuntimeTests
                 [Fetch]
                 public static async Task<Response> Fetch(Request request, Env env, Context ctx)
                 {
-                    return new HtmlRewriter().On("p", new Handler()).Transform(Response.Html("<p>x</p>"));
+                    return new HtmlRewriter().On("p", new Handler()).Transform(new Response("<p>x</p>") { Headers = new Headers { ["content-type"] = "text/html; charset=utf-8" } });
                 }
             }
             """);
@@ -176,7 +176,7 @@ public sealed class PlatformRuntimeTests
             {
                 [Fetch]
                 public static Response Fetch(Request request, Env env, Context ctx) =>
-                    new HtmlRewriter().On("p", new Handler()).Transform(Response.Html("<p>x</p>"));
+                    new HtmlRewriter().On("p", new Handler()).Transform(new Response("<p>x</p>") { Headers = new Headers { ["content-type"] = "text/html; charset=utf-8" } });
             }
             """);
 

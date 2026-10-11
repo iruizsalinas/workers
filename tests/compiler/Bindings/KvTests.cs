@@ -15,7 +15,7 @@ public sealed class KvTests
                 {
                     var text = await env.Kv("DATA").GetTextAsync("key", new KvGetOptions { CacheTtl = 60 });
                     await env.Kv("DATA").PutJsonAsync("result", new { text }, new KvPutOptions { ExpirationTtl = 300 });
-                    return Response.Text(text ?? "missing");
+                    return new Response(text ?? "missing");
                 }
             }
             """);
@@ -57,7 +57,7 @@ public sealed class KvTests
                 public static async Task<Response> Fetch(Request request, Env env, Context context)
                 {
                     await env.Kv("DATA").PutTextAsync(value: "content", @key: "entry");
-                    return Response.Empty();
+                    return new Response();
                 }
             }
             """);
