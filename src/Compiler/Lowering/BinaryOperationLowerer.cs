@@ -20,10 +20,13 @@ internal sealed partial class JavaScriptEmitter
             && IsSupportedNullableNumeric(operation.LeftOperand.Type)
             && IsSupportedNullableNumeric(operation.RightOperand.Type))
             return LiftedNumericBinary(operation);
-        var type = operation.Type?.SpecialType ?? SpecialType.None;
+        var numericType = operation.Type is INamedTypeSymbol { EnumUnderlyingType: { } enumUnderlying }
+            ? enumUnderlying : operation.Type;
+        var type = numericType?.SpecialType ?? SpecialType.None;
         var left = Operand(operation.LeftOperand);
         var right = Operand(operation.RightOperand);
         var integral32 = type is SpecialType.System_Int32 or SpecialType.System_UInt32;
+        var narrowIntegral = type is SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16 or SpecialType.System_UInt16;
 
         if (operation.OperatorKind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals
             && (operation.LeftOperand.ConstantValue is { HasValue: true, Value: null }
@@ -38,13 +41,17 @@ internal sealed partial class JavaScriptEmitter
             && operation.OperatorKind is BinaryOperatorKind.And or BinaryOperatorKind.Or or BinaryOperatorKind.ExclusiveOr)
             return $"Boolean({left} {BinaryOperator(operation.OperatorKind)} {right})";
 
-        if (operation.IsChecked == true && integral32
+        if (operation.IsChecked == true && (integral32 || narrowIntegral)
             && operation.OperatorKind is BinaryOperatorKind.Add or BinaryOperatorKind.Subtract or BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide)
             throw Unsupported("WRK108", expression);
 
         if (type is SpecialType.System_Int64 or SpecialType.System_UInt64
             && operation.OperatorKind is BinaryOperatorKind.Add or BinaryOperatorKind.Subtract or BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide or BinaryOperatorKind.Remainder)
             throw Unsupported("WRK108", expression);
+
+        if (type is SpecialType.System_Int64 or SpecialType.System_UInt64
+            && operation.OperatorKind is BinaryOperatorKind.And or BinaryOperatorKind.Or or BinaryOperatorKind.ExclusiveOr)
+            return $"Number(BigInt({left}) {BinaryOperator(operation.OperatorKind)} BigInt({right}))";
 
         if (operation.OperatorKind == BinaryOperatorKind.Divide && integral32)
         {
@@ -57,6 +64,14 @@ internal sealed partial class JavaScriptEmitter
             var helper = _helpers.Require(JavaScriptHelper.IntegerRemainder);
             return $"{helper}({left}, {right}, {(type == SpecialType.System_UInt32 ? "true" : "false")})";
         }
+
+        if (type == SpecialType.System_UInt32
+            && operation.OperatorKind is BinaryOperatorKind.And or BinaryOperatorKind.Or or BinaryOperatorKind.ExclusiveOr)
+            return $"(({left} {BinaryOperator(operation.OperatorKind)} {right}) >>> 0)";
+
+        if (narrowIntegral && operation.OperatorKind is BinaryOperatorKind.Add or BinaryOperatorKind.Subtract)
+            return ConvertValue(_compilation.GetSpecialType(SpecialType.System_Int32), numericType!,
+                $"({left} {BinaryOperator(operation.OperatorKind)} {right})", expression);
 
         if (integral32)
         {
@@ -154,14 +169,30 @@ internal sealed partial class JavaScriptEmitter
             ? "false"
             : "null";
         var underlying = NullableUnderlyingType(operation.LeftOperand.Type);
-        if (operation.IsChecked && underlying is SpecialType.System_Int32 or SpecialType.System_UInt32
+        if (operation.IsChecked && underlying is SpecialType.System_SByte or SpecialType.System_Byte
+                or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or SpecialType.System_UInt32
             && kind is BinaryOperatorKind.Add or BinaryOperatorKind.Subtract
                 or BinaryOperatorKind.Multiply or BinaryOperatorKind.Divide)
             throw Unsupported("WRK108", expression);
+        if (underlying is SpecialType.System_Int64 or SpecialType.System_UInt64
+            && kind is BinaryOperatorKind.Add or BinaryOperatorKind.Subtract or BinaryOperatorKind.Multiply
+                or BinaryOperatorKind.Divide or BinaryOperatorKind.Remainder)
+            throw Unsupported("WRK108", expression);
         var result = kind switch
         {
+            BinaryOperatorKind.Add or BinaryOperatorKind.Subtract when underlying is
+                SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16 or SpecialType.System_UInt16 =>
+                ConvertValue(_compilation.GetSpecialType(SpecialType.System_Int32), _compilation.GetSpecialType(underlying),
+                    $"({left} {BinaryOperator(kind)} {right})", expression),
             BinaryOperatorKind.Add or BinaryOperatorKind.Subtract =>
                 NumericResult($"{left} {BinaryOperator(kind)} {right}", underlying, expression),
+            BinaryOperatorKind.And or BinaryOperatorKind.Or or BinaryOperatorKind.ExclusiveOr
+                when underlying is SpecialType.System_Int64 or SpecialType.System_UInt64 =>
+                $"Number(BigInt({left}) {BinaryOperator(kind)} BigInt({right}))",
+            BinaryOperatorKind.And or BinaryOperatorKind.Or or BinaryOperatorKind.ExclusiveOr
+                when underlying == SpecialType.System_UInt32 => $"(({left} {BinaryOperator(kind)} {right}) >>> 0)",
+            BinaryOperatorKind.And or BinaryOperatorKind.Or or BinaryOperatorKind.ExclusiveOr =>
+                $"{left} {BinaryOperator(kind)} {right}",
             BinaryOperatorKind.Multiply when underlying == SpecialType.System_Int32 => $"Math.imul({left}, {right})",
             BinaryOperatorKind.Multiply when underlying == SpecialType.System_UInt32 => $"(Math.imul({left}, {right}) >>> 0)",
             BinaryOperatorKind.Divide when underlying is SpecialType.System_Int32 or SpecialType.System_UInt32 =>
@@ -182,12 +213,15 @@ internal sealed partial class JavaScriptEmitter
     }
 
     private static bool IsSupportedNullableNumeric(ITypeSymbol? type) =>
-        NullableUnderlyingType(type) is SpecialType.System_Int32 or SpecialType.System_UInt32
+        NullableUnderlyingType(type) is SpecialType.System_SByte or SpecialType.System_Byte
+            or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or SpecialType.System_UInt32
+            or SpecialType.System_Int64 or SpecialType.System_UInt64
             or SpecialType.System_Single or SpecialType.System_Double;
 
     private static SpecialType NullableUnderlyingType(ITypeSymbol? type) =>
         type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
-            ? nullable.TypeArguments[0].SpecialType
+            ? nullable.TypeArguments[0] is INamedTypeSymbol { EnumUnderlyingType: { } underlying }
+                ? underlying.SpecialType : nullable.TypeArguments[0].SpecialType
             : SpecialType.None;
 
     private static string BinaryOperator(BinaryOperatorKind kind) => kind switch

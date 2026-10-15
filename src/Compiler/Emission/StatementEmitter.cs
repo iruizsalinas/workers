@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
 
@@ -55,8 +56,29 @@ internal sealed partial class JavaScriptEmitter
                 else if (IsDictionary(collection.Type)) enumerable = $"Object.entries({enumerable})";
                 if (loop.Locals.Length != 1 || loop.LoopControlVariable is not IVariableDeclaratorOperation)
                     throw Unsupported("WRK108", loop.Syntax);
+                var local = UserIdentifier(loop.Locals[0], loop.Locals[0].Name);
+                var item = local;
+                string? converted = null;
+                var info = _model.GetForEachStatementInfo((CommonForEachStatementSyntax)loop.Syntax);
+                if (!info.ElementConversion.IsIdentity
+                    && !(info.ElementConversion.IsImplicit && info.ElementConversion.IsReference)
+                    && loop.Locals[0].Type.SpecialType != SpecialType.System_Object)
+                {
+                    if (info.ElementConversion.IsUserDefined || info.ElementType is null)
+                        throw Unsupported("WRK108", loop.Syntax);
+                    var checkedContext = loop.Syntax.Ancestors().OfType<CheckedStatementSyntax>().FirstOrDefault();
+                    if (info.ElementConversion.IsExplicit
+                        && (info.ElementConversion.IsNumeric || info.ElementConversion.IsNullable || info.ElementConversion.IsEnumeration)
+                        && (checkedContext is null ? _compilation.Options.CheckOverflow : checkedContext.Keyword.IsKind(SyntaxKind.CheckedKeyword)))
+                        throw Unsupported("WRK108", loop.Syntax);
+                    item = _names.Get($"foreach:{loop.Syntax.SyntaxTree.FilePath}:{loop.Syntax.SpanStart}", "item");
+                    converted = ForeachElementConversion(info.ElementType, loop.Locals[0].Type, item, loop.Syntax,
+                        info.ElementConversion.IsImplicit);
+                }
                 _output.Append(indent).Append(loop.IsAsynchronous ? "for await (const " : "for (const ")
-                    .Append(UserIdentifier(loop.Locals[0], loop.Locals[0].Name)).Append(" of ").Append(enumerable).AppendLine(") {");
+                    .Append(item).Append(" of ").Append(enumerable).AppendLine(") {");
+                if (converted is not null)
+                    _output.Append(indent).Append("  const ").Append(local).Append(" = ").Append(converted).AppendLine(";");
                 EmitEmbedded(loop.Body, depth + 1);
                 _output.Append(indent).AppendLine("}");
                 break;
@@ -110,6 +132,19 @@ internal sealed partial class JavaScriptEmitter
             default:
                 throw Unsupported("WRK100", operation.Syntax);
         }
+    }
+
+    private string ForeachElementConversion(ITypeSymbol source, ITypeSymbol target, string value, SyntaxNode node, bool implicitConversion)
+    {
+        var from = UnwrapNullable(source);
+        var to = UnwrapNullable(target);
+        var widening = implicitConversion && from.SpecialType is SpecialType.System_Int32 or SpecialType.System_UInt32
+            && to.SpecialType is SpecialType.System_Int64 or SpecialType.System_UInt64;
+        var converted = widening ? value : ConvertValue(from, to, value, node);
+        if (!IsNullable(source)) return converted;
+        return IsNullable(target)
+            ? $"{value} == null ? null : {converted}"
+            : $"(() => {{ if ({value} == null) throw new TypeError(\"Nullable object must have a value.\"); return {converted}; }})()";
     }
 
     private string VariableDeclaration(IVariableDeclaratorOperation variable) =>

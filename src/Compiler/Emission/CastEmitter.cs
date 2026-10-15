@@ -3,7 +3,8 @@ using Microsoft.CodeAnalysis.Operations;
 
 // Bound conversions between the numeric types the compiler represents as JavaScript numbers,
 // chars (one-character strings), enums and nullable values. Floating-point to integer conversions
-// truncate and saturate, with NaN converting to zero, matching .NET on x64 since .NET 9.
+// truncate and saturate for Int32/UInt32, with NaN converting to zero, matching .NET on
+// x64 since .NET 9. Narrower targets wrap the resulting integer to their bit width.
 internal sealed partial class JavaScriptEmitter
 {
     private string Conversion(IConversionOperation conversion)
@@ -80,17 +81,18 @@ internal sealed partial class JavaScriptEmitter
         string Integer(double minimum, double maximum, string wrap) => floating
             ? $"(Number.isNaN({number}) ? 0 : Math.min(Math.max(Math.trunc({number}), {minimum}), {maximum}))"
             : wrap;
+        var narrow = floating ? Integer(int.MinValue, int.MaxValue, number) : number;
         return to switch
         {
             SpecialType.System_Double => number,
             SpecialType.System_Single => $"Math.fround({number})",
             SpecialType.System_Int32 => Integer(int.MinValue, int.MaxValue, $"({number} | 0)"),
             SpecialType.System_UInt32 => Integer(0, uint.MaxValue, $"({number} >>> 0)"),
-            SpecialType.System_Int16 => Integer(short.MinValue, short.MaxValue, $"(({number} << 16) >> 16)"),
-            SpecialType.System_UInt16 => Integer(0, ushort.MaxValue, $"({number} & 65535)"),
-            SpecialType.System_SByte => Integer(sbyte.MinValue, sbyte.MaxValue, $"(({number} << 24) >> 24)"),
-            SpecialType.System_Byte => Integer(0, byte.MaxValue, $"({number} & 255)"),
-            SpecialType.System_Char => $"String.fromCharCode({Integer(0, ushort.MaxValue, $"({number} & 65535)")})",
+            SpecialType.System_Int16 => $"(({narrow} << 16) >> 16)",
+            SpecialType.System_UInt16 => $"({narrow} & 65535)",
+            SpecialType.System_SByte => $"(({narrow} << 24) >> 24)",
+            SpecialType.System_Byte => $"({narrow} & 255)",
+            SpecialType.System_Char => $"String.fromCharCode({narrow} & 65535)",
             _ => throw Unsupported("WRK101", node)
         };
     }
