@@ -3,6 +3,10 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -23,13 +27,22 @@ jobs:
       - run: npm ci
       - run: npm audit --audit-level=critical
       - run: dotnet restore Workers.slnx
+      - run: dotnet pack src/Workers.csproj -c Release --no-restore -o .artifacts/package
       - run: dotnet test Workers.slnx -c Release --no-restore
+        env:
+          WORKERS_PACKAGE_DIRECTORY: ${{ github.workspace }}/.artifacts/package
       - run: npm run test:runtime
       - shell: pwsh
         run: ./eng/verify-worker-artifacts.ps1 -SkipPublish
-      - run: dotnet pack src/Workers.csproj -c Release --no-restore -o .artifacts/package
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nuget-package
+          path: .artifacts/package/*.nupkg
+          if-no-files-found: error
+          retention-days: 7
 
   packed-package-consumer:
+    needs: verify
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -39,5 +52,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-package
+          path: .artifacts/package
       - run: dotnet restore tests/package/PackageTests.csproj
       - run: dotnet test tests/package/PackageTests.csproj -c Release --no-restore
+        env:
+          WORKERS_PACKAGE_DIRECTORY: ${{ github.workspace }}/.artifacts/package

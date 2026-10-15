@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Check release version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      package: ${{ steps.check.outputs.package }}
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Check existing tags and NuGet versions
+        id: check
+        shell: pwsh
+        run: ./eng/check-release.ps1
+
+  test:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish tested NuGet package
+    needs: [prepare, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nuget-package
+          path: release
+      - name: Check package artifact
+        shell: pwsh
+        env:
+          EXPECTED_PACKAGE: ${{ needs.prepare.outputs.package }}
+        run: |
+          $packages = @(Get-ChildItem -LiteralPath release -Filter '*.nupkg' -File)
+          if ($packages.Count -ne 1 -or $packages[0].Name -cne $env:EXPECTED_PACKAGE) {
+              throw 'Expected exactly the tested release package.'
+          }
+      - name: NuGet login
+        id: login
+        uses: NuGet/login@ebc737b6fc418a6ca0073cf116ec8dc156d8b81e # v1
+        with:
+          user: iruizsalinas
+      - name: Publish package
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+          EXPECTED_PACKAGE: ${{ needs.prepare.outputs.package }}
+        run: dotnet nuget push "./release/$env:EXPECTED_PACKAGE" --api-key "$env:NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+
+  tag:
+    name: Tag the published commit
+    needs: [prepare, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Create version tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          existing_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$RELEASE_TAG" \
+            --jq '.[] | select(.ref == ("refs/tags/" + env.RELEASE_TAG)) | .object.sha')
+          if [ -n "$existing_sha" ]; then
+            if [ "$existing_sha" = "$GITHUB_SHA" ]; then
+              echo "Tag $RELEASE_TAG already points to the published commit; skipping."
+              exit 0
+            fi
+            echo "Tag $RELEASE_TAG already points to another commit."
+            exit 1
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$RELEASE_TAG" \
+            -f "sha=$GITHUB_SHA"
