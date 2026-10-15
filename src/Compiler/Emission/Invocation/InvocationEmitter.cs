@@ -24,7 +24,9 @@ internal sealed partial class JavaScriptEmitter
                     (target, values) => $"{target}({string.Join(", ", values)})")
                 : $"{Operand(operation.Instance!)}({string.Join(", ", arguments)})";
         var isBindingIntrinsic = BindingIntrinsicRegistry.TryGet(method, out _);
-        if (invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
+        if ((invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
+                || receiver is not null && !method.IsStatic && method.DeclaringSyntaxReferences.Length != 0
+                    && operation.Arguments.Any(argument => !IsTrivialArgumentValue(argument.Value)))
             && !isBindingIntrinsic)
         {
             return EmitNormalizedInvocation(invocation, method, receiver,
@@ -33,6 +35,16 @@ internal sealed partial class JavaScriptEmitter
         }
         return InvocationCore(invocation, method, arguments, member, receiver);
     }
+
+    private static bool IsTrivialArgumentValue(IOperation operation) => operation switch
+    {
+        _ when operation.ConstantValue.HasValue => true,
+        ILocalReferenceOperation or IParameterReferenceOperation or IAnonymousFunctionOperation => true,
+        IDelegateCreationOperation { Target: IAnonymousFunctionOperation } => true,
+        IConversionOperation conversion when conversion.Conversion.IsIdentity || conversion.Conversion.IsReference =>
+            IsTrivialArgumentValue(conversion.Operand),
+        _ => false
+    };
 
     private string InvocationCore(
         InvocationExpressionSyntax invocation,

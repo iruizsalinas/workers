@@ -65,7 +65,8 @@ internal sealed partial class JavaScriptEmitter
             var key = $"method-group:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
             var target = _names.Get($"{key}:target", "target");
             var parameters = string.Join(", ", method.Parameters.Select((_, index) => _names.Get($"{key}:{index}", $"arg{index + 1}")));
-            return $"(({target}) => ({parameters}) => {target}.{UserInstanceMethodName(method)}({parameters}))" +
+            return $"(({target}) => {{ if ({target} == null) throw new TypeError(\"Object reference not set to an instance of an object.\"); " +
+                   $"return ({parameters}) => {target}.{UserInstanceMethodName(method)}({parameters}); }})" +
                    $"({(receiver is null ? "this" : Expression(receiver))})";
         }
         throw new NotSupportedException(

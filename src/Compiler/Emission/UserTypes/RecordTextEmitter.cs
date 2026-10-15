@@ -42,6 +42,7 @@ internal sealed partial class JavaScriptEmitter
                 .ToArray();
             var body = members.Length == 0 ? $"{type.Name} {{ }}" : $"{type.Name} {{ {string.Join(", ", members)} }}";
             _output.Append("function ").Append(_recordTextFunctions[type]).AppendLine("(value) {");
+            _output.AppendLine("  if (value == null) throw new TypeError(\"Object reference not set to an instance of an object.\");");
             _output.Append("  return `").Append(body).AppendLine("`;");
             _output.AppendLine("}").AppendLine();
         }

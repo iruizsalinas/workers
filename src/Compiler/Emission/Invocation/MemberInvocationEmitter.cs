@@ -18,7 +18,8 @@ internal sealed partial class JavaScriptEmitter
         if (IsSynthesizedRecordMember(method))
             return method is { Name: "Equals", Parameters: [{ } other] }
                    && SymbolEqualityComparer.Default.Equals(other.Type.OriginalDefinition, method.ContainingType.OriginalDefinition)
-                ? RecordEquals(method.ContainingType, receiver, arguments[0], invocation)
+                ? $"(($workers$receiver, $workers$other) => {{ if ($workers$receiver == null) throw new TypeError(\"Object reference not set to an instance of an object.\"); " +
+                    $"return {RecordEquals(method.ContainingType, "$workers$receiver", "$workers$other", invocation)}; }})({receiver}, {arguments[0]})"
                 : throw UnsupportedSymbol(method, invocation);
         if (TryEmitFoundationInvocation(invocation, method, receiver, name, arguments, out var framework)) return framework;
         if (type == "Workers.Env" && EnvironmentBindings.Contains(name)) return $"{receiver}[{arguments[0]}]";
