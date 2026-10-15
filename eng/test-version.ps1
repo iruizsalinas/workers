@@ -15,9 +15,34 @@ try {
     )) {
         $before = "<Project>`n  <PropertyGroup><WorkersVersion>$($case.Before)</WorkersVersion></PropertyGroup>`n</Project>`n"
         [System.IO.File]::WriteAllText($versionFile, $before)
+        $exampleDirectory = Join-Path $testDirectory 'examples/HelloWorld'
+        New-Item -ItemType Directory -Path $exampleDirectory -Force | Out-Null
+        $exampleFile = Join-Path $exampleDirectory 'HelloWorld.csproj'
+        $project = @'
+<Project>
+  <PackageReference Include="Workers" Version="0.4.1" Condition="'$(UseProject)' != 'true'" />
+  <PackageReference Version='0.4.0' Update='Workers' />
+  <PackageReference Include="Workers" Version="$(WorkersVersion)" />
+  <PackageReference Include="Other" Version="0.4.1" />
+</Project>
+'@
+        [System.IO.File]::WriteAllText($exampleFile, $project)
+        $propsFile = Join-Path $exampleDirectory 'Versions.props'
+        [System.IO.File]::WriteAllText($propsFile, '<Project><PackageReference Include="Workers" Version="0.3.0" /></Project>')
+        $ignoredDirectory = Join-Path $testDirectory 'obj'
+        New-Item -ItemType Directory -Path $ignoredDirectory -Force | Out-Null
+        $ignoredFile = Join-Path $ignoredDirectory 'Ignored.csproj'
+        [System.IO.File]::WriteAllText($ignoredFile, $project)
+        $readmeFile = Join-Path $testDirectory 'README.md'
+        [System.IO.File]::WriteAllText($readmeFile, 'Version 0.4.1 changed behavior.')
         & (Join-Path $PSScriptRoot 'bump-version.ps1') -Bump $case.Bump -VersionFile $versionFile
         $expected = $before.Replace("<WorkersVersion>$($case.Before)</WorkersVersion>", "<WorkersVersion>$($case.After)</WorkersVersion>")
         if ([System.IO.File]::ReadAllText($versionFile) -cne $expected) { throw "Incorrect $($case.Bump) bump from $($case.Before)" }
+        $expectedProject = $project.Replace('Include="Workers" Version="0.4.1"', "Include=`"Workers`" Version=`"$($case.After)`"").Replace("Version='0.4.0' Update='Workers'", "Version='$($case.After)' Update='Workers'")
+        if ([System.IO.File]::ReadAllText($exampleFile) -cne $expectedProject) { throw 'Pinned example references were not synchronized.' }
+        if ([System.IO.File]::ReadAllText($propsFile) -notmatch ([regex]::Escape("Version=`"$($case.After)`""))) { throw 'Props references were not synchronized.' }
+        if ([System.IO.File]::ReadAllText($ignoredFile) -cne $project) { throw 'Generated project was modified.' }
+        if ([System.IO.File]::ReadAllText($readmeFile) -cne 'Version 0.4.1 changed behavior.') { throw 'Historical documentation was modified.' }
     }
     foreach ($invalid in @(
         '<Project />',
