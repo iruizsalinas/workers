@@ -24,7 +24,9 @@ internal sealed partial class JavaScriptEmitter
                 $"{UserInitializerMemberAccess(temporary, assignment.Left)} = {Expression(assignment.Right)};",
             _ => throw Unsupported("WRK106", expression)
         });
-        return $"(({temporary}) => {{ {string.Join(" ", assignments)} return {temporary}; }})({creation})";
+        var isAsync = _model.GetOperation(source.Initializer) is { } initializer && ContainsAwait(initializer);
+        var initialized = $"({(isAsync ? "async " : "")}({temporary}) => {{ {string.Join(" ", assignments)} return {temporary}; }})({creation})";
+        return isAsync ? $"(await {initialized})" : initialized;
     }
 
     private string UserInitializerMemberAccess(string receiver, ExpressionSyntax expression) =>

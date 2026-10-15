@@ -91,6 +91,10 @@ internal sealed partial class JavaScriptEmitter
             return $"((a, b) => a === b || a !== a && b !== b)({left}, {right})";
         if (type is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record))
             return RecordEquals(record, left, right, source);
+        if (type is INamedTypeSymbol pair
+            && pair.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
+            return $"((a, b) => {ValueEquality(pair.TypeArguments[0], "a[0]", "b[0]", source)} " +
+                $"&& {ValueEquality(pair.TypeArguments[1], "a[1]", "b[1]", source)})({left}, {right})";
         return $"({left} === {right})";
     }
 }

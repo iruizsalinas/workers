@@ -23,7 +23,8 @@ internal sealed partial class JavaScriptEmitter
             "string" => StringInvocation(invocation, method, receiver, name, arguments),
             "Workers.Url" or "Workers.UrlSearchParams" when name == "ToString" && arguments.Length == 0 => $"{receiver}.toString()",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
-                   && name == "Add" && arguments.Length == 1 => $"{receiver}.push({arguments[0]})",
+                   && name == "Add" && arguments.Length == 1 =>
+                $"{RequireHelperName(JavaScriptHelper.ListState, "listAdd")}({receiver}, {arguments[0]})",
             _ when type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>"
                    && name == "Contains" && arguments.Length == 1
                    && SupportsLinqEquality(type.TypeArguments[0]) =>

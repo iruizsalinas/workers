@@ -4,6 +4,18 @@ using Microsoft.CodeAnalysis.Operations;
 internal sealed partial class JavaScriptEmitter
 {
     private readonly Stack<(IConditionalAccessOperation Access, string Receiver)> _conditionalReceivers = new();
+    private readonly Stack<List<string>> _expressionTemporaryScopes = new();
+
+    private void EmitWithExpressionScope(int depth, Action emit)
+    {
+        var temporaries = new List<string>();
+        var start = _output.Length;
+        _expressionTemporaryScopes.Push(temporaries);
+        try { emit(); }
+        finally { _expressionTemporaryScopes.Pop(); }
+        if (temporaries.Count != 0)
+            _output.Insert(start, new string(' ', depth * 2) + $"let {string.Join(", ", temporaries)};" + Environment.NewLine);
+    }
 
     private string ConditionalAccess(IConditionalAccessOperation operation)
     {
@@ -14,6 +26,15 @@ internal sealed partial class JavaScriptEmitter
         try
         {
             var body = Expression(operation.WhenNotNull);
+            if (ContainsAwait(operation.WhenNotNull))
+            {
+                if (!_expressionTemporaryScopes.TryPeek(out var temporaries))
+                    throw Unsupported("WRK108", operation.Syntax);
+                temporaries.Add(temporary);
+                // Keep await in its original function. An async wrapper would unwrap returned
+                // tasks and suspend even when a null receiver skips the awaited argument.
+                return $"(({temporary} = {receiver}), {temporary} == null ? null : ({body} ?? null))";
+            }
             return $"(({temporary}) => {temporary} == null ? null : ({body} ?? null))({receiver})";
         }
         finally

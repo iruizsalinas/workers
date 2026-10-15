@@ -15,7 +15,8 @@ internal sealed partial class JavaScriptEmitter
     {
         if (!type.IsRecord) return true;
         if (type.GetMembers().OfType<IPropertySymbol>().Any(property =>
-                HasAttribute(property, "Workers.JsonIgnoreAttribute")
+                LowerFirst(property.Name) is "__proto__" or "constructor"
+                || HasAttribute(property, "Workers.JsonIgnoreAttribute")
                 || HasAttribute(property, "Workers.JsonNameAttribute")))
             return true;
         return type.DeclaringSyntaxReferences.Any(reference =>

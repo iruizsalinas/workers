@@ -91,6 +91,36 @@ public sealed class AdminApi : WorkerEntrypoint
 
 public sealed class CoreService : WorkerEntrypoint
 {
+    private int _iteratorOffset;
+
+    public async Task<string> AsyncControlFlowAsync(int value)
+    {
+        var url = value < 0 ? null : new Url("https://worker.test/?value=present");
+        return value switch
+        {
+            0 => await Task.FromResult("awaited"),
+            _ => url?.SearchParams.Get(await Task.FromResult("value")) ?? "missing"
+        };
+    }
+
+    public async Task<int[]> IteratorSnapshotAsync(int start)
+    {
+        _iteratorOffset = 10;
+        var sequence = ValuesAsync(start);
+        var values = new List<int>();
+        await foreach (var value in sequence) values.Add(value);
+        _iteratorOffset = 20;
+        await foreach (var value in sequence) values.Add(value);
+        return values.ToArray();
+    }
+
+    private async IAsyncEnumerable<int> ValuesAsync(int start)
+    {
+        await Task.CompletedTask;
+        yield return _iteratorOffset + start++;
+        yield return _iteratorOffset + start++;
+    }
+
     public Health Health() => new(true, "core", new Date().ToIsoString());
     public override Task<Response> FetchAsync(Request request) => Task.FromResult(new Url(request.Url).Pathname == "/internal/health"
         ? Response.Json(Health())

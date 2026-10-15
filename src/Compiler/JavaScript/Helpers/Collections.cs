@@ -1,5 +1,42 @@
 internal static partial class HelperSource
 {
+    private static string ListState(Func<string, string> name) => $$"""
+        const {{name("listVersions")}} = new WeakMap();
+        function {{name("listCreate")}}(values) {
+          if ({{name("listVersions")}}.has(values)) return values;
+          {{name("listVersions")}}.set(values, 0);
+          Object.defineProperty(values, Symbol.iterator, { configurable: true, value: function* () {
+            const version = {{name("listVersions")}}.get(this);
+            let index = 0;
+            while (true) {
+              if ({{name("listVersions")}}.get(this) !== version)
+                throw new Error("Collection was modified; enumeration operation may not execute.");
+              if (index >= this.length) return;
+              yield this[index++];
+            }
+          }
+          });
+          return values;
+        }
+        function {{name("listChanged")}}(values) {
+          const version = {{name("listVersions")}}.get(values);
+          if (version !== undefined) {{name("listVersions")}}.set(values, version + 1);
+        }
+        function {{name("listAdd")}}(values, item) {
+          values.push(item);
+          {{name("listChanged")}}(values);
+        }
+        function {{name("listClear")}}(values) {
+          values.length = 0;
+          {{name("listChanged")}}(values);
+        }
+        function {{name("listReverse")}}(values) {
+          values.reverse();
+          {{name("listChanged")}}(values);
+        }
+
+        """;
+
     private static string QueueStack(Func<string, string> name) => $$"""
         function {{name("queueStackCreate")}}(source, stack, capacity) {
           if (capacity != null) {
@@ -28,6 +65,7 @@ internal static partial class HelperSource
           if (!Number.isInteger(index) || index < 0 || index >= source.length)
             throw new RangeError("Index was outside the bounds of the sequence.");
           source[index] = value;
+          {{name("listChanged")}}(source);
           return value;
         }
 
@@ -85,12 +123,13 @@ internal static partial class HelperSource
           const index = {{name("listIndexOf")}}(source, item, equals);
           if (index < 0) return false;
           source.splice(index, 1);
+          {{name("listChanged")}}(source);
           return true;
         }
         function {{name("listAddRange")}}(source, items) {
           if (items == null) throw new TypeError("Collection cannot be null.");
           if (source === items) items = source.slice();
-          for (const item of {{name("linqValues")}}(items)) source.push(item);
+          for (const item of {{name("linqValues")}}(items)) {{name("listAdd")}}(source, item);
         }
         function {{name("listCheckIndex")}}(source, index, inclusive) {
           if (!Number.isInteger(index) || index < 0 || index > source.length || !inclusive && index === source.length)
@@ -99,25 +138,32 @@ internal static partial class HelperSource
         function {{name("listRemoveAt")}}(source, index) {
           {{name("listCheckIndex")}}(source, index, false);
           source.splice(index, 1);
+          {{name("listChanged")}}(source);
         }
         function {{name("listInsert")}}(source, index, item) {
           {{name("listCheckIndex")}}(source, index, true);
           source.splice(index, 0, item);
+          {{name("listChanged")}}(source);
         }
         function {{name("listRemoveAll")}}(source, predicate) {
           if (predicate == null) throw new TypeError("Predicate cannot be null.");
           let kept = 0;
-          for (const item of source) if (!predicate(item)) source[kept++] = item;
+          for (let index = 0; index < source.length; index++) {
+            const item = source[index];
+            if (!predicate(item)) source[kept++] = item;
+          }
           const removed = source.length - kept;
           source.length = kept;
+          if (removed !== 0) {{name("listChanged")}}(source);
           return removed;
         }
         function {{name("listGetRange")}}(source, index, count) {
           if (!Number.isInteger(index) || !Number.isInteger(count) || index < 0 || count < 0 || index + count > source.length)
             throw new RangeError("Offset and length were out of bounds for the array.");
-          return source.slice(index, index + count);
+          return {{name("listCreate")}}(source.slice(index, index + count));
         }
         function {{name("listSort")}}(source, comparison) {
+          if (comparison === null) throw new TypeError("Comparison cannot be null.");
           if (comparison === "Ordinal" || comparison === "OrdinalIgnoreCase") {
             const key = comparison === "Ordinal" ? text => text : text => Array.from(text, character => {
               const mapped = character.toUpperCase();
@@ -129,6 +175,7 @@ internal static partial class HelperSource
           }
           source.sort(comparison ?? ((left, right) => left !== left ? (right !== right ? 0 : -1)
             : right !== right ? 1 : left < right ? -1 : left > right ? 1 : 0));
+          {{name("listChanged")}}(source);
         }
         function {{name("setUnionWith")}}(set, items) {
           for (const item of {{name("linqValues")}}(items)) set.add(item);

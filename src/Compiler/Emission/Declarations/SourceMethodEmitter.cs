@@ -11,6 +11,18 @@ internal sealed partial class JavaScriptEmitter
         if (type.SpecialType == SpecialType.System_Char) return "\"\\u0000\"";
         if (type.TypeKind == TypeKind.Enum || type.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Double)
             return "0";
+        if (type is INamedTypeSymbol named)
+        {
+            var definition = named.OriginalDefinition.ToDisplayString();
+            if (named.TypeArguments is [{ SpecialType: SpecialType.System_Byte }]
+                && definition is "System.Memory<T>" or "System.ReadOnlyMemory<T>" or "System.Span<T>" or "System.ReadOnlySpan<T>")
+                return "new Uint8Array(0)";
+            if (definition == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
+                return $"[{DefaultFieldValue(named.TypeArguments[0], source)}, {DefaultFieldValue(named.TypeArguments[1], source)}]";
+            if (definition == "System.Threading.Tasks.ValueTask<TResult>")
+                return $"Promise.resolve({DefaultFieldValue(named.TypeArguments[0], source)})";
+            if (definition == "System.Threading.Tasks.ValueTask") return "Promise.resolve()";
+        }
         throw Unsupported("WRK108", source);
     }
 
@@ -20,11 +32,19 @@ internal sealed partial class JavaScriptEmitter
         _diagnosticNode = method;
         var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterName));
         var isAsync = method.Modifiers.Any(token => token.RawKind == (int)SyntaxKind.AsyncKeyword);
-        _output.Append(isAsync ? "async " : "").Append("function ").Append(EventName(eventName)).Append('(').Append(parameters).AppendLine(") {");
-        if (method.ExpressionBody is not null)
-            _output.Append("  return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
-        else
-            EmitStatements(method.Body?.Statements ?? [], 1);
+        var type = _model.GetDeclaredSymbol(method)!.ContainingType;
+        var asyncWrapper = isAsync && HasExplicitStaticConstructor(type);
+        _output.Append(isAsync && !asyncWrapper ? "async " : "").Append("function ").Append(EventName(eventName)).Append('(').Append(parameters).AppendLine(") {");
+        EmitWithExpressionScope(1, () =>
+        {
+            EmitExplicitStaticInitialization(type, 1);
+            if (asyncWrapper) _output.AppendLine("  return (async () => {");
+            if (method.ExpressionBody is not null)
+                _output.Append("  return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
+            else
+                EmitStatements(method.Body?.Statements ?? [], 1);
+            if (asyncWrapper) _output.AppendLine("  })();");
+        });
         _output.AppendLine("}").AppendLine();
     }
 
@@ -61,14 +81,42 @@ internal sealed partial class JavaScriptEmitter
             var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(ParameterDeclaration));
             var isAsync = declaration.Modifiers.Any(SyntaxKind.AsyncKeyword);
             var isIterator = IsIterator(declaration);
-            _output.Append(isAsync ? "async " : "").Append(isIterator ? "function* " : "function ")
+            var isEnumerable = IsEnumerableIterator(declaration, symbol);
+            var asyncWrapper = isAsync && !isEnumerable && HasExplicitStaticConstructor(symbol.ContainingType);
+            _output.Append(isAsync && !isEnumerable && !asyncWrapper ? "async " : "").Append(isIterator && !isEnumerable ? "function* " : "function ")
                 .Append(_userMethods[symbol]).Append('(').Append(parameters).AppendLine(") {");
-            if (declaration.ExpressionBody is not null)
-                _output.Append("  return ").Append(Expression(declaration.ExpressionBody.Expression)).AppendLine(";");
-            else
-                EmitStatements(declaration.Body?.Statements ?? [], 1);
+            EmitWithExpressionScope(1, () =>
+            {
+                EmitExplicitStaticInitialization(symbol.ContainingType, 1);
+                if (asyncWrapper) _output.AppendLine("  return (async () => {");
+                if (isEnumerable)
+                    EmitEnumerableIteratorBody(declaration, 1);
+                else if (declaration.ExpressionBody is not null)
+                    _output.Append("  return ").Append(Expression(declaration.ExpressionBody.Expression)).AppendLine(";");
+                else
+                    EmitStatements(declaration.Body?.Statements ?? [], 1);
+                if (asyncWrapper) _output.AppendLine("  })();");
+            });
             _output.AppendLine("}").AppendLine();
         }
+    }
+
+    private static bool IsEnumerableIterator(MethodDeclarationSyntax declaration, IMethodSymbol symbol) =>
+        IsIterator(declaration) && symbol.ReturnType.OriginalDefinition.ToDisplayString() is
+            "System.Collections.Generic.IEnumerable<T>" or "System.Collections.IEnumerable"
+            or "System.Collections.Generic.IAsyncEnumerable<T>";
+
+    // Each enumeration gets new parameter locals, while the factory captures the original
+    // arguments and instance. A generator object alone can only be consumed once.
+    private void EmitEnumerableIteratorBody(MethodDeclarationSyntax declaration, int depth)
+    {
+        var indent = new string(' ', depth * 2);
+        var isAsync = declaration.Modifiers.Any(SyntaxKind.AsyncKeyword);
+        var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(ParameterName));
+        _output.Append(indent).Append("return { [Symbol.").Append(isAsync ? "asyncIterator" : "iterator")
+            .Append("]: (").Append(isAsync ? "async " : "").Append("function* (").Append(parameters).AppendLine(") {");
+        EmitWithExpressionScope(depth + 1, () => EmitStatements(declaration.Body?.Statements ?? [], depth + 1));
+        _output.Append(indent).Append("}).bind(this").Append(parameters.Length == 0 ? "" : ", " + parameters).AppendLine(") };");
     }
 
 }

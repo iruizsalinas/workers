@@ -41,7 +41,7 @@ internal sealed partial class JavaScriptEmitter
                 IIncrementOrDecrementOperation value => NumericMutation(value),
                 IAwaitOperation value => $"await {Operand(value.Operation)}",
                 IBinaryOperation value => Binary(value),
-                ICoalesceOperation value => $"(({Expression(value.Value)}) ?? ({Expression(value.WhenNull)}))",
+                ICoalesceOperation value => Coalesce(value),
                 IConditionalOperation value => $"{Expression(value.Condition)} ? {Expression(value.WhenTrue)} : {Expression(value.WhenFalse!)}",
                 IConditionalAccessOperation value => ConditionalAccess(value),
                 IConditionalAccessInstanceOperation value => ConditionalReceiver(value),
@@ -50,7 +50,7 @@ internal sealed partial class JavaScriptEmitter
                 IWithOperation value => WithExpression(value),
                 ISwitchExpressionOperation value => SwitchExpression(value),
                 IArrayCreationOperation value => ArrayCreation(value),
-                IThrowOperation value => $"(() => {{ throw {Expression(value.Exception!)}; }})()",
+                IThrowOperation value => $"(($workers$exception) => {{ throw $workers$exception; }})({Expression(value.Exception!)})",
                 IIsPatternOperation value => IsPattern(value),
                 IFieldReferenceOperation value => Member(value),
                 IPropertyReferenceOperation value => Member(value),
@@ -81,6 +81,25 @@ internal sealed partial class JavaScriptEmitter
             or ISimpleAssignmentOperation or ICompoundAssignmentOperation ? $"({value})" : value;
     }
 
+    private string Coalesce(ICoalesceOperation operation)
+    {
+        var value = Expression(operation.Value);
+        if (!operation.ValueConversion.IsIdentity && !operation.ValueConversion.IsReference
+            && operation.Type?.SpecialType != SpecialType.System_Object)
+        {
+            if (operation.ValueConversion.IsUserDefined) throw Unsupported("WRK108", operation.Syntax);
+            var parameter = _names.Get($"coalesce:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "value");
+            var source = UnwrapNullable(operation.Value.Type!);
+            var target = UnwrapNullable(operation.Type!);
+            var widening = source.SpecialType is SpecialType.System_Int32 or SpecialType.System_UInt32
+                && target.SpecialType is SpecialType.System_Int64 or SpecialType.System_UInt64;
+            var converted = widening ? parameter : ConvertValue(source, target, parameter, operation.Syntax);
+            // Keep the null path lazy while converting a present value exactly once.
+            value = $"(({parameter}) => {parameter} == null ? null : {converted})({value})";
+        }
+        return $"(({value}) ?? ({Expression(operation.WhenNull)}))";
+    }
+
     private string AnonymousObject(IAnonymousObjectCreationOperation operation) =>
         "{ " + string.Join(", ", operation.Initializers.Select(initializer =>
         {
@@ -105,7 +124,13 @@ internal sealed partial class JavaScriptEmitter
 
     private string LambdaExpressionBody(ExpressionSyntax expression)
     {
-        var body = Expression(expression);
+        var temporaries = new List<string>();
+        _expressionTemporaryScopes.Push(temporaries);
+        string body;
+        try { body = Expression(expression); }
+        finally { _expressionTemporaryScopes.Pop(); }
+        if (temporaries.Count != 0)
+            return $"{{ let {string.Join(", ", temporaries)}; return {body}; }}";
         // Object literals are parsed as statement blocks in arrow-function bodies.
         return body.StartsWith('{') ? $"({body})" : body;
     }
@@ -236,27 +261,30 @@ internal sealed partial class JavaScriptEmitter
     private static bool ContainsAwait(IOperation operation) => operation is IAwaitOperation
         || operation is not IAnonymousFunctionOperation && operation.ChildOperations.Any(ContainsAwait);
 
-    // A record "with" expression is a memberwise clone that keeps the prototype, so class-backed
-    // records keep their methods, followed by the initializer assignments.
+    // Clone before evaluating initializers, then apply each assignment in source order.
     private string WithExpression(IWithOperation operation)
     {
         var value = operation.Syntax;
         if (operation.Operand.Type is not INamedTypeSymbol { IsRecord: true } type || !IsUserInstanceType(type))
             throw Unsupported("WRK101", value);
+        var temporary = _names.Get($"with:{value.SyntaxTree.FilePath}:{value.SpanStart}", "copy");
         var assignments = operation.Initializer.Initializers.Select(expression => expression switch
         {
             ISimpleAssignmentOperation { Target: IMemberReferenceOperation member } assignment =>
-                $"{JavaScriptObjectKey(UserMemberName(member.Member))}: {Expression(assignment.Value)}",
+                $"{UserMemberAccess(temporary, member.Member)} = {Expression(assignment.Value)};",
             _ => throw Unsupported("WRK106", expression.Syntax)
         });
+        string clone;
         if (type.InstanceConstructors.Any(constructor => !constructor.IsImplicitlyDeclared && IsUserRecordCopyConstructor(constructor)))
         {
             var record = QueueUserType(type, value);
-            return $"((source) => Object.assign({record}.$copy(source), {{ {string.Join(", ", assignments)} }}))"
-                + $"({Expression(operation.Operand)})";
+            clone = $"{record}.$copy({Expression(operation.Operand)})";
         }
-        return $"((source) => Object.assign(Object.create(Object.getPrototypeOf(source)), source, {{ {string.Join(", ", assignments)} }}))"
-            + $"({Expression(operation.Operand)})";
+        else
+            clone = $"((source) => Object.assign(Object.create(Object.getPrototypeOf(source)), source))({Expression(operation.Operand)})";
+        var isAsync = ContainsAwait(operation.Initializer);
+        var initialized = $"({(isAsync ? "async " : "")}({temporary}) => {{ {string.Join(" ", assignments)} return {temporary}; }})({clone})";
+        return isAsync ? $"(await {initialized})" : initialized;
     }
 
     private static bool IsSimpleMutationTarget(IOperation target) => target switch
@@ -294,7 +322,7 @@ internal sealed partial class JavaScriptEmitter
     private string LambdaBlock(BlockSyntax block)
     {
         var start = _output.Length;
-        EmitStatements(block.Statements, 1);
+        EmitWithExpressionScope(1, () => EmitStatements(block.Statements, 1));
         var statements = _output.ToString(start, _output.Length - start).TrimEnd();
         _output.Length = start;
         return statements.Length == 0 ? "{}" : $"{{\n{statements}\n}}";
@@ -325,9 +353,15 @@ internal sealed partial class JavaScriptEmitter
             : (operation.Type as INamedTypeSymbol)?.TypeArguments.FirstOrDefault();
         var items = "[" + string.Join(", ", operation.Elements.Select(element => element is ISpreadOperation spread
             ? "..." + Spread(spread, elementType) : Expression(element))) + "]";
+        if (operation.Type is INamedTypeSymbol set
+            && set.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>")
+        {
+            if (!SupportsLinqEquality(set.TypeArguments[0])) throw UnsupportedSymbol(set, operation.Syntax);
+            return $"new Set({items})";
+        }
         return operation.Type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
             ? $"Uint8Array.from({items})"
-            : items;
+            : IsListType(operation.Type) ? CreateList(items) : items;
     }
 
     private string Spread(ISpreadOperation operation, ITypeSymbol? elementType)

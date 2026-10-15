@@ -135,6 +135,53 @@ public static class Worker
 
 public sealed class EchoObject : DurableObject
 {
+    private int _iteratorOffset;
+
+    public async Task<bool> StoredListEnumerationAsync()
+    {
+        List<int> values = [1, 2];
+        await Ctx.Storage.PutAsync("enumeration-list", values);
+        var stored = await Ctx.Storage.GetAsync<List<int>>("enumeration-list");
+        var caught = false;
+        var seen = 0;
+        try
+        {
+            foreach (var value in stored!)
+            {
+                seen++;
+                stored!.Add(value);
+                if (seen == 4) break;
+            }
+        }
+        catch (Exception) { caught = true; }
+        return caught && seen == 1 && stored!.Count == 3;
+    }
+
+    public async Task<string> AsyncControlFlowAsync(int value)
+    {
+        var url = value < 0 ? null : new Url("https://worker.test/?value=present");
+        return value switch
+        {
+            0 => await Task.FromResult("awaited"),
+            _ => url?.SearchParams.Get(await Task.FromResult("value")) ?? "missing"
+        };
+    }
+
+    public int[] IteratorSnapshot(int start)
+    {
+        _iteratorOffset = 10;
+        var sequence = Values(start);
+        var first = sequence.ToArray();
+        _iteratorOffset = 20;
+        return first.Concat(sequence).ToArray();
+    }
+
+    private IEnumerable<int> Values(int start)
+    {
+        yield return _iteratorOffset + start++;
+        yield return _iteratorOffset + start++;
+    }
+
     public override Task<Response> FetchAsync(Request request) =>
         Task.FromResult(new Response($"durable:{new Url(request.Url).Pathname}"));
 

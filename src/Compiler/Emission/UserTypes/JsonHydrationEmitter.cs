@@ -117,12 +117,16 @@ internal sealed partial class JavaScriptEmitter
         if (JsonElementType(type) is { } element)
         {
             var isSet = type.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>";
+            var isList = IsListType(type);
             var converted = JsonValueExpression(element, "item", mode);
-            if (converted == "item" && !isSet) return value;
+            if (converted == "item" && !isSet && !isList) return value;
+            if (converted == "item" && isList)
+                return $"(values => Array.isArray(values) ? {CreateList("values")} : values)({value})";
             var expression = type is INamedTypeSymbol { TypeArguments.Length: 2 }
                 ? $"Object.fromEntries(Object.entries(values).map(([key, item]) => [key, {converted}]))"
                 : $"Array.from(values, item => {converted})";
             if (isSet) expression = $"new Set({expression})";
+            if (isList) expression = CreateList(expression);
             return $"(values => values == null ? values : {expression})({value})";
         }
         if (mode == JsonQueryMode) value = $"(Array.isArray({value}) ? {value}[0] : {value})";

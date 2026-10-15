@@ -40,7 +40,7 @@ internal sealed partial class JavaScriptEmitter
             return FrameworkException(constructor, type!, arguments);
         if (typeName == "Workers.Url") return CreateUrl(value, constructor, arguments);
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" && arguments.Length == 0)
-            return $"[{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}]";
+            return CreateList($"[{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}]");
         if (type?.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.List<T>" or "System.Collections.Generic.HashSet<T>"
             && arguments.Length == 1 && value.Initializer is null && constructor?.Parameters.Length == 1)
         {
@@ -48,11 +48,11 @@ internal sealed partial class JavaScriptEmitter
             if (set && !SupportsLinqEquality(type.TypeArguments[0])) throw UnsupportedSymbol(constructor, value);
             var parameter = constructor.Parameters[0].Type;
             if (parameter.SpecialType == SpecialType.System_Int32 && !set)
-                return $"((capacity) => {{ if (capacity < 0) throw new RangeError(\"capacity must be non-negative.\"); return []; }})({Expression(arguments[0].Expression)})";
+                return $"((capacity) => {{ if (capacity < 0) throw new RangeError(\"capacity must be non-negative.\"); return {CreateList("[]")}; }})({Expression(arguments[0].Expression)})";
             if (parameter.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
             {
                 var copy = Linq(JavaScriptHelper.LinqToArray, Expression(arguments[0].Expression), []);
-                return set ? $"new Set({copy})" : copy;
+                return set ? $"new Set({copy})" : CreateList(copy);
             }
         }
         if (type?.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.Queue<T>" or

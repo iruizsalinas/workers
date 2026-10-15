@@ -36,7 +36,7 @@ public sealed class LinqAdvancedTests
         Assert.Contains("$workers$linqToDictionary(", module);
         Assert.Contains("lookup.contains(\"a\")", module);
         Assert.Contains("lookup.get(\"a\")", module);
-        Assert.Contains("$workers$linqJoin(items, [\"a\"]", module);
+        Assert.Contains("$workers$linqJoin(items, $workers$listCreate([\"a\"])", module);
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public sealed class LinqAdvancedTests
         Assert.Contains("$workers$linqExtremum(items, item => item.score", module);
         Assert.Contains("$workers$linqSet(values", module);
         Assert.Contains("$workers$linqReverse(values)", module);
-        Assert.Contains("$workers$linqDefaultIfEmpty([], 0)", module);
+        Assert.Contains("$workers$linqDefaultIfEmpty($workers$listCreate([]), 0)", module);
         Assert.Contains("$workers$linqChunk(values, 2)", module);
         Assert.Contains("$workers$linqZip(values, values", module);
         Assert.Contains("left.return?.()", module);

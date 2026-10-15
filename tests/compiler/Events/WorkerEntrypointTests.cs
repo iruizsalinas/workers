@@ -88,7 +88,8 @@ public sealed class WorkerEntrypointTests
             }
             """);
 
-        Assert.Contains("async *#values()", module);
+        Assert.Contains("#values()", module);
+        Assert.Contains("return { [Symbol.asyncIterator]: (async function* ()", module);
     }
 
     [Fact]

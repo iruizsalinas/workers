@@ -1,7 +1,7 @@
 internal enum JavaScriptHelper
 {
-    RequestCookies, SetCookie, TaskWhenAll, StreamFrom, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
-    SetAdd, QueueStack, RpcArguments, JsonExpect, TryCall, CollectionMembers, StringReplace,
+    RequestCookies, SetCookie, TaskWhenAll, AsyncExpressionResult, StreamFrom, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
+    SetAdd, QueueStack, RpcArguments, JsonExpect, TryCall, CollectionMembers, ListState, StringReplace,
     StringOrdinal,
     Router, HttpError, Cors, BoundedBody, Redirect,
     NumericParse, LinqValues, LinqWhere, LinqSelect, LinqSelectMany, LinqAppend, LinqPrepend, LinqSkip, LinqTake,
@@ -24,6 +24,8 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
             _required.Add(JavaScriptHelper.LinqValues);
         if (helper.IsLinqOperator())
             _required.Add(JavaScriptHelper.LinqValues);
+        if (helper is JavaScriptHelper.SequenceIndex or JavaScriptHelper.CollectionMembers)
+            _required.Add(JavaScriptHelper.ListState);
         return Name(helper.EntryPoint());
     }
 
@@ -39,6 +41,7 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.RequestCookies => "requestCookies",
         JavaScriptHelper.SetCookie => "setCookie",
         JavaScriptHelper.TaskWhenAll => "taskWhenAll",
+        JavaScriptHelper.AsyncExpressionResult => "asyncExpressionResult",
         JavaScriptHelper.StreamFrom => "streamFrom",
         JavaScriptHelper.SequenceIndex => "sequenceIndex",
         JavaScriptHelper.DictionaryIndex => "dictionaryIndex",
@@ -50,6 +53,7 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.JsonExpect => "jsonExpect",
         JavaScriptHelper.TryCall => "tryCall",
         JavaScriptHelper.CollectionMembers => "collectionKey",
+        JavaScriptHelper.ListState => "listCreate",
         JavaScriptHelper.Router => "routerCreate",
         JavaScriptHelper.HttpError => "HttpError",
         JavaScriptHelper.Cors => "corsAllow",

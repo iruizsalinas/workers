@@ -43,12 +43,13 @@ internal sealed partial class JavaScriptEmitter
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())
         {
             var methodSymbol = _model.GetDeclaredSymbol(method)!;
+            var isEnumerable = IsEnumerableIterator(method, methodSymbol);
             var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterDeclaration));
-            _output.Append("  ").Append(method.Modifiers.Any(SyntaxKind.AsyncKeyword) ? "async " : "")
-                .Append(IsIterator(method) ? "*" : "")
+            _output.Append("  ").Append(method.Modifiers.Any(SyntaxKind.AsyncKeyword) && !isEnumerable ? "async " : "")
+                .Append(IsIterator(method) && !isEnumerable ? "*" : "")
                 .Append(GeneratedInstanceMethodName(methodSymbol))
                 .Append('(').Append(parameters).AppendLine(") {");
-            EmitRpcMethodBody(method, methodSymbol);
+            EmitWithExpressionScope(2, () => EmitRpcMethodBody(method, methodSymbol));
             _output.AppendLine("  }");
         }
         _output.AppendLine("}").AppendLine();

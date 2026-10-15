@@ -26,7 +26,7 @@ public sealed class LinqOrderingTests
 
         Assert.Contains("$workers$linqDistinct(values)", module);
         Assert.Contains("$workers$linqDistinctBy(words, word => word.length)", module);
-        Assert.Contains("$workers$linqSequenceEqual(values, [1, 2, 1])", module);
+        Assert.Contains("$workers$linqSequenceEqual(values, $workers$listCreate([1, 2, 1]))", module);
         Assert.Contains("const seen = new Set()", module);
     }
 

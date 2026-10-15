@@ -3,6 +3,23 @@ import { describe, expect, it } from "vitest";
 import { env } from "../support.js";
 
 describe("Durable Object bindings", () => {
+  it("persists lists without iterator metadata and restores their enumeration checks", async () => {
+    const stub = env.ECHO.getByName(`stored-list-${crypto.randomUUID()}`);
+    await expect(stub.storedListEnumeration()).resolves.toBe(true);
+  });
+
+  it("runs awaited switch arms and conditional calls inside generated methods", async () => {
+    const stub = env.ECHO.getByName(`async-flow-${crypto.randomUUID()}`);
+    await expect(stub.asyncControlFlow(0)).resolves.toBe("awaited");
+    await expect(stub.asyncControlFlow(1)).resolves.toBe("present");
+    await expect(stub.asyncControlFlow(-1)).resolves.toBe("missing");
+  });
+
+  it("restarts iterator helpers with their original arguments and current receiver", async () => {
+    const stub = env.ECHO.getByName(`iterator-${crypto.randomUUID()}`);
+    await expect(stub.iteratorSnapshot(2)).resolves.toEqual([12, 13, 22, 23]);
+  });
+
   it("exports a C# Durable Object class usable by the local namespace", async () => {
     const stub = env.ECHO.getByName(`echo-${crypto.randomUUID()}`);
     const response = await stub.fetch("https://worker.test/native");

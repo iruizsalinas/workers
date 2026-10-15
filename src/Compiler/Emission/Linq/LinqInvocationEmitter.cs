@@ -80,7 +80,8 @@ internal sealed partial class JavaScriptEmitter
             "Reverse" when operationArguments.Length == 0 => Linq(JavaScriptHelper.LinqReverse, source, []),
             "DefaultIfEmpty" => LinqDefaultIfEmpty(invocation, method, source, operationArguments),
             "Chunk" when HasInt32(parameters, operationArguments) =>
-                Linq(JavaScriptHelper.LinqChunk, source, operationArguments),
+                Linq(JavaScriptHelper.LinqChunk, source, method.TypeArguments[0].SpecialType == SpecialType.System_Byte
+                    ? [operationArguments[0], "true"] : operationArguments),
             "Zip" => LinqZip(invocation, method, parameters, source, operationArguments),
             "Aggregate" => LinqAggregate(invocation, method, parameters, source, operationArguments),
             "Join" or "GroupJoin" => LinqJoin(invocation, method, parameters, source, operationArguments),
@@ -101,8 +102,8 @@ internal sealed partial class JavaScriptEmitter
                 JavaScriptHelper.LinqSingle, orDefault: false),
             "SingleOrDefault" => LinqElement(invocation, method, parameters, source, operationArguments,
                 JavaScriptHelper.LinqSingle, orDefault: true),
-            "ToArray" when operationArguments.Length == 0 => Linq(JavaScriptHelper.LinqToArray, source, []),
-            "ToList" when operationArguments.Length == 0 => Linq(JavaScriptHelper.LinqToArray, source, []),
+            "ToArray" when operationArguments.Length == 0 => MaterializeArray(method.ReturnType, Linq(JavaScriptHelper.LinqToArray, source, [])),
+            "ToList" when operationArguments.Length == 0 => CreateList(Linq(JavaScriptHelper.LinqToArray, source, [])),
             _ => throw UnsupportedSymbol(method, invocation)
         };
     }

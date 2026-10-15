@@ -22,7 +22,7 @@ internal sealed partial class JavaScriptEmitter
             ("Clear", 0) => $"{receiver}.length = 0",
             ("Contains", 1) when SupportsLinqEquality(method.ContainingType.TypeArguments[0]) =>
                 $"{receiver}.includes({arguments[0]})",
-            ("ToArray", 0) => $"{receiver}.slice()",
+            ("ToArray", 0) => MaterializeArray(method.ReturnType, $"{receiver}.slice()"),
             _ => throw UnsupportedSymbol(method, source)
         };
     }
@@ -32,5 +32,15 @@ internal sealed partial class JavaScriptEmitter
         _helpers.Require(JavaScriptHelper.QueueStack);
         return $"{_helpers.Name("queueStackTake")}({receiver}, {remove.ToString().ToLowerInvariant()})";
     }
+
+    private static string MaterializeArray(ITypeSymbol type, string values) =>
+        type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
+            ? $"Uint8Array.from({values})" : values;
+
+    private string CreateList(string values) => $"{_helpers.Require(JavaScriptHelper.ListState)}({values})";
+
+    private static bool IsListType(ITypeSymbol? type) => type is INamedTypeSymbol named
+        && named.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.List<T>"
+            or "System.Collections.Generic.IList<T>" or "System.Collections.Generic.ICollection<T>";
 
 }

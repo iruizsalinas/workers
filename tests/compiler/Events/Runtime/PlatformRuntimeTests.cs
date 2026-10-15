@@ -180,7 +180,8 @@ public sealed class PlatformRuntimeTests
             }
             """);
 
-        Assert.Contains("*#values()", module);
+        Assert.Contains("#values()", module);
+        Assert.Contains("return { [Symbol.iterator]: (function* ()", module);
     }
 
 }

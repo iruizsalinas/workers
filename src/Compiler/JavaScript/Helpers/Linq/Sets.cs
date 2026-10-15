@@ -26,16 +26,16 @@ internal static partial class HelperSource
         """;
 
     private static string LinqChunk(Func<string, string> name) => $$"""
-        function {{name("linqChunk")}}(source, size) {
+        function {{name("linqChunk")}}(source, size, bytes = false) {
           if (source == null) throw new TypeError("LINQ source cannot be null.");
           if (size < 1) throw new RangeError("Chunk size must be positive.");
           return { *[Symbol.iterator]() {
             let chunk = [];
             for (const value of {{name("linqValues")}}(source)) {
               chunk.push(value);
-              if (chunk.length === size) { yield chunk; chunk = []; }
+              if (chunk.length === size) { yield bytes ? Uint8Array.from(chunk) : chunk; chunk = []; }
             }
-            if (chunk.length !== 0) yield chunk;
+            if (chunk.length !== 0) yield bytes ? Uint8Array.from(chunk) : chunk;
           }
           };
         }

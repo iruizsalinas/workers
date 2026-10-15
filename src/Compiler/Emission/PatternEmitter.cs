@@ -213,6 +213,13 @@ internal sealed partial class JavaScriptEmitter
                 .OfType<SingleVariableDesignationSyntax>(),
             variables.Add);
         var isAsync = operation.Arms.Any(ContainsAwait);
+        string? state = null;
+        if (isAsync)
+        {
+            if (!_expressionTemporaryScopes.TryPeek(out var temporaries)) throw Unsupported("WRK108", value);
+            state = _names.Get($"switch-state:{value.SyntaxTree.FilePath}:{value.SpanStart}", "switchState");
+            temporaries.Add(state);
+        }
         var body = new List<string>();
         if (variables.Count != 0) body.Add($"let {string.Join(", ", variables)};");
         foreach (var arm in operation.Arms)
@@ -221,11 +228,20 @@ internal sealed partial class JavaScriptEmitter
             if (arm.Guard is not null) condition = $"{condition} && ({Expression(arm.Guard)})";
             var result = arm.Value is IThrowOperation thrown
                 ? $"throw {Expression(thrown.Exception!)};"
+                : isAsync ? $"{state}.value = ({Expression(arm.Value)}); {state}.done = true; return;"
                 : $"return {Expression(arm.Value)};";
-            body.Add(condition == "true" ? result : $"if ({condition}) {result}");
+            body.Add(condition == "true" ? result : isAsync ? $"if ({condition}) {{ {result} }}" : $"if ({condition}) {result}");
         }
         body.Add("throw new Error(\"The switch expression does not handle all possible values.\");");
-        var function = $"({(isAsync ? "async " : "")}({parameter}) => {{ {string.Join(" ", body)} }})({Expression(operation.Value)})";
-        return isAsync ? $"(await {function})" : function;
+        if (!isAsync)
+            return $"(({parameter}) => {{ {string.Join(" ", body)} }})({Expression(operation.Value)})";
+        // The wrapper stores its result rather than returning it, so a Task-valued arm keeps
+        // its identity. Inspect completion before awaiting to preserve synchronous branches.
+        var resultHelper = _helpers.Require(JavaScriptHelper.AsyncExpressionResult);
+        var function = $"(async ({parameter}, {state}) => {{ try {{ {string.Join(" ", body)} }} " +
+            $"catch ($workers$error) {{ {state}.error = $workers$error; {state}.failed = true; {state}.done = true; }} }})" +
+            $"({Expression(operation.Value)}, {state})";
+        return $"(({state} = {{}}), {state}.pending = {function}, {state}.done ? {resultHelper}({state}) : " +
+            $"(await {state}.pending, {resultHelper}({state})))";
     }
 }

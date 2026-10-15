@@ -39,16 +39,23 @@ internal sealed partial class JavaScriptEmitter
         }
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())
         {
-            var name = GeneratedInstanceMethodName(_model.GetDeclaredSymbol(method)!);
+            var symbol = _model.GetDeclaredSymbol(method)!;
+            var name = GeneratedInstanceMethodName(symbol);
             var parameters = string.Join(", ", method.ParameterList.Parameters.Select(ParameterDeclaration));
             var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);
             var isIterator = IsIterator(method);
-            _output.Append("  ").Append(isAsync ? "async " : "").Append(isIterator ? "*" : "")
+            var isEnumerable = IsEnumerableIterator(method, symbol);
+            _output.Append("  ").Append(isAsync && !isEnumerable ? "async " : "").Append(isIterator && !isEnumerable ? "*" : "")
                 .Append(name).Append('(').Append(parameters).AppendLine(") {");
-            if (method.ExpressionBody is not null)
-                _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
-            else
-                EmitStatements(method.Body?.Statements ?? [], 2);
+            EmitWithExpressionScope(2, () =>
+            {
+                if (isEnumerable)
+                    EmitEnumerableIteratorBody(method, 2);
+                else if (method.ExpressionBody is not null)
+                    _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
+                else
+                    EmitStatements(method.Body?.Statements ?? [], 2);
+            });
             _output.AppendLine("  }");
         }
         _output.AppendLine("}").AppendLine();
@@ -58,6 +65,11 @@ internal sealed partial class JavaScriptEmitter
     // carry instances of compiled user classes; their results are converted to plain objects.
     private void EmitRpcMethodBody(MethodDeclarationSyntax method, IMethodSymbol symbol)
     {
+        if (IsEnumerableIterator(method, symbol))
+        {
+            EmitEnumerableIteratorBody(method, 2);
+            return;
+        }
         var convert = symbol.DeclaredAccessibility == Accessibility.Public && !IsIterator(method)
             && ContainsUserInstanceType(symbol.ReturnType);
         var rpcValue = convert ? RequireHelperName(JavaScriptHelper.RpcArguments, "rpcValue") : null;

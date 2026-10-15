@@ -27,7 +27,8 @@ public sealed class SafetyRegressionTests
             """);
 
         Assert.Contains("for await (const value of", module);
-        Assert.Contains("async function* $workers$cs$Worker$Values$0()", module);
+        Assert.Contains("function $workers$cs$Worker$Values$0()", module);
+        Assert.Contains("return { [Symbol.asyncIterator]: (async function* ()", module);
         Assert.Contains("| 0", module);
         Assert.Contains("\"True\" : \"False\"", module);
     }
@@ -55,7 +56,8 @@ public sealed class SafetyRegressionTests
             }
             """);
 
-        Assert.Contains("function* $workers$cs$Worker$Values$0()", module);
+        Assert.Contains("function $workers$cs$Worker$Values$0()", module);
+        Assert.Contains("return { [Symbol.iterator]: (function* ()", module);
         Assert.Contains("yield 1;", module);
         Assert.Contains("yield 2;", module);
     }

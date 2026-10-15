@@ -109,7 +109,8 @@ public sealed class DurableObjectTests
             }
             """);
 
-        Assert.Contains("*#values()", module);
+        Assert.Contains("#values()", module);
+        Assert.Contains("return { [Symbol.iterator]: (function* ()", module);
     }
 
 }

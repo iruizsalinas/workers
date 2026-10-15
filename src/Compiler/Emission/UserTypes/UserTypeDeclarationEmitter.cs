@@ -82,17 +82,6 @@ internal sealed partial class JavaScriptEmitter
         if (IsUserException(type))
             EmitExceptionBaseCall(type, constructor);
 
-        foreach (var field in declaration.Members.OfType<FieldDeclarationSyntax>())
-            foreach (var variable in field.Declaration.Variables)
-            {
-                var symbol = (IFieldSymbol)_model.GetDeclaredSymbol(variable)!;
-                if (symbol.IsStatic) continue;
-                _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
-                    .Append(variable.Initializer is null
-                        ? DefaultFieldValue(symbol.Type, variable)
-                        : Expression(variable.Initializer.Value)).AppendLine(";");
-            }
-
         if (record?.ParameterList is not null)
             foreach (var parameter in record.ParameterList.Parameters)
             {
@@ -102,13 +91,27 @@ internal sealed partial class JavaScriptEmitter
                     .Append(ParameterName(parameter)).AppendLine(";");
             }
 
-        foreach (var property in declaration.Members.OfType<PropertyDeclarationSyntax>().Where(IsAutoProperty))
+        foreach (var member in declaration.Members)
         {
-            var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
-            _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
-                .Append(property.Initializer is null
-                    ? DefaultFieldValue(symbol.Type, property)
-                    : Expression(property.Initializer.Value)).AppendLine(";");
+            if (member is FieldDeclarationSyntax field)
+                foreach (var variable in field.Declaration.Variables)
+                {
+                    var symbol = (IFieldSymbol)_model.GetDeclaredSymbol(variable)!;
+                    if (symbol.IsStatic) continue;
+                    _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
+                        .Append(variable.Initializer is null
+                            ? DefaultFieldValue(symbol.Type, variable)
+                            : Expression(variable.Initializer.Value)).AppendLine(";");
+                }
+            else if (member is PropertyDeclarationSyntax property && IsAutoProperty(property))
+            {
+                var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
+                if (symbol.IsStatic) continue;
+                _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
+                    .Append(property.Initializer is null
+                        ? DefaultFieldValue(symbol.Type, property)
+                        : Expression(property.Initializer.Value)).AppendLine(";");
+            }
         }
 
         if (constructor?.ExpressionBody is not null)
@@ -138,13 +141,13 @@ internal sealed partial class JavaScriptEmitter
         // A custom C# copy constructor starts with zero-initialized fields. Member initializers
         // belong to ordinary construction and do not run during record copying.
         foreach (var field in declaration.Members.OfType<FieldDeclarationSyntax>())
-        foreach (var variable in field.Declaration.Variables)
-        {
-            var symbol = (IFieldSymbol)_model.GetDeclaredSymbol(variable)!;
-            if (!symbol.IsStatic)
-                _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
-                    .Append(DefaultFieldValue(symbol.Type, variable)).AppendLine(";");
-        }
+            foreach (var variable in field.Declaration.Variables)
+            {
+                var symbol = (IFieldSymbol)_model.GetDeclaredSymbol(variable)!;
+                if (!symbol.IsStatic)
+                    _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
+                        .Append(DefaultFieldValue(symbol.Type, variable)).AppendLine(";");
+            }
         if (declaration is RecordDeclarationSyntax { ParameterList: { } parameters })
             foreach (var parameter in parameters.Parameters)
             {
@@ -215,13 +218,19 @@ internal sealed partial class JavaScriptEmitter
         var symbol = (IMethodSymbol)_model.GetDeclaredSymbol(method)!;
         var isAsync = method.Modifiers.Any(SyntaxKind.AsyncKeyword);
         var isIterator = IsIterator(method);
-        _output.Append("  ").Append(isAsync ? "async " : "").Append(isIterator ? "*" : "")
+        var isEnumerable = IsEnumerableIterator(method, symbol);
+        _output.Append("  ").Append(isAsync && !isEnumerable ? "async " : "").Append(isIterator && !isEnumerable ? "*" : "")
             .Append(UserInstanceMethodName(symbol)).Append('(')
             .Append(string.Join(", ", method.ParameterList.Parameters.Select(ParameterDeclaration))).AppendLine(") {");
-        if (method.ExpressionBody is not null)
-            _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
-        else
-            EmitStatements(method.Body?.Statements ?? [], 2);
+        EmitWithExpressionScope(2, () =>
+        {
+            if (isEnumerable)
+                EmitEnumerableIteratorBody(method, 2);
+            else if (method.ExpressionBody is not null)
+                _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
+            else
+                EmitStatements(method.Body?.Statements ?? [], 2);
+        });
         _output.AppendLine("  }");
     }
 

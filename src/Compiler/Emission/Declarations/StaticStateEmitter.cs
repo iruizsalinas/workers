@@ -106,10 +106,8 @@ internal sealed partial class JavaScriptEmitter
         _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
         var function = _staticHolders[type];
         var storage = _names.Get($"static-storage:{type.ToDisplayString()}", $"static${type.Name}");
-        _output.Append("var ").Append(storage).AppendLine(";");
-        _output.Append("function ").Append(function).AppendLine("() {");
-        _output.Append("  if (").Append(storage).Append(" !== undefined) return ").Append(storage).AppendLine(";");
-        _output.Append("  ").Append(storage).AppendLine(" = Object.create(null);");
+        var failure = _names.Get($"static-failure:{type.ToDisplayString()}", $"staticFailure${type.Name}");
+        var members = new List<(ISymbol Symbol, ITypeSymbol Type, ExpressionSyntax? Initializer, SyntaxNode Source)>();
         foreach (var member in declaration.Members)
         {
             if (member is FieldDeclarationSyntax field && field.Modifiers.Any(SyntaxKind.StaticKeyword)
@@ -117,27 +115,45 @@ internal sealed partial class JavaScriptEmitter
                 foreach (var variable in field.Declaration.Variables)
                 {
                     var symbol = (IFieldSymbol)_model.GetDeclaredSymbol(variable)!;
-                    _output.Append("  ").Append(storage).Append(StaticMemberKey(symbol)).Append(" = ")
-                        .Append(variable.Initializer is null
-                            ? DefaultFieldValue(symbol.Type, variable)
-                            : Expression(variable.Initializer.Value)).AppendLine(";");
+                    members.Add((symbol, symbol.Type, variable.Initializer?.Value, variable));
                 }
             else if (member is PropertyDeclarationSyntax property && property.Modifiers.Any(SyntaxKind.StaticKeyword)
                      && IsAutoProperty(property))
             {
                 var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
-                _output.Append("  ").Append(storage).Append(StaticMemberKey(symbol)).Append(" = ")
-                    .Append(property.Initializer is null
-                        ? DefaultFieldValue(symbol.Type, property)
-                        : Expression(property.Initializer.Value)).AppendLine(";");
+                members.Add((symbol, symbol.Type, property.Initializer?.Value, property));
             }
         }
+        _output.Append("var ").Append(storage).AppendLine(";");
+        _output.Append("var ").Append(failure).AppendLine(";");
+        _output.Append("function ").Append(function).AppendLine("() {");
+        _output.Append("  if (").Append(failure).Append(" !== undefined) throw ").Append(failure).AppendLine(";");
+        _output.Append("  if (").Append(storage).Append(" !== undefined) return ").Append(storage).AppendLine(";");
+        _output.Append("  ").Append(storage).AppendLine(" = Object.create(null);");
+        // Publish every default before evaluating any initializer, including cyclic reads.
+        foreach (var member in members)
+            _output.Append("  ").Append(storage).Append(StaticMemberKey(member.Symbol)).Append(" = ")
+                .Append(DefaultFieldValue(member.Type, member.Source)).AppendLine(";");
+        _output.AppendLine("  try {");
+        foreach (var member in members.Where(member => member.Initializer is not null))
+            _output.Append("    ").Append(storage).Append(StaticMemberKey(member.Symbol)).Append(" = ")
+                .Append(Expression(member.Initializer!)).AppendLine(";");
         var staticConstructor = declaration.Members.OfType<ConstructorDeclarationSyntax>()
             .SingleOrDefault(constructor => constructor.Modifiers.Any(SyntaxKind.StaticKeyword));
         if (staticConstructor?.ExpressionBody is not null)
-            _output.Append("  ").Append(Expression(staticConstructor.ExpressionBody.Expression)).AppendLine(";");
-        else
-            EmitStatements(staticConstructor?.Body?.Statements ?? [], 1);
+            _output.Append("    ").Append(Expression(staticConstructor.ExpressionBody.Expression)).AppendLine(";");
+        else if (staticConstructor is not null)
+        {
+            _output.AppendLine("    (() => {");
+            EmitStatements(staticConstructor.Body?.Statements ?? [], 3);
+            _output.AppendLine("    })();");
+        }
+        _output.AppendLine("  } catch (cause) {");
+        _output.Append("    ").Append(failure).Append(" = new Error(")
+            .Append(JsonSerializer.Serialize($"The type initializer for '{type.ToDisplayString()}' threw an exception."))
+            .AppendLine(", { cause });");
+        _output.Append("    throw ").Append(failure).AppendLine(";");
+        _output.AppendLine("  }");
         _output.Append("  return ").Append(storage).AppendLine(";");
         _output.AppendLine("}").AppendLine();
     }
@@ -150,6 +166,7 @@ internal sealed partial class JavaScriptEmitter
             throw new NotSupportedException(
                 $"WRK110: Static property '{property.ToDisplayString()}' must be an auto-property or a getter-only property.");
         _output.Append("function ").Append(_staticGetters[property]).AppendLine("() {");
+        EmitExplicitStaticInitialization(property.ContainingType, 1);
         var getter = declaration.AccessorList?.Accessors.Single();
         var expression = declaration.ExpressionBody?.Expression ?? getter?.ExpressionBody?.Expression;
         if (expression is not null)
@@ -157,5 +174,14 @@ internal sealed partial class JavaScriptEmitter
         else
             EmitStatements(getter?.Body?.Statements ?? [], 1);
         _output.AppendLine("}").AppendLine();
+    }
+
+    private bool HasExplicitStaticConstructor(INamedTypeSymbol type) =>
+        IsStaticStateContainer(type) && type.StaticConstructors.Any(constructor => !constructor.IsImplicitlyDeclared);
+
+    private void EmitExplicitStaticInitialization(INamedTypeSymbol type, int depth)
+    {
+        if (HasExplicitStaticConstructor(type))
+            _output.Append(new string(' ', depth * 2)).Append(StaticHolder(type)).AppendLine("();");
     }
 }

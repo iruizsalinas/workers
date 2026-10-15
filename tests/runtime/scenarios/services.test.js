@@ -9,6 +9,16 @@ beforeEach(async () => {
 });
 
 describe("named WorkerEntrypoint service bindings", () => {
+  it("runs awaited switch arms and conditional calls inside generated methods", async () => {
+    await expect(env.CORE.asyncControlFlow(0)).resolves.toBe("awaited");
+    await expect(env.CORE.asyncControlFlow(1)).resolves.toBe("present");
+    await expect(env.CORE.asyncControlFlow(-1)).resolves.toBe("missing");
+  });
+
+  it("restarts async iterator helpers with their original arguments and current receiver", async () => {
+    await expect(env.CORE.iteratorSnapshot(2)).resolves.toEqual([12, 13, 22, 23]);
+  });
+
   it("calls the same service through RPC and fetch", async () => {
     const response = await invoke("/health");
     const result = await response.json();
