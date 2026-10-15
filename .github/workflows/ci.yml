@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_call:
+    inputs:
+      release_commit:
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -13,6 +18,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_commit || github.sha }}
+          persist-credentials: false
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -26,6 +34,8 @@ jobs:
       # The compiler tests run generated Workers in Node.js and read the runtime declarations from wrangler.
       - run: npm ci
       - run: npm audit --audit-level=critical
+      - shell: pwsh
+        run: ./eng/test-version.ps1
       - run: dotnet restore Workers.slnx
       - run: dotnet pack src/Workers.csproj -c Release --no-restore -o .artifacts/package
       - run: dotnet test Workers.slnx -c Release --no-restore
@@ -49,6 +59,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_commit || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
