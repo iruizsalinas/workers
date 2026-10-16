@@ -44,16 +44,16 @@ public sealed class CollectionControlFlowTests
             }
             """);
 
-        Assert.Contains("let methods = new Set([\"GET\", \"HEAD\"]);", module);
-        Assert.Contains("setAdd(methods, \"OPTIONS\")", module);
-        Assert.Contains("allowed: methods.has(request.method)", module);
-        Assert.Contains("count: methods.size", module);
+        Assert.Contains("let methods = $workers$setCreate(new Set([\"GET\", \"HEAD\"]));", module);
+        Assert.Contains("setAdd($workers$notNull(methods), \"OPTIONS\")", module);
+        Assert.Contains("allowed: (($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).has($workers$arg1))(methods, $workers$notNull(request).method)", module);
+        Assert.Contains("count: $workers$notNull(methods).size", module);
     }
 
     [Fact]
-    public void RejectsHashSetsThatNeedClrValueEquality()
+    public void EmitsValueEqualityForRecordHashSets()
     {
-        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+        var module = Compile("""
             using Workers;
             public static class Worker
             {
@@ -65,9 +65,9 @@ public sealed class CollectionControlFlowTests
                 }
             }
             public sealed record Item(int Id);
-            """));
+            """);
 
-        Assert.StartsWith("WRK105:", error.Message);
+        Assert.Contains("keyCollection", module);
     }
 
     [Fact]
@@ -133,9 +133,9 @@ public sealed class CollectionControlFlowTests
             }
             """);
 
-        Assert.Contains("storage => {\n  let current = await storage.get(\"owner\")", module);
+        Assert.Contains("storage => {\n  let current = await $workers$notNull(storage).get(\"owner\")", module);
         Assert.Contains("if (current != null)", module);
-        Assert.Contains("await storage.put(\"owner\", owner)", module);
+        Assert.Contains("await $workers$notNull(storage).put(\"owner\", owner)", module);
     }
 
     [Fact]
@@ -157,8 +157,9 @@ public sealed class CollectionControlFlowTests
             """);
 
         Assert.Contains("let values = Object.assign(Object.create(null), { [\"one\"]: 1, [\"two\"]: 2 });", module);
-        Assert.Contains("for (const entry of Object.entries(values))", module);
-        Assert.Contains("count: Object.keys(values).length", module);
+        Assert.Matches(@"for \(const \$workers\$item(?:\$\d+)? of Object.entries\(\$workers\$notNull\(values\)\)\)", module);
+        Assert.Contains("const entry =", module);
+        Assert.Contains("count: Object.keys($workers$notNull(values)).length", module);
         Assert.Contains("first: $workers$dictionaryIndex(values, \"one\")", module);
     }
 

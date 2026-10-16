@@ -32,7 +32,7 @@ internal sealed partial class JavaScriptEmitter
                 var member = field.AssociatedSymbol ?? field;
                 string Storage(string receiver) => member is IPropertySymbol property
                     ? UserPropertyStorage(receiver, property) : UserMemberAccess(receiver, member);
-                _output.Append("    ").Append(Storage("this")).Append(" = ").Append(Storage(source)).AppendLine(";");
+                _output.Append("    ").Append(Storage("this")).Append(" = ").Append(CopyValue(field.Type, Storage(source))).AppendLine(";");
             }
         _output.AppendLine("  }");
     }

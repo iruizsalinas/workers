@@ -64,21 +64,30 @@ internal sealed partial class JavaScriptEmitter
             emitter.EmitUserCode();
             emitter.EmitPendingJsonReaders();
             emitter.PrepareGenericDispatch();
+            emitter.PrepareObjectTextDispatch();
             emitter.PrepareRecordTextDispatch();
+            emitter.PrepareRecordHashDispatch();
+            emitter.PrepareUserKeyDispatch();
         } while (emitter._pendingUserTypes.Count != 0 || emitter._pendingUserMethods.Count != 0
-            || emitter._pendingRecordTextFunctions.Count != 0 || emitter._pendingRecordPrintFunctions.Count != 0);
+            || emitter._pendingRecordHashes.Count != 0 || emitter._pendingRecordTextFunctions.Count != 0 || emitter._pendingRecordPrintFunctions.Count != 0);
 
         emitter.EmitGenericDispatchers();
+        emitter.EmitRecordHashDispatch();
         emitter.EmitVariantInterfaceMembers();
 
         emitter._output.Append(emitter._helpers.Emit());
+        emitter._output.Insert(0, emitter.EmitBuiltInExceptionTypes());
+        if (emitter._usesPlainRecordIdentity)
+            emitter._output.Insert(0, $"const {emitter.PlainRecordIdentitySlot} = Symbol();" + Environment.NewLine);
+        emitter.EmitDelegateMethodAliases();
+        emitter.EmitUserKeyDispatch();
         emitter._output.Append(emitter._routeDeclarations);
 
         if (program.Events.Count != 0)
             emitter._output.Append("export default { ")
                 .Append(string.Join(", ", program.Events.Select(handler => $"{handler.Name}: {emitter.EventName(handler.Name)}")))
                 .AppendLine(" };");
-        return emitter._imports.Emit() + (emitter._usesHierarchyConstruction
+        return emitter._imports.Emit() + emitter.EmitObjectTextSupport() + (emitter._usesHierarchyConstruction
             ? $"const {emitter.HierarchySkipToken} = Symbol();\n" : "")
             + string.Concat(emitter._requestedInterfaces.ToArray().Select(type =>
                 $"const {emitter.InterfaceMarker(type)} = Symbol();\n")) + emitter._output;

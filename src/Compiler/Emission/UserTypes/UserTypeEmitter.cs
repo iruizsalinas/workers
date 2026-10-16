@@ -25,7 +25,7 @@ internal sealed partial class JavaScriptEmitter
             && record.Members.Any(member => member is FieldDeclarationSyntax
                 or ConstructorDeclarationSyntax
                 or PropertyDeclarationSyntax
-                or MethodDeclarationSyntax));
+                or MethodDeclarationSyntax or IndexerDeclarationSyntax or EventDeclarationSyntax or EventFieldDeclarationSyntax));
     }
 
     private string QueueUserType(INamedTypeSymbol type, SyntaxNode source)
@@ -140,6 +140,7 @@ internal sealed partial class JavaScriptEmitter
                     ? JsonPropertyName(property) ?? LowerFirst(property.Name)
                     : LowerFirst(property.Name),
                 IFieldSymbol field => field.Name,
+                IEventSymbol ev => $"event${ev.Name}",
                 _ => null
             };
             if (preferred is null) continue;

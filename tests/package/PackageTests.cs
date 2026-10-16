@@ -53,7 +53,8 @@ public sealed class PackageTests
         var module = Path.Combine(consumer, "dist", "worker.js");
         Assert.True(File.Exists(module));
         Assert.Contains("Hello from package", File.ReadAllText(module), StringComparison.Ordinal);
-        Assert.Contains("globalThis.crypto.subtle.generateKey", File.ReadAllText(module), StringComparison.Ordinal);
+        Assert.Contains("$workers$notNull($workers$receiver).generateKey", File.ReadAllText(module), StringComparison.Ordinal);
+        Assert.Contains(")(globalThis.crypto.subtle,", File.ReadAllText(module), StringComparison.Ordinal);
 
         var compilerArguments = Directory.GetFiles(Path.Combine(consumer, "obj"), "worker-compiler-arguments.rsp", SearchOption.AllDirectories).Single();
         File.Delete(compilerArguments);

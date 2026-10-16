@@ -7,7 +7,7 @@ internal sealed partial class JavaScriptEmitter
 {
     private void EmitUserCode()
     {
-        while (_pendingUserMethods.Count != 0 || _pendingUserTypes.Count != 0
+        while (_pendingRecordHashes.Count != 0 || _pendingSourceAccessors.Count != 0 || _pendingUserMethods.Count != 0 || _pendingUserTypes.Count != 0
                || _pendingStaticHolders.Count != 0 || _pendingStaticGetters.Count != 0
                || _pendingRecordTextFunctions.Count != 0 || _pendingRecordPrintFunctions.Count != 0
                || _pendingRecordEqualityFunctions.Count != 0 || _pendingEnumTextFunctions.Count != 0)
@@ -16,6 +16,8 @@ internal sealed partial class JavaScriptEmitter
             EmitPendingRecordEqualityFunctions();
             EmitPendingRecordTextFunctions();
             EmitUserMethods();
+            EmitSourceAccessors();
+            EmitRecordHashes();
             EmitPendingStaticState();
             while (_pendingUserTypes.Count != 0)
             {
@@ -44,6 +46,8 @@ internal sealed partial class JavaScriptEmitter
 
         _output.Append("class ").Append(_userTypes[type])
             .Append(parentName is not null ? " extends " + parentName : IsUserException(type) ? " extends Error" : "").AppendLine(" {");
+        if (type.IsRecord && !RequiresUserClass(type))
+            _output.Append("  get [").Append(PlainRecordIdentitySlot).Append("]() { return ").Append(PlainRecordIdentity(type)).AppendLine("; }");
         if (IsException(type))
             _output.Append("  get ").Append(ExceptionTypeNameSlot).Append("() { return ")
                 .Append(JsonSerializer.Serialize(type.ToDisplayString())).AppendLine("; }");
@@ -59,9 +63,12 @@ internal sealed partial class JavaScriptEmitter
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>().Where(method =>
                      _model.GetDeclaredSymbol(method) is IMethodSymbol { IsStatic: false, IsGenericMethod: false, IsAbstract: false }))
             EmitUserInstanceMethod(method);
+        foreach (var indexer in declaration.Members.OfType<IndexerDeclarationSyntax>()) EmitUserIndexer(indexer);
+        EmitUserEvents(declaration);
         EmitUserJsonProjection(type, declaration);
         EmitUserInterfaceMembers(type, declaration);
         EmitRecordHierarchyMembers(type, declaration);
+        EmitUserObjectTextMember(type, declaration);
         _output.AppendLine("}").AppendLine();
     }
 
@@ -90,24 +97,25 @@ internal sealed partial class JavaScriptEmitter
     {
         var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
         var name = UserMemberName(symbol);
-        _output.Append("  get ").Append(IsJavaScriptPropertyIdentifier(name)
-                ? name
-                : $"[{JsonSerializer.Serialize(name)}]")
-            .AppendLine("() {");
-        EmitWithExpressionScope(2, () =>
+        foreach (var getter in new[] { true, false })
         {
-            if (property.ExpressionBody is not null)
-                _output.Append("    return ").Append(Expression(property.ExpressionBody.Expression)).AppendLine(";");
-            else
+            var accessorSymbol = getter ? symbol.GetMethod : symbol.SetMethod;
+            if (accessorSymbol is null) continue;
+            _output.Append(getter ? "  get " : "  set ").Append(IsJavaScriptPropertyIdentifier(name) ? name : $"[{JsonSerializer.Serialize(name)}]")
+                .Append('(').Append(getter ? "" : UserIdentifier(accessorSymbol.Parameters[0], accessorSymbol.Parameters[0].Name)).AppendLine(") {");
+            EmitWithExpressionScope(2, () =>
             {
-                var getter = property.AccessorList!.Accessors.Single(accessor => accessor.IsKind(SyntaxKind.GetAccessorDeclaration));
-                if (getter.ExpressionBody is not null)
-                    _output.Append("    return ").Append(Expression(getter.ExpressionBody.Expression)).AppendLine(";");
+                var syntax = property.AccessorList?.Accessors.SingleOrDefault(accessor => getter
+                    ? accessor.IsKind(SyntaxKind.GetAccessorDeclaration)
+                    : accessor.IsKind(SyntaxKind.SetAccessorDeclaration) || accessor.IsKind(SyntaxKind.InitAccessorDeclaration));
+                var expression = getter ? property.ExpressionBody?.Expression ?? syntax?.ExpressionBody?.Expression : syntax?.ExpressionBody?.Expression;
+                if (expression is not null)
+                    _output.Append("    ").Append(getter ? "return " : "").Append(ValueExpression(expression)).AppendLine(";");
                 else
-                    EmitStatements(getter.Body?.Statements ?? [], 2);
-            }
-        });
-        _output.AppendLine("  }");
+                    EmitStatements(syntax?.Body?.Statements ?? [], 2);
+            });
+            _output.AppendLine("  }");
+        }
         EmitInheritedPropertyAccessors(symbol, property);
     }
 
@@ -125,7 +133,7 @@ internal sealed partial class JavaScriptEmitter
             if (isEnumerable)
                 EmitEnumerableIteratorBody(method, 2);
             else if (method.ExpressionBody is not null)
-                _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
+                _output.Append("    return ").Append(ValueExpression(method.ExpressionBody.Expression)).AppendLine(";");
             else
                 EmitStatements(method.Body?.Statements ?? [], 2);
         });

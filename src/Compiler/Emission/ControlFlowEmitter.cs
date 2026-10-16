@@ -57,7 +57,7 @@ internal sealed partial class JavaScriptEmitter
             ? UserIdentifier(declaration.Symbol, declaration.Symbol.Name)
             : _names.Get($"catch:{clause.Syntax.SyntaxTree.FilePath}:{clause.Syntax.SpanStart}", "exception");
 
-    // Framework exceptions share Error; only user exception classes are distinguishable.
+    // Typed exceptions use their Roslyn inheritance chain, shared by helper failures.
     private string? CatchTypeTest(ICatchClauseOperation clause, string caught)
     {
         var type = clause.ExceptionType;
@@ -66,6 +66,8 @@ internal sealed partial class JavaScriptEmitter
             return $"{caught} instanceof {_helpers.Require(JavaScriptHelper.HttpError)}";
         if (type is INamedTypeSymbol named && IsException(named) && IsUserInstanceType(named))
             return $"{caught} instanceof {QueueUserType(named, clause.Syntax)}";
+        if (type is INamedTypeSymbol builtIn && IsException(builtIn) && builtIn.DeclaringSyntaxReferences.Length == 0)
+            return $"{caught} instanceof ({BuiltInExceptionType(builtIn)})";
         throw WorkerDiagnostics.WithLocation(new NotSupportedException(
             $"WRK108: Catching '{type}' is not supported; catch System.Exception or an exception type declared in the Worker."), clause.Syntax);
     }

@@ -45,9 +45,17 @@ public static class ResultExtensions
 public static class Worker
 {
     [Fetch]
-    public static async Task<Response> Fetch(Request request)
+    public static async Task<Response> Fetch(Request request, Env env)
     {
         if (new Url(request.Url).Pathname == "/semantics") return Semantics.Run();
+        if (new Url(request.Url).Pathname == "/features") return LanguageFeatures.Run();
+        if (new Url(request.Url).Pathname == "/composite") return CompositeFeatures.Run();
+        if (new Url(request.Url).Pathname == "/correctness") return ProfileCorrectness.Run();
+        if (new Url(request.Url).Pathname == "/collections") return ProfileCorrectness.Collections();
+        if (new Url(request.Url).Pathname == "/enumeration") return ProfileCorrectness.Enumeration();
+        if (new Url(request.Url).Pathname == "/predicates") return await ProfileCorrectness.Predicates();
+        if (new Url(request.Url).Pathname == "/null-dereferences") return ProfileCorrectness.NullDereferences();
+        if (new Url(request.Url).Pathname == "/binding-params") return ProfileCorrectness.BindingParams(env);
         var page = await request.JsonAsync<Page<User>>();
         IHandler<User> handler = new UserHandler();
         var result = handler.Handle(page!.Items[0]);

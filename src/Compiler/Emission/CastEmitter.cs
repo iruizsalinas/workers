@@ -12,6 +12,15 @@ internal sealed partial class JavaScriptEmitter
         var cast = conversion.Syntax;
         var operand = conversion.Operand;
         var target = ResolveType(conversion.Type ?? throw Unsupported("WRK101", cast));
+        if (conversion.OperatorMethod is { DeclaringSyntaxReferences.Length: > 0 } sourceOperator)
+        {
+            if (operand.Type?.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
+                && sourceOperator.Parameters[0].Type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T)
+                throw Unsupported("WRK108", cast);
+            return SourceOperator(sourceOperator, conversion.ConstrainedToType, cast, operand);
+        }
+        if (IsIndexType(target) && conversion.OperatorMethod?.ContainingType.ToDisplayString() == "System.Index")
+            return IndexValue(Expression(operand), false);
         var nativeUnion = NativeUnionTypes.Contains(conversion.OperatorMethod?.ContainingType.ToDisplayString() ?? "");
         if (conversion.OperatorMethod is not null && !IsByteViewConversion(conversion) && !nativeUnion)
             throw UnsupportedSymbol(conversion.OperatorMethod, cast);
@@ -19,6 +28,12 @@ internal sealed partial class JavaScriptEmitter
         var source = operand.Type;
         if (source is null) return value;
         source = ResolveType(source);
+        if (target.TypeKind == TypeKind.Interface && source is INamedTypeSymbol { IsRecord: true } interfaceRecord
+            && IsUserInstanceType(interfaceRecord)) return AttachObjectText(source, value, cast);
+        if (target.SpecialType == SpecialType.System_Object && IsWebValueBoundary(conversion)) return value;
+        if (target.SpecialType == SpecialType.System_Object) return ObjectConversion(source, value, cast);
+        if (source is INamedTypeSymbol { IsTupleType: true } sourceTuple && target is INamedTypeSymbol { IsTupleType: true } targetTuple)
+            return TupleConversion(sourceTuple, targetTuple, value, cast);
         if (SymbolEqualityComparer.Default.Equals(source, target)) return value;
         if (IsByteViewConversion(conversion) || nativeUnion) return value;
         if (conversion.Conversion.IsIdentity || source.IsValueType && target.SpecialType == SpecialType.System_Object
@@ -29,12 +44,7 @@ internal sealed partial class JavaScriptEmitter
         if (conversion.ConstantValue is { HasValue: true } constant && constant.Value is not decimal)
             return LiteralConstant(constant.Value, cast);
         if (target is INamedTypeSymbol userTarget && (IsSourceInterface(userTarget) || IsUserInstanceType(userTarget)))
-        {
-            var parameterName = _names.Get($"reference-cast:{cast.SyntaxTree.FilePath}:{cast.SpanStart}", "value");
-            var test = TypePatternTest(target, parameterName, null, cast);
-            var failure = conversion.IsTryCast ? "return null;" : "throw new TypeError(\"Specified cast is not valid.\");";
-            return $"(({parameterName}) => {{ if ({parameterName} == null || {test}) return {parameterName}; {failure} }})({value})";
-        }
+            return CheckedReferenceConversion(target, value, cast, conversion.IsTryCast);
         var targetValue = UnwrapNullable(target);
         if (conversion.IsImplicit && operand.ConstantValue is { HasValue: true } supplied
             && supplied.Value is byte or sbyte or short or ushort or int or uint or long or ulong or double
@@ -60,8 +70,34 @@ internal sealed partial class JavaScriptEmitter
         if (sourceNullable && targetNullable)
             return $"(({parameter}) => {parameter} == null ? null : {converted})({value})";
         if (sourceNullable)
-            return $"(({parameter}) => {{ if ({parameter} == null) throw new TypeError(\"Nullable object must have a value.\"); return {converted}; }})({value})";
+            return $"(({parameter}) => {{ if ({parameter} == null) throw {NewBuiltInException("System.InvalidOperationException", "Nullable object must have a value.")}; return {converted}; }})({value})";
         return converted == parameter ? value : $"(({parameter}) => {converted})({value})";
+    }
+
+    private string ObjectConversion(ITypeSymbol source, string value, SyntaxNode node)
+    {
+        source = ResolveType(source);
+        if (source is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+        {
+            var boxed = ObjectConversion(nullable.TypeArguments[0], "value", node);
+            return boxed == "value" ? value : $"((value) => value == null ? null : {boxed})({value})";
+        }
+        if (IsTextEnum(source)) return BoxEnumText(source, value);
+        if (IsKeyValuePair(source)) return AttachObjectText(source, CopyValue(source, value), node);
+        if (source is INamedTypeSymbol { IsTupleType: true }) return AttachObjectText(source, CopyValue(source, value), node);
+        if (source is IArrayTypeSymbol || HasCollectionTypeName(source)
+            || source is INamedTypeSymbol { IsAnonymousType: true }
+            || source is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record))
+            return AttachObjectText(source, value, node);
+        return value;
+    }
+
+    private string CheckedReferenceConversion(ITypeSymbol target, string value, SyntaxNode node, bool tryCast = false)
+    {
+        var parameter = _names.Get($"reference-cast:{node.SyntaxTree.FilePath}:{node.SpanStart}", "value");
+        var test = TypePatternTest(target, parameter, null, node);
+        var failure = tryCast ? "return null;" : $"throw {NewBuiltInException("System.InvalidCastException", "Specified cast is not valid.")};";
+        return $"(({parameter}) => {{ if ({parameter} == null || {test}) return {parameter}; {failure} }})({value})";
     }
 
     // Types that stand for a JavaScript union, such as string | ReadableStream. Each member converts to the union

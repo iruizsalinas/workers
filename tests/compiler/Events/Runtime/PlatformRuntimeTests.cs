@@ -77,22 +77,22 @@ public sealed class PlatformRuntimeTests
 
         Assert.Contains("import { connect as $workers$connectSocket } from \"cloudflare:sockets\";", module);
         Assert.Contains("globalThis.crypto.getRandomValues(new Uint8Array(8))", module);
-        Assert.Contains("let reader = stream.getReader();", module);
-        Assert.Contains("let chunk = await reader.read();", module);
-        Assert.Contains("reader.releaseLock();", module);
-        Assert.Contains("chunk.done ? 0 : chunk.value.length", module);
+        Assert.Contains("let reader = $workers$notNull(stream).getReader();", module);
+        Assert.Contains("let chunk = await $workers$notNull(reader).read();", module);
+        Assert.Contains("$workers$notNull(reader).releaseLock();", module);
+        Assert.Contains("$workers$notNull(chunk).done ? 0 : $workers$notNull($workers$notNull(chunk).value).length", module);
         Assert.Contains("await new Response(stream).bytes()", module);
-        Assert.Contains("pair[1].addEventListener(\"message\", event => (message => ", module);
+        Assert.Contains("$workers$notNull($workers$notNull(pair)[1]).addEventListener(\"message\", event => (message =>", module);
         Assert.Contains("(event.data)", module);
-        Assert.Contains("pair[1].addEventListener(\"close\", close => console.info(close.code))", module);
+        Assert.Contains("$workers$notNull($workers$notNull(pair)[1]).addEventListener(\"close\", close => console.info($workers$notNull(close).code))", module);
         Assert.Contains("$workers$connectSocket({ hostname: \"example.com\", port: 443 }, {  })", module);
-        Assert.Contains("let writer = socket.writable.getWriter();", module);
-        Assert.Contains("await writer.write(new TextEncoder().encode(\"hello\"))", module);
-        Assert.Contains("await socket.opened", module);
+        Assert.Contains("let writer = $workers$notNull($workers$notNull(socket).writable).getWriter();", module);
+        Assert.Contains("await (($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).write($workers$arg1$2))(writer, new TextEncoder().encode(\"hello\"))", module);
+        Assert.Contains("await $workers$notNull(socket).opened", module);
         Assert.Contains("new globalThis.crypto.DigestStream(\"SHA-256\")", module);
-        Assert.Contains("await stream.pipeTo(digest)", module);
+        Assert.Contains("await $workers$notNull(stream).pipeTo(digest)", module);
         Assert.Contains(".toHex()", module);
-        Assert.Equal(["$workers$fetch"], System.Text.RegularExpressions.Regex.Matches(module, @"function (\$workers\$\w+)").Select(match => match.Groups[1].Value));
+        Assert.Equal(["$workers$exceptionType", "$workers$notNull", "$workers$fetch"], System.Text.RegularExpressions.Regex.Matches(module, @"function (\$workers\$\w+)").Select(match => match.Groups[1].Value));
     }
 
     [Theory]
@@ -153,9 +153,9 @@ public sealed class PlatformRuntimeTests
         Assert.Contains("this.#attribute()", module);
         Assert.Contains("  element(element)", module);
         Assert.DoesNotContain("async element(element)", module);
-        Assert.Contains("value.setAttribute(this.#attribute(), \"csharp\")", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => (value => { value.setAttribute($workers$arg1, $workers$arg2); return value; })($workers$notNull($workers$receiver)))(element, this.#attribute(), \"csharp\")", module);
         Assert.DoesNotContain("this.Source", module);
-        Assert.Contains("new HTMLRewriter()).transform", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).transform($workers$arg1$2))((value => { value.on(\"p\", new Handler()); return value; })(new HTMLRewriter()), new Response(\"\\u003Cp\\u003Ex\\u003C/p\\u003E\", { headers: (($workers$value) => { $workers$value.set(\"content-type\", \"text/html; charset=utf-8\"); return $workers$value; })(new Headers()) }))", module);
     }
 
     [Fact]

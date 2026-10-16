@@ -29,11 +29,11 @@ public sealed class NativeRuntimeTests
         Assert.Contains("JSON.parse(", module);
         Assert.Contains("JSON.stringify(value)", module);
         Assert.Contains("new Date(Date.UTC(2024, 1, 29))", module);
-        Assert.Contains("date.toISOString()", module);
-        Assert.Contains("date.getTime()", module);
+        Assert.Contains("$workers$notNull(date).toISOString()", module);
+        Assert.Contains("$workers$notNull(date).getTime()", module);
         Assert.Contains("new RegExp(\"^.$\", \"u\")", module);
-        Assert.Contains("controller.abort(\"done\")", module);
-        Assert.Contains("controller.signal.aborted", module);
+        Assert.Contains("$workers$notNull(controller).abort(\"done\")", module);
+        Assert.Contains("$workers$notNull($workers$notNull(controller).signal).aborted", module);
         Assert.Contains("$workers$jsonExpect(value[\"name\"], \"string\")", module);
         Assert.DoesNotContain("function $workers$date", module);
         Assert.DoesNotContain("function $workers$regex", module);

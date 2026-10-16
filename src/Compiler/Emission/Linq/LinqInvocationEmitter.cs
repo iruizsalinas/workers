@@ -7,7 +7,7 @@ internal sealed partial class JavaScriptEmitter
         (method?.ReducedFrom ?? method)?.ContainingType.ToDisplayString() == "System.Linq.Enumerable";
 
     private string LinqInvocation(
-        InvocationExpressionSyntax invocation,
+        SyntaxNode invocation,
         IMethodSymbol method,
         string[] arguments,
         MemberAccessExpressionSyntax? member,
@@ -103,7 +103,7 @@ internal sealed partial class JavaScriptEmitter
             "SingleOrDefault" => LinqElement(invocation, method, parameters, source, operationArguments,
                 JavaScriptHelper.LinqSingle, orDefault: true),
             "ToArray" when operationArguments.Length == 0 => MaterializeArray(method.ReturnType, Linq(JavaScriptHelper.LinqToArray, source, [])),
-            "ToList" when operationArguments.Length == 0 => CreateList(Linq(JavaScriptHelper.LinqToArray, source, [])),
+            "ToList" when operationArguments.Length == 0 => CreateList(CopySequenceValues(method.TypeArguments[0], Linq(JavaScriptHelper.LinqToArray, source, []))),
             _ => throw UnsupportedSymbol(method, invocation)
         };
     }

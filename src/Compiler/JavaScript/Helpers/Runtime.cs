@@ -9,7 +9,7 @@ internal static partial class HelperSource
           }
         }
         function {{name("dictionaryTake")}}(dictionary, key, fallback, remove) {
-          if (key == null) throw new TypeError("Value cannot be null.");
+          if (key == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("Value cannot be null.");
           if (!Object.hasOwn(dictionary, key)) return [false, fallback];
           const value = dictionary[key];
           if (remove) delete dictionary[key];

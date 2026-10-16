@@ -24,10 +24,10 @@ public sealed class HttpBodyTests
             """);
 
         Assert.Contains("let response = new Response(form);", module);
-        Assert.Contains("new Response(request.body)", module);
-        Assert.Contains("new Response(new URL(request.url).searchParams)", module);
-        Assert.Contains("response.bodyUsed", module);
-        Assert.Contains("await response.formData()", module);
+        Assert.Contains("new Response($workers$notNull(request).body)", module);
+        Assert.Contains("new Response(new URL($workers$notNull(request).url).searchParams)", module);
+        Assert.Contains("$workers$notNull(response).bodyUsed", module);
+        Assert.Contains("await $workers$notNull(response).formData()", module);
         Assert.DoesNotContain("fromFormData", module);
         Assert.DoesNotContain("fromStream", module);
         Assert.DoesNotContain("fromQueryParameters", module);

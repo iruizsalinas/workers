@@ -13,8 +13,16 @@ internal sealed partial class JavaScriptEmitter
     {
         var name = method?.Name ?? throw Unsupported("WRK105", invocation);
         var receiver = receiverOverride ?? (method?.IsStatic == true ? "" : member is null ? "this" : Expression(member.Expression));
+        if (method is { Name: "ToString", Parameters.Length: 0, ContainingType: { } owner } && owner.ToDisplayString() == "System.Type")
+            return $"{receiver}.text";
         if (TryEmitRecordInvocation(invocation, method, receiver, arguments, member?.Expression is BaseExpressionSyntax, out var record))
             return record;
+        if (method is { Name: "ToString", Parameters.Length: 0, ContainingType.IsTupleType: true })
+            return $"((tuple) => {TupleText(method.ContainingType, "tuple", invocation)})({receiver})";
+        if (method is { Name: "ToString", Parameters.Length: 0 } && IsKeyValuePair(method.ContainingType))
+            return KeyValuePairText(method.ContainingType, receiver, invocation);
+        if (method is { Name: "ToString", Parameters.Length: 0, ContainingType.SpecialType: SpecialType.System_Object })
+            return $"((value) => {{ if (value == null) throw {NullReferenceException()}; return {ObjectText("value")}; }})({receiver})";
         if (method is not null && member?.Expression is BaseExpressionSyntax && IsUserInstanceType(method.ContainingType))
             return $"{QueueUserType(method.ContainingType, invocation)}.prototype.{UserInstanceMethodName(method)}.call(this{(arguments.Length == 0 ? "" : ", " + string.Join(", ", arguments))})";
         if (method is not null && IsSourceInterface(method.ContainingType))

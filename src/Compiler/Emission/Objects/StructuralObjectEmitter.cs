@@ -56,7 +56,7 @@ internal sealed partial class JavaScriptEmitter
                     $"{JavaScriptObjectKey(UserInitializerMemberName(assignment.Left))}: {Expression(assignment.Right)}",
                 _ => throw Unsupported("WRK106", expression)
             }));
-        return "{ " + string.Join(", ", properties) + " }";
+        return $"Object.defineProperty({{ {string.Join(", ", properties)} }}, {PlainRecordIdentitySlot}, {{ value: {PlainRecordIdentity(constructor.ContainingType)} }})";
     }
 
     private string PositionalObjectCreation(
@@ -67,6 +67,15 @@ internal sealed partial class JavaScriptEmitter
         bool isAsync = false)
     {
         var values = arguments.Select(ArgumentValue).ToArray();
+        if (constructor is { DeclaringSyntaxReferences.Length: > 0 }
+            && constructor.Parameters.LastOrDefault()?.IsParams == true)
+        {
+            var keyPrefix = $"params-constructor:{source.SyntaxTree.FilePath}:{source.SpanStart}";
+            var captured = values.Select((_, index) => _names.Get($"{keyPrefix}:{index}", $"arg{index}")).ToArray();
+            var body = emit(OrderCallArguments(constructor, arguments, captured, source));
+            return isAsync ? $"(await (async ({string.Join(", ", captured)}) => {body})({string.Join(", ", values)}))"
+                : $"(({string.Join(", ", captured)}) => {body})({string.Join(", ", values)})";
+        }
         if (constructor is null || arguments.Length == 0)
             return emit(values);
 
@@ -131,7 +140,7 @@ internal sealed partial class JavaScriptEmitter
         {
             Left: ImplicitElementAccessSyntax { ArgumentList.Arguments: [{ Expression: var key }] },
             Right: var value
-        } => $"[{Expression(key)}]: {Expression(value)}",
+        } => $"[{Expression(key)}]: {ValueExpression(value)}",
         _ => throw Unsupported("WRK106", expression)
     };
 

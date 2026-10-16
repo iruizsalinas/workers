@@ -24,9 +24,9 @@ public sealed class ControlFlowTests
     }
 
     [Fact]
-    public void RejectsMultipleOrSpecificCatchClauses()
+    public void SupportsMultipleAndSpecificCatchClauses()
     {
-        var multiple = Assert.Throws<NotSupportedException>(() => Compile("""
+        var multiple = Compile("""
             using Workers;
             public static class Worker
             {
@@ -38,8 +38,8 @@ public sealed class ControlFlowTests
                     catch (Exception) { return new Response("general"); }
                 }
             }
-            """));
-        var specific = Assert.Throws<NotSupportedException>(() => Compile("""
+            """);
+        var specific = Compile("""
             using Workers;
             public static class Worker
             {
@@ -50,10 +50,10 @@ public sealed class ControlFlowTests
                     catch (InvalidOperationException) { return new Response("specific"); }
                 }
             }
-            """));
+            """);
 
-        Assert.StartsWith("WRK108:", multiple.Message);
-        Assert.StartsWith("WRK108:", specific.Message);
+        Assert.Contains("instanceof ($workers$exceptionType(\"System.InvalidOperationException\"))", multiple);
+        Assert.Contains("instanceof ($workers$exceptionType(\"System.InvalidOperationException\"))", specific);
     }
 
     [Fact]
@@ -86,9 +86,10 @@ public sealed class ControlFlowTests
 
         Assert.Contains("try {", module);
         Assert.Contains("do {", module);
-        Assert.Contains("switch (request.method)", module);
-        Assert.Contains("throw new Error(\"bad method\")", module);
+        Assert.Contains("switch ($workers$notNull(request).method)", module);
+        Assert.Contains("$workers$exceptionType(\"System.InvalidOperationException\")", module);
+        Assert.Contains("(\"bad method\")", module);
         Assert.Contains("catch (exception)", module);
-        Assert.Contains("exception.message", module);
+        Assert.Contains("$workers$notNull(exception).message", module);
     }
 }

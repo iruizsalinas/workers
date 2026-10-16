@@ -26,8 +26,8 @@ public sealed class ResponseTests
             }
             """);
 
-        Assert.Contains("new Response(request.body, { status: 200, statusText: \"OK\", encodeBody: \"manual\", cf: { example: true } })", module);
-        Assert.Contains("webSocket: pair[0]", module);
+        Assert.Contains("new Response($workers$notNull(request).body, { status: 200, statusText: \"OK\", encodeBody: \"manual\", cf: { example: true } })", module);
+        Assert.Contains("webSocket: $workers$notNull(pair)[0]", module);
     }
 
     [Fact]

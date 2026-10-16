@@ -27,17 +27,17 @@ public sealed class DurableObjectBindingTests
             }
             """);
 
-        Assert.Contains("this.env[\"COUNTERS\"].getByName(\"primary\")", module);
-        Assert.Contains("stub.fetch(\"https://counter\")", module);
-        Assert.Contains("stub[\"read\"](...$workers$rpcArguments([\"count\"]))", module);
-        Assert.Contains("stub[\"reset\"]()", module);
-        Assert.Contains("this.ctx.storage.put(\"count\", 1)", module);
-        Assert.Contains("this.ctx.storage.get(\"count\")", module);
-        Assert.Contains("let rows = this.ctx.storage.sql.exec(\"SELECT ? AS value\", 1).toArray();", module);
-        Assert.Contains("let container = this.ctx.container;", module);
-        Assert.Contains("if (!(container.running)) {", module);
-        Assert.Contains("container.start();", module);
-        Assert.Contains("container.signal(15);", module);
+        Assert.Contains("$workers$notNull($workers$notNull(this.env)[\"COUNTERS\"]).getByName(\"primary\")", module);
+        Assert.Contains("$workers$notNull(stub).fetch(\"https://counter\")", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver)[$workers$arg1](...$workers$rpcArguments([$workers$arg2])))(stub, \"read\", \"count\")", module);
+        Assert.Contains("$workers$notNull(stub)[\"reset\"]()", module);
+        Assert.Contains("$workers$notNull($workers$notNull(this.ctx).storage).put(\"count\", 1)", module);
+        Assert.Contains("$workers$notNull($workers$notNull(this.ctx).storage).get(\"count\")", module);
+        Assert.Contains("let rows = $workers$notNull((($workers$receiver$2, $workers$arg1$2, $workers$arg2$2) => $workers$notNull($workers$receiver$2).exec($workers$arg1$2, $workers$arg2$2))($workers$notNull($workers$notNull(this.ctx).storage).sql, \"SELECT ? AS value\", 1)).toArray();", module);
+        Assert.Contains("let container = $workers$notNull(this.ctx).container;", module);
+        Assert.Contains("if (!($workers$notNull(container).running)) {", module);
+        Assert.Contains("$workers$notNull(container).start();", module);
+        Assert.Contains("$workers$notNull(container).signal(15);", module);
     }
 
     [Fact]
@@ -66,8 +66,8 @@ public sealed class DurableObjectBindingTests
         Assert.Contains("constructor(ctx, env) {", module);
         Assert.Contains("super(ctx, env);", module);
         Assert.Contains("this._increments = 1", module);
-        Assert.Contains("this.ctx.storage.get(\"count\")", module);
-        Assert.Contains("this.ctx.storage.put(\"count\", ((count + this._increments) | 0))", module);
+        Assert.Contains("$workers$notNull($workers$notNull(this.ctx).storage).get(\"count\")", module);
+        Assert.Contains(".put($workers$arg1, $workers$arg2))($workers$notNull(this.ctx).storage, \"count\", ((count + this._increments) | 0))", module);
     }
 
     [Fact]
@@ -90,13 +90,13 @@ public sealed class DurableObjectBindingTests
             }
             """);
 
-        Assert.Contains("env[\"OBJECTS\"].jurisdiction(\"eu\")", module);
-        Assert.Contains("ns.idFromName(\"one\")", module);
-        Assert.Contains("ns.idFromString(first.toString())", module);
-        Assert.Contains("ns.newUniqueId()", module);
-        Assert.Contains("first.equals(restored)", module);
-        Assert.Contains("jurisdiction: first.jurisdiction", module);
-        Assert.Contains("id: stub.id", module);
+        Assert.Contains("$workers$notNull($workers$notNull(env)[\"OBJECTS\"]).jurisdiction(\"eu\")", module);
+        Assert.Contains("$workers$notNull(ns).idFromName(\"one\")", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).idFromString($workers$arg1))(ns, $workers$notNull(first).toString())", module);
+        Assert.Contains("$workers$notNull(ns).newUniqueId()", module);
+        Assert.Contains("$workers$notNull(first).equals(restored)", module);
+        Assert.Contains("jurisdiction: $workers$notNull(first).jurisdiction", module);
+        Assert.Contains("id: $workers$notNull(stub).id", module);
     }
 
 }

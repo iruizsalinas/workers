@@ -42,7 +42,7 @@ public sealed class EnvironmentTests
             }
             """);
 
-        Assert.Contains("let binding = env[\"BINDING\"];", module);
+        Assert.Contains("let binding = $workers$notNull(env)[\"BINDING\"];", module);
     }
 
 }

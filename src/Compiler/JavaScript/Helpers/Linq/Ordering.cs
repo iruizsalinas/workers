@@ -43,9 +43,9 @@ internal static partial class HelperSource
           };
         }
         function {{name("linqOrder")}}(source, selector, descending, kind, append) {
-          if (source == null || selector == null) throw new TypeError("LINQ argument cannot be null.");
+          if (source == null || selector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           const state = append ? source[{{name("linqOrderState")}}] : null;
-          if (append && state == null) throw new TypeError("ThenBy requires an ordered sequence.");
+          if (append && state == null) throw new ({{name("exceptionType")}}("System.InvalidOperationException"))("ThenBy requires an ordered sequence.");
           return {{name("linqOrdered")}}(
             state == null ? source : state.source,
             [...(state == null ? [] : state.criteria), { selector, descending, kind }]);
@@ -55,7 +55,7 @@ internal static partial class HelperSource
 
     private static string LinqGroupBy(Func<string, string> name) => $$"""
         function {{name("linqGroupBy")}}(source, keySelector, elementSelector) {
-          if (source == null || keySelector == null) throw new TypeError("LINQ argument cannot be null.");
+          if (source == null || keySelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           return { *[Symbol.iterator]() {
             const groups = new Map();
             for (const value of {{name("linqValues")}}(source)) {
@@ -77,12 +77,12 @@ internal static partial class HelperSource
 
     private static string LinqToDictionary(Func<string, string> name) => $$"""
         function {{name("linqToDictionary")}}(source, keySelector, elementSelector) {
-          if (source == null || keySelector == null) throw new TypeError("LINQ argument cannot be null.");
+          if (source == null || keySelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           const result = Object.create(null);
           for (const value of {{name("linqValues")}}(source)) {
             const key = keySelector(value);
-            if (key == null) throw new TypeError("Dictionary key cannot be null.");
-            if (Object.hasOwn(result, key)) throw new TypeError("An item with the same key has already been added.");
+            if (key == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("Dictionary key cannot be null.");
+            if (Object.hasOwn(result, key)) throw new ({{name("exceptionType")}}("System.ArgumentException"))("An item with the same key has already been added.");
             result[key] = elementSelector == null ? value : elementSelector(value);
           }
           return result;
@@ -92,7 +92,7 @@ internal static partial class HelperSource
 
     private static string LinqToLookup(Func<string, string> name) => $$"""
         function {{name("linqToLookup")}}(source, keySelector, elementSelector) {
-          if (source == null || keySelector == null) throw new TypeError("LINQ argument cannot be null.");
+          if (source == null || keySelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           const groups = new Map();
           for (const value of {{name("linqValues")}}(source)) {
             const key = keySelector(value);

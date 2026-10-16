@@ -31,10 +31,12 @@ public sealed class QueueTests
             public sealed record Message(string Id);
             """);
 
-        Assert.Contains("queue.send({ id: \"one\" })", module);
-        Assert.Contains("queue.send(\"line\", { contentType: \"text\", delaySeconds: 5 })", module);
-        Assert.Contains("queue.sendBatch([{ body: { id: \"two\" } }, { body: { id: \"three\" }, delaySeconds: 10 }], { delaySeconds: 1 })", module);
-        Assert.Contains("backlogCount: metrics.backlogCount", module);
-        Assert.Contains("oldestMessageTimestamp: metrics.oldestMessageTimestamp", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).send($workers$arg1))(queue, Object.defineProperty({ id: \"one\" }, $workers$recordType, { value: \"Message\" }))", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2, $workers$arg2) => $workers$notNull($workers$receiver$2).send($workers$arg1$2, $workers$arg2))(queue, \"line\", { contentType: \"text\", delaySeconds: 5 })", module);
+        Assert.Contains("(($workers$receiver$3, $workers$arg1$3, $workers$arg2$2) => $workers$notNull($workers$receiver$3).sendBatch($workers$arg1$3, $workers$arg2$2))(queue, [{ body: Object.defineProperty({ id: \"two\" }, $workers$recordType, { value: \"Message\" }) }, { body: Object.defineProperty({ id: \"three\" }, $workers$recordType, { value: \"Message\" }), delaySeconds: 10 }], { delaySeconds: 1 })", module);
+        Assert.Contains("{ id: \"three\" }", module);
+        Assert.Contains("delaySeconds: 10 }], { delaySeconds: 1 })", module);
+        Assert.Contains("(($workers$arg1$4, $workers$arg2$3) => Response.json($workers$arg1$4, { status: $workers$arg2$3 }))({ backlogCount: $workers$notNull(metrics).backlogCount, backlogBytes: $workers$notNull(metrics).backlogBytes, oldestMessageTimestamp: $workers$notNull(metrics).oldestMessageTimestamp }, 202)", module);
+        Assert.Contains("(($workers$arg1$4, $workers$arg2$3) => Response.json($workers$arg1$4, { status: $workers$arg2$3 }))({ backlogCount: $workers$notNull(metrics).backlogCount, backlogBytes: $workers$notNull(metrics).backlogBytes, oldestMessageTimestamp: $workers$notNull(metrics).oldestMessageTimestamp }, 202)", module);
     }
 }

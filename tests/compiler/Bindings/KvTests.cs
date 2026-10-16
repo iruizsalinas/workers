@@ -20,8 +20,8 @@ public sealed class KvTests
             }
             """);
 
-        Assert.Contains("env[\"DATA\"].get(\"key\", { cacheTtl: 60 })", module);
-        Assert.Contains("env[\"DATA\"].put(\"result\", JSON.stringify({ text: text }), { expirationTtl: 300 })", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver).get($workers$arg1, $workers$arg2 ?? undefined))($workers$notNull(env)[\"DATA\"], \"key\", { cacheTtl: 60 })", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2, $workers$arg2$2, $workers$arg3) => $workers$notNull($workers$receiver$2).put($workers$arg1$2, JSON.stringify($workers$arg2$2), $workers$arg3))($workers$notNull(env)[\"DATA\"], \"result\", { text: text }, { expirationTtl: 300 })", module);
     }
 
     [Fact]
@@ -42,8 +42,8 @@ public sealed class KvTests
             }
             """);
 
-        Assert.Contains("env[\"DATA\"].get(\"json\", { type: \"json\" })", module);
-        Assert.Contains("env[\"DATA\"].get(\"bytes\", { type: \"arrayBuffer\" })", module);
+        Assert.Contains("$workers$notNull($workers$notNull(env)[\"DATA\"]).get(\"json\", { type: \"json\" })", module);
+        Assert.Contains("$workers$notNull($workers$notNull(env)[\"DATA\"]).get(\"bytes\", { type: \"arrayBuffer\" })", module);
     }
 
     [Fact]

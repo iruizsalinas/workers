@@ -21,9 +21,9 @@ public sealed class BoundedBodyTests
             }
             """);
 
-        Assert.Contains("$workers$requestText(request, limit)", module);
-        Assert.Contains("$workers$requestBytes(request, limit)", module);
-        Assert.Contains("$workers$requestJson(request, limit).then(", module);
+        Assert.Contains("$workers$requestText($workers$notNull(request), limit)", module);
+        Assert.Contains("$workers$requestBytes($workers$notNull(request), limit)", module);
+        Assert.Contains("$workers$requestJson($workers$notNull(request), limit).then(value => value == null ? value : $workers$Input.$fromJSON(value))", module);
         Assert.Contains("$fromJSON", module);
         Assert.Contains("request.body.getReader()", module);
         Assert.Contains("new $workers$HttpError(413, \"Request body too large\")", module);
@@ -47,8 +47,8 @@ public sealed class BoundedBodyTests
             """);
 
         Assert.Contains("request.text()", module);
-        Assert.Contains("request.bytes()", module);
-        Assert.Contains("$workers$requestJson(request)", module);
+        Assert.Contains("$workers$notNull(request).bytes()", module);
+        Assert.Contains("$workers$requestJson($workers$notNull(request))", module);
         Assert.DoesNotContain("request.body.getReader()", module);
     }
 }

@@ -53,8 +53,8 @@ public sealed class WorkerEntrypointTests
         Assert.Contains("WorkerEntrypoint", module);
         Assert.Contains("export class Users extends", module);
         Assert.Contains("async find(prefix, limit = 10)", module);
-        Assert.Contains("this.ctx.waitUntil(Promise.resolve())", module);
-        Assert.Contains("this.env[\"DATA\"]", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).waitUntil($workers$arg1))(this.ctx, Promise.resolve())", module);
+        Assert.Contains("$workers$notNull($workers$notNull(this.env)[\"DATA\"])", module);
     }
 
     [Fact]

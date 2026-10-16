@@ -21,9 +21,9 @@ public sealed class SetExpressionRegressionTests
         """);
 
     [Fact]
-    public void RejectsSetExpressionsWhoseElementsNeedUnsupportedValueEquality()
+    public void EmitsValueEqualityForRecordSetExpressions()
     {
-        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+        var module = Compile("""
             using Workers;
             public static class Worker
             {
@@ -35,7 +35,7 @@ public sealed class SetExpressionRegressionTests
                 }
             }
             public sealed record Key(int Value);
-            """));
-        Assert.Contains("WRK105", error.Message);
+            """);
+        Assert.Contains("keyCollection", module);
     }
 }

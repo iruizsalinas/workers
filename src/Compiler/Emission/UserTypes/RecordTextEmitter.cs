@@ -89,7 +89,7 @@ internal sealed partial class JavaScriptEmitter
             var declaration = (TypeDeclarationSyntax)type.DeclaringSyntaxReferences[0].GetSyntax();
             _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
             _output.Append("function ").Append(_recordTextFunctions[type]).AppendLine("(value) {");
-            _output.AppendLine("  if (value == null) throw new TypeError(\"Object reference not set to an instance of an object.\");");
+            _output.AppendLine($"  if (value == null) throw {NullReferenceException()};");
             if (UsesUserHierarchy(type))
             {
                 _output.Append("  const members = value.").Append(RecordPrintSlot).AppendLine("();");
@@ -172,9 +172,18 @@ internal sealed partial class JavaScriptEmitter
         if (type.SpecialType is SpecialType.System_Char or >= SpecialType.System_SByte and <= SpecialType.System_UInt64)
             return value;
         if (type is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record))
-            return $"(item => item == null ? \"\" : {RecordText(record, "item", source)})({value})";
+            return $"(item => item == null ? \"\" : ({RecordText(record, "item", source)} ?? \"\"))({value})";
+        if (type is INamedTypeSymbol { IsTupleType: true } tuple) return TupleText(tuple, value, source);
+        if (type is INamedTypeSymbol pair && IsKeyValuePair(pair)) return KeyValuePairText(pair, value, source);
         if (IsTextEnum(type))
             return EnumText(type, value);
+        if (type.SpecialType == SpecialType.System_Object)
+            return ObjectText(value);
+        if (type is INamedTypeSymbol { IsAnonymousType: true } anonymous) return AnonymousText(anonymous, value, source);
+        if (type is INamedTypeSymbol user && IsUserInstanceType(user))
+            return $"(item => item == null ? \"\" : ({UserObjectText(user, "item", source)} ?? \"\"))({value})";
+        if (type is IArrayTypeSymbol || type is INamedTypeSymbol named && named.ContainingNamespace.ToDisplayString().StartsWith("System.Collections", StringComparison.Ordinal))
+            return $"({value} == null ? \"\" : {JsonSerializer.Serialize(RuntimeTypeName(type))})";
         throw new NotSupportedException(
             $"WRK105: The synthesized ToString() of a record cannot format member type '{type.ToDisplayString()}'.");
     }

@@ -33,11 +33,12 @@ internal sealed partial class JavaScriptEmitter
         return $"{_helpers.Name("queueStackTake")}({receiver}, {remove.ToString().ToLowerInvariant()})";
     }
 
-    private static string MaterializeArray(ITypeSymbol type, string values) =>
+    private string MaterializeArray(ITypeSymbol type, string values) =>
         type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
-            ? $"Uint8Array.from({values})" : values;
+            ? $"Uint8Array.from({values})" : type is IArrayTypeSymbol array ? CopySequenceValues(array.ElementType, values) : values;
 
     private string CreateList(string values) => $"{_helpers.Require(JavaScriptHelper.ListState)}({values})";
+    private string CreateSet(string values) => $"{_helpers.Require(JavaScriptHelper.SetState)}(new Set({values}))";
 
     private static bool IsListType(ITypeSymbol? type) => type is INamedTypeSymbol named
         && named.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.List<T>"

@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 internal sealed partial class JavaScriptEmitter
 {
     private string UserObject(
@@ -18,14 +19,9 @@ internal sealed partial class JavaScriptEmitter
         var temporary = _names.Get(
             $"object-initializer:{source.SyntaxTree.FilePath}:{source.SpanStart}",
             "value");
-        var assignments = source.Initializer.Expressions.Select(expression => expression switch
-        {
-            AssignmentExpressionSyntax assignment when assignment.Left is IdentifierNameSyntax =>
-                $"{UserInitializerMemberAccess(temporary, assignment.Left)} = {Expression(assignment.Right)};",
-            _ => throw Unsupported("WRK106", expression)
-        });
+        var assignments = BoundInitializers((IObjectOrCollectionInitializerOperation)_model.GetOperation(source.Initializer)!, temporary);
         var isAsync = _model.GetOperation(source.Initializer) is { } initializer && ContainsAwait(initializer);
-        var initialized = $"({(isAsync ? "async " : "")}({temporary}) => {{ {string.Join(" ", assignments)} return {temporary}; }})({creation})";
+        var initialized = $"({(isAsync ? "async " : "")}({temporary}) => {{ {assignments} return {temporary}; }})({creation})";
         return isAsync ? $"(await {initialized})" : initialized;
     }
 

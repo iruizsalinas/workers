@@ -12,6 +12,7 @@ internal sealed partial class JavaScriptEmitter
         var definition = (method.ReducedFrom ?? method).ContainingType.OriginalDefinition.ToDisplayString();
         var container = method.ReducedFrom is null ? method.ContainingType : method.ReceiverType as INamedTypeSymbol;
         if (container is null) return null;
+        if (KeyCollectionInvocation(source, container, receiver, name, arguments) is { } keyed) return keyed;
         string Helper(string helper, params string[] values)
         {
             _helpers.Require(JavaScriptHelper.CollectionMembers);
@@ -42,6 +43,8 @@ internal sealed partial class JavaScriptEmitter
         if (definition == "System.Collections.Generic.List<T>")
         {
             var element = method.ContainingType.TypeArguments[0];
+            string Predicate(string mode) => Helper("listPredicate", receiver, arguments[0], $"\"{mode}\"", DefaultValueText(element, source),
+                $"value => {CopyValue(element, "value")}");
             return (name, arguments.Length) switch
             {
                 ("Remove", 1) => Helper("listRemove", receiver, arguments[0], EqualityFunction(element, source)),
@@ -51,14 +54,16 @@ internal sealed partial class JavaScriptEmitter
                 ("RemoveAt", 1) => Helper("listRemoveAt", receiver, arguments[0]),
                 ("Insert", 2) => Helper("listInsert", receiver, arguments[0], arguments[1]),
                 ("Clear", 0) => $"{RequireHelperName(JavaScriptHelper.ListState, "listClear")}({receiver})",
-                ("AddRange", 1) => Helper("listAddRange", receiver, arguments[0]),
+                ("AddRange", 1) => CopyValue(element, "item") == "item" ? Helper("listAddRange", receiver, arguments[0])
+                    : Helper("listAddRange", receiver, arguments[0], $"item => {CopyValue(element, "item")}"),
                 ("RemoveAll", 1) => Helper("listRemoveAll", receiver, arguments[0]),
-                ("Find", 1) => $"(({receiver}).find({arguments[0]}) ?? {DefaultValueText(element, source)})",
-                ("FindAll", 1) => CreateList($"{receiver}.filter({arguments[0]})"),
-                ("FindIndex", 1) => $"{receiver}.findIndex({arguments[0]})",
-                ("Exists", 1) => $"{receiver}.some({arguments[0]})",
-                ("TrueForAll", 1) => $"{receiver}.every({arguments[0]})",
-                ("GetRange", 2) => Helper("listGetRange", receiver, arguments[0], arguments[1]),
+                ("Find", 1) => Predicate("find"),
+                ("FindAll", 1) => CreateList(Predicate("all")),
+                ("FindIndex", 1) => Predicate("index"),
+                ("Exists", 1) => Predicate("exists"),
+                ("TrueForAll", 1) => Predicate("every"),
+                ("GetRange", 2) => CopyValue(element, "item") == "item" ? Helper("listGetRange", receiver, arguments[0], arguments[1])
+                    : CreateList(CopySequenceValues(element, Helper("listGetRange", receiver, arguments[0], arguments[1]))),
                 ("ToArray", 0) => MaterializeArray(method.ReturnType, $"{receiver}.slice()"),
                 ("Reverse", 0) => $"{RequireHelperName(JavaScriptHelper.ListState, "listReverse")}({receiver})",
                 ("Sort", 0) when UnwrapNullable(element).SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Double

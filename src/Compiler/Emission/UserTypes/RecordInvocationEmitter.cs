@@ -9,6 +9,17 @@ internal sealed partial class JavaScriptEmitter
         result = "";
         if (!IsSynthesizedRecordMember(method)) return false;
         var type = method!.ContainingType;
+        if (method.Name == "Deconstruct" && method.Parameters.All(parameter => parameter.RefKind == RefKind.Out))
+        {
+            var outputs = method.Parameters.Select((parameter, index) =>
+            {
+                var property = UserTypeProperties(type).First(property => property.Name == parameter.Name);
+                return $"$out{index}.value = {CopyValue(parameter.Type, UserMemberAccess("$receiver", property))};";
+            });
+            var parameters = method.Parameters.Select((_, index) => $"$out{index}");
+            result = $"(($receiver, {string.Join(", ", parameters)}) => {{ {string.Join(" ", outputs)} }})({receiver}, {string.Join(", ", arguments)})";
+            return true;
+        }
         if (IsSynthesizedRecordToString(method))
         {
             if (baseCall) _recordPrintDispatchTypes.Add((INamedTypeSymbol)ResolveType(type));
@@ -24,7 +35,7 @@ internal sealed partial class JavaScriptEmitter
         var other = typed ? "$other" : $"({TypePatternTest(type, "$other", null, invocation)} ? $other : null)";
         var comparison = baseCall && typed ? $"{RecordEqualityFunction(type, invocation)}($receiver, {other})"
             : RecordEquals(type, "$receiver", other, invocation);
-        result = $"(($receiver, $other) => {{ if ($receiver == null) throw new TypeError(\"Object reference not set to an instance of an object.\"); " +
+        result = $"(($receiver, $other) => {{ if ($receiver == null) throw {NullReferenceException()}; " +
             $"return {comparison}; }})({receiver}, {arguments[0]})";
         return true;
     }

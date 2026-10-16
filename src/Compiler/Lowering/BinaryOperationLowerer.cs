@@ -8,11 +8,31 @@ internal sealed partial class JavaScriptEmitter
     private string Binary(IBinaryOperation operation)
     {
         var expression = operation.Syntax;
+        if (operation.OperatorMethod?.ContainingType.ToDisplayString() == "System.Type"
+            && operation.OperatorKind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals)
+            return $"({Expression(operation.LeftOperand)} {(operation.OperatorKind == BinaryOperatorKind.Equals ? "===" : "!==")} {Expression(operation.RightOperand)})";
+        if (operation.LeftOperand.Type?.TypeKind == TypeKind.Delegate || operation.RightOperand.Type?.TypeKind == TypeKind.Delegate)
+        {
+            var helper = operation.OperatorKind switch
+            {
+                BinaryOperatorKind.Add => "delegateCombine", BinaryOperatorKind.Subtract => "delegateRemove",
+                BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals => "delegateEquals",
+                _ => throw Unsupported("WRK108", expression)
+            };
+            var result = $"{DelegateHelper(helper)}({Expression(operation.LeftOperand)}, {Expression(operation.RightOperand)})";
+            return operation.OperatorKind == BinaryOperatorKind.NotEquals ? $"!{result}" : result;
+        }
         if (operation.OperatorMethod is { } recordOperator && IsSynthesizedRecordMember(recordOperator)
             && operation.OperatorKind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals)
         {
             var equals = RecordEquals(recordOperator.ContainingType, Expression(operation.LeftOperand), Expression(operation.RightOperand), expression, referenceComparison: true);
             return operation.OperatorKind == BinaryOperatorKind.Equals ? equals : $"!{equals}";
+        }
+        if (operation.OperatorMethod is { } sourceOperator && sourceOperator.DeclaringSyntaxReferences.Length != 0)
+        {
+            if (operation.IsLifted || operation.OperatorKind is BinaryOperatorKind.ConditionalAnd or BinaryOperatorKind.ConditionalOr)
+                throw Unsupported("WRK108", expression);
+            return SourceOperator(sourceOperator, operation.ConstrainedToType, expression, operation.LeftOperand, operation.RightOperand);
         }
         if (operation.OperatorMethod is not null)
             throw UnsupportedSymbol(operation.OperatorMethod, expression);
@@ -101,13 +121,16 @@ internal sealed partial class JavaScriptEmitter
     }
 
     // Converts an operand of string concatenation the way String.Concat calls ToString().
-    private string StringConcatOperand(IOperation operation, string value, SyntaxNode source)
+    private string StringConcatOperand(IOperation operation, string value, SyntaxNode source, bool interpolation = false)
     {
         operation = Unbox(operation);
-        var type = operation.Type;
+        var type = operation.Type is { } boundType ? ResolveType(boundType) : null;
         if (type is null) return "\"\"";
         var underlying = UnwrapNullable(type!);
         var nullable = type is null || type.IsReferenceType || !SymbolEqualityComparer.Default.Equals(type, underlying);
+        if (interpolation && underlying.SpecialType is SpecialType.System_String or SpecialType.System_Char
+            or >= SpecialType.System_SByte and <= SpecialType.System_Double)
+            return nullable ? $"({value}) ?? \"\"" : value;
         if (operation.ConstantValue is { HasValue: true, Value: string or char })
             return value;
         if (underlying.SpecialType == SpecialType.System_String)
@@ -117,17 +140,25 @@ internal sealed partial class JavaScriptEmitter
         string Convert(string item) => underlying.SpecialType switch
         {
             SpecialType.System_Char or SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16
-                or SpecialType.System_UInt16 or SpecialType.System_Int32 or SpecialType.System_UInt32 => $"String({item})",
+                or SpecialType.System_UInt16 or SpecialType.System_Int32 or SpecialType.System_UInt32
+                or SpecialType.System_Int64 or SpecialType.System_UInt64 => $"String({item})",
             SpecialType.System_Boolean => $"({item} ? \"True\" : \"False\")",
             SpecialType.System_Single => $"String({item})",
             SpecialType.System_Double => $"String({item})",
-            _ when IsTextEnum(underlying) => EnumText(underlying, item),
+            _ when IsTextEnum(underlying) => EnumText(underlying, $"Number({item})"),
             _ when underlying is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record) =>
                 RecordText(record, item, source),
+            _ when underlying is INamedTypeSymbol user && IsUserInstanceType(user) =>
+                UserObjectText(user, item, source),
+            _ when underlying.SpecialType == SpecialType.System_Object => ObjectText(item),
+            _ when underlying is INamedTypeSymbol { IsAnonymousType: true } anonymous => AnonymousText(anonymous, item, source),
+            _ when underlying is INamedTypeSymbol { IsTupleType: true } tuple => TupleText(tuple, item, source),
+            _ when underlying is INamedTypeSymbol pair && IsKeyValuePair(pair) => KeyValuePairText(pair, item, source),
+            _ when underlying is IArrayTypeSymbol || HasCollectionTypeName(underlying) => System.Text.Json.JsonSerializer.Serialize(RuntimeTypeName(underlying)),
             _ => throw Unsupported("WRK108", source)
         };
         return nullable
-            ? $"(($workers$value) => $workers$value == null ? \"\" : {Convert("$workers$value")})({value})"
+            ? $"(($workers$value) => $workers$value == null ? \"\" : ({Convert("$workers$value")} ?? \"\"))({value})"
             : $"({Convert(value)})";
     }
 

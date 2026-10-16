@@ -30,13 +30,13 @@ public sealed class HttpRuntimeTests
             }
             """);
 
-        Assert.Contains("let url = new URL(request.url)", module);
-        Assert.Contains("origin: url.origin", module);
-        Assert.Contains("protocol: url.protocol", module);
-        Assert.Contains("hostname: url.hostname", module);
-        Assert.Contains("hash: url.hash", module);
-        Assert.Contains("redirect: request.redirect", module);
-        Assert.Contains("hasSignal: request.signal != null", module);
+        Assert.Contains("let url = new URL($workers$notNull(request).url)", module);
+        Assert.Contains("origin: $workers$notNull(url).origin", module);
+        Assert.Contains("protocol: $workers$notNull(url).protocol", module);
+        Assert.Contains("hostname: $workers$notNull(url).hostname", module);
+        Assert.Contains("hash: $workers$notNull(url).hash", module);
+        Assert.Contains("redirect: $workers$notNull(request).redirect", module);
+        Assert.Contains("hasSignal: $workers$notNull(request).signal != null", module);
     }
 
     [Fact]
@@ -79,9 +79,9 @@ public sealed class HttpRuntimeTests
             """);
 
         Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) =>", module);
-        Assert.Contains("$workers$receiver.set($workers$arg2, $workers$arg1)", module);
+        Assert.Contains("$workers$notNull($workers$receiver).set($workers$arg2, $workers$arg1)", module);
         Assert.Matches(
-            @"\)\(\$workers\$cs\$Worker\$GetResponse\$\d+\(events\).headers, \$workers\$cs\$Worker\$GetValue\$\d+\(events\), \$workers\$cs\$Worker\$GetName\$\d+\(events\)\)",
+            @"\)\(\$workers\$notNull\(\$workers\$cs\$Worker\$GetResponse\$\d+\(events\)\).headers, \$workers\$cs\$Worker\$GetValue\$\d+\(events\), \$workers\$cs\$Worker\$GetName\$\d+\(events\)\)",
             module);
     }
 
@@ -114,7 +114,7 @@ public sealed class HttpRuntimeTests
             }
             """);
 
-        Assert.Contains("console.info(String(tail.length))", module);
+        Assert.Contains("console.info(String($workers$notNull(tail).length))", module);
         Assert.DoesNotContain("tail.events", module);
     }
 
@@ -135,8 +135,8 @@ public sealed class HttpRuntimeTests
             }
             """);
 
-        Assert.Contains("new Headers((value => value != null && \"request\" in value ? value : null)($workers$sequenceIndex(tail, 0).event).request.headers).get(\"content-type\")", module);
-        Assert.Contains("new Date(value))(scheduled.scheduledTime)", module);
+        Assert.Contains("$workers$notNull(new Headers($workers$notNull($workers$notNull((value => value != null && \"request\" in value ? value : null)($workers$notNull($workers$sequenceIndex(tail, 0)).event)).request).headers)).get(\"content-type\")", module);
+        Assert.Contains("$workers$notNull((value => value == null ? null : new Date(value))($workers$notNull(scheduled).scheduledTime))", module);
         Assert.DoesNotContain("scheduled.type", module);
     }
 

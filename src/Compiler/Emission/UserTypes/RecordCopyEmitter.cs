@@ -20,7 +20,7 @@ internal sealed partial class JavaScriptEmitter
             .SingleOrDefault(candidate => IsUserRecordCopyConstructor((IMethodSymbol)_model.GetDeclaredSymbol(candidate)!));
         if (constructor is null) return;
         _output.AppendLine("  static $copy(source) {");
-        _output.AppendLine("    if (source == null) throw new TypeError(\"Cannot copy a null record.\");");
+        _output.AppendLine($"    if (source == null) throw {NullReferenceException()};");
         _output.Append("    const result = Object.create(").Append(_userTypes[type]).AppendLine(".prototype);");
         _output.AppendLine("    result.$copyFrom(source);");
         _output.AppendLine("    return result;");

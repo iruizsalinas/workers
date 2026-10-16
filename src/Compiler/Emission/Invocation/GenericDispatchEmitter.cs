@@ -25,7 +25,8 @@ internal sealed partial class JavaScriptEmitter
             foreach (var type in _userTypes.Keys.ToArray())
             {
                 if (type.IsAbstract || _genericDispatchTargets[method].ContainsKey(type)) continue;
-                if (!_compilation.ClassifyConversion(type, method.ContainingType).IsImplicit) continue;
+                var conversion = _compilation.ClassifyConversion(type, method.ContainingType);
+                if (!conversion.IsIdentity && !conversion.IsImplicit) continue;
                 IMethodSymbol? target;
                 if (IsSourceInterface(method.ContainingType))
                 {
@@ -45,6 +46,9 @@ internal sealed partial class JavaScriptEmitter
 
     private static IMethodSymbol? FindVirtualImplementation(INamedTypeSymbol type, IMethodSymbol slot)
     {
+        // Constructed generic methods do not expose OverriddenMethod in Roslyn.
+        // Find the virtual slot on the unconstructed method, then specialize its implementation.
+        slot = slot.ConstructedFrom;
         while (slot.OverriddenMethod is { } parent) slot = parent;
         for (var current = type; current is not null; current = current.BaseType)
             foreach (var method in current.GetMembers(slot.Name).OfType<IMethodSymbol>())
@@ -62,7 +66,7 @@ internal sealed partial class JavaScriptEmitter
         {
             var parameters = method.Parameters.Select((_, index) => $"$arg{index}").ToArray();
             _output.Append("function ").Append(name).Append('(').Append(string.Join(", ", parameters)).AppendLine(") {");
-            _output.AppendLine("  if (this == null) throw new TypeError(\"Object reference not set to an instance of an object.\");");
+            _output.AppendLine($"  if (this == null) throw {NullReferenceException()};");
             _output.AppendLine("  switch (Object.getPrototypeOf(this)) {");
             foreach (var (type, target) in _genericDispatchTargets[method])
                 _output.Append("    case ").Append(_userTypes[type]).Append(".prototype: return ")

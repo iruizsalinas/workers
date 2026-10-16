@@ -15,6 +15,8 @@ internal sealed partial class JavaScriptEmitter
         var typeName = type?.ToDisplayString();
         result = typeName switch
         {
+            _ when name == "GetHashCode" && arguments.Length == 0 && type is not null && SupportsLinqEquality(type) =>
+                $"((value) => {{ if (value == null) throw {NullReferenceException()}; return {KeyHash(type, "value", invocation)}; }})({receiver})",
             _ when CollectionMemberInvocation(invocation, method, receiver, name, arguments) is { } collection => collection,
             "System.Enum" when name == "ToString" && arguments.Length == 0
                 && invocation.Expression is MemberAccessExpressionSyntax enumMember

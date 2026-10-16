@@ -20,9 +20,9 @@ public sealed class SqliteDurableObjectTests
             public sealed record Row(int Value);
             """);
 
-        Assert.Contains("storage.transactionSync", module);
-        Assert.Contains("storage.sql.exec(\"DELETE FROM rows\")", module);
-        Assert.Contains("storage.kv.put(\"key\"", module);
+        Assert.Contains("$workers$notNull($workers$notNull(this.ctx).storage).transactionSync", module);
+        Assert.Contains("$workers$notNull($workers$notNull($workers$notNull(this.ctx).storage).sql).exec(\"DELETE FROM rows\")", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver).put($workers$arg1, $workers$arg2))($workers$notNull($workers$notNull(this.ctx).storage).kv, \"key\", { value: 1 })", module);
         Assert.Contains(".toArray()", module);
     }
 }

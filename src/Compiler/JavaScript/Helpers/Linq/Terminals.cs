@@ -3,7 +3,7 @@ internal static partial class HelperSource
     private static string LinqJoin(Func<string, string> name) => $$"""
         function {{name("linqJoin")}}(outer, inner, outerKey, innerKey, selector, grouped) {
           if (outer == null || inner == null || outerKey == null || innerKey == null || selector == null)
-            throw new TypeError("LINQ argument cannot be null.");
+            throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           return { *[Symbol.iterator]() {
             const iterator = {{name("linqValues")}}(outer);
             try {
@@ -35,14 +35,14 @@ internal static partial class HelperSource
 
     private static string LinqElementAt(Func<string, string> name) => $$"""
         function {{name("linqElementAt")}}(source, index, defaultValue, orDefault) {
-          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          if (source == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ source cannot be null.");
           if (index >= 0) {
             let current = 0;
             for (const value of {{name("linqValues")}}(source))
               if (current++ === index) return value;
           }
           if (orDefault) return defaultValue;
-          throw new RangeError("Index was outside the bounds of the sequence.");
+          throw new ({{name("exceptionType")}}("System.ArgumentOutOfRangeException"))("Index was outside the bounds of the sequence.");
         }
 
         """;
@@ -50,12 +50,12 @@ internal static partial class HelperSource
     private static string LinqFirst(Func<string, string> name) => $$"""
         function {{name("linqFirst")}}(source, predicate, hasPredicate, defaultValue, orDefault) {
           if (source == null || (hasPredicate && predicate == null))
-            throw new TypeError("LINQ argument cannot be null.");
+            throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           let index = 0;
           for (const value of {{name("linqValues")}}(source))
             if (predicate === null || predicate(value, index++)) return value;
           if (orDefault) return defaultValue;
-          throw new RangeError("Sequence contains no matching element.");
+          throw new ({{name("exceptionType")}}("System.InvalidOperationException"))("Sequence contains no matching element.");
         }
 
         """;
@@ -63,14 +63,14 @@ internal static partial class HelperSource
     private static string LinqLast(Func<string, string> name) => $$"""
         function {{name("linqLast")}}(source, predicate, hasPredicate, defaultValue, orDefault) {
           if (source == null || (hasPredicate && predicate == null))
-            throw new TypeError("LINQ argument cannot be null.");
+            throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           let found = false, result = defaultValue, index = 0;
           for (const value of {{name("linqValues")}}(source))
             if (predicate === null || predicate(value, index++)) {
             found = true; result = value;
           }
           if (found || orDefault) return result;
-          throw new RangeError("Sequence contains no matching element.");
+          throw new ({{name("exceptionType")}}("System.InvalidOperationException"))("Sequence contains no matching element.");
         }
 
         """;
@@ -78,22 +78,22 @@ internal static partial class HelperSource
     private static string LinqSingle(Func<string, string> name) => $$"""
         function {{name("linqSingle")}}(source, predicate, hasPredicate, defaultValue, orDefault) {
           if (source == null || (hasPredicate && predicate == null))
-            throw new TypeError("LINQ argument cannot be null.");
+            throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           let found = false, result = defaultValue, index = 0;
           for (const value of {{name("linqValues")}}(source))
             if (predicate === null || predicate(value, index++)) {
-            if (found) throw new RangeError("Sequence contains more than one matching element.");
+            if (found) throw new ({{name("exceptionType")}}("System.InvalidOperationException"))("Sequence contains more than one matching element.");
             found = true; result = value;
           }
           if (found || orDefault) return result;
-          throw new RangeError("Sequence contains no matching element.");
+          throw new ({{name("exceptionType")}}("System.InvalidOperationException"))("Sequence contains no matching element.");
         }
 
         """;
 
     private static string LinqToArray(Func<string, string> name) => $$"""
         function {{name("linqToArray")}}(source) {
-          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          if (source == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ source cannot be null.");
           return Array.from({{name("linqValues")}}(source));
         }
 

@@ -27,13 +27,13 @@ public sealed class QueueStackTests
             """);
 
         Assert.Contains("$workers$queueStackCreate($workers$listCreate([1, 2]), false, null)", module);
-        Assert.Contains("queue.push(3)", module);
-        Assert.Contains("$workers$queueStackTake(queue, false)", module);
-        Assert.Contains("$workers$queueStackTake(queue, true)", module);
+        Assert.Contains("$workers$notNull(queue).push(3)", module);
+        Assert.Contains("$workers$queueStackTake($workers$notNull(queue), false)", module);
+        Assert.Contains("$workers$queueStackTake($workers$notNull(queue), true)", module);
         Assert.Contains("$workers$queueStackCreate($workers$listCreate([\"bottom\", \"top\"]), true, null)", module);
-        Assert.Contains("stack.unshift(\"new\")", module);
-        Assert.Contains("stack.includes(\"top\")", module);
-        Assert.Contains("stack.slice()", module);
+        Assert.Contains("$workers$notNull(stack).unshift(\"new\")", module);
+        Assert.Contains("$workers$notNull(stack).includes(\"top\")", module);
+        Assert.Contains("$workers$notNull(stack).slice()", module);
     }
 
     [Fact]
@@ -61,10 +61,10 @@ public sealed class QueueStackTests
             """);
 
         Assert.Contains("$workers$queueStackCreate(null, false, 4)", module);
-        Assert.Contains("for (const value of queue)", module);
-        Assert.Contains(" of stack) {", module);
-        Assert.Contains("queue.length = 0", module);
-        Assert.Contains("stack.length = 0", module);
+        Assert.Contains("for (const value of $workers$notNull(queue))", module);
+        Assert.Contains("of $workers$notNull(stack)) {", module);
+        Assert.Contains("$workers$notNull(queue).length = 0", module);
+        Assert.Contains("$workers$notNull(stack).length = 0", module);
     }
 
     [Theory]

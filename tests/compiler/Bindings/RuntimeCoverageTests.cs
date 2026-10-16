@@ -31,11 +31,11 @@ public sealed class RuntimeCoverageTests
             }
             """);
 
-        Assert.Contains("bucket.put(\"a\", \"body\", { ssecKey: \"0001", module);
-        Assert.Contains("(value => value == null ? null : new Uint8Array(value))(stored.checksums.md5)", module);
-        Assert.Contains("let keyed = stored.ssecKeyMd5;", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2, $workers$arg3) => $workers$notNull($workers$receiver).put($workers$arg1, $workers$arg2, $workers$arg3))(bucket, \"a\", \"body\", { ssecKey: \"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\" })", module);
+        Assert.Contains("(value => value == null ? null : new Uint8Array(value))($workers$notNull($workers$notNull(stored).checksums).md5)", module);
+        Assert.Contains("let keyed = $workers$notNull(stored).ssecKeyMd5;", module);
         Assert.Contains("onlyIf: { uploadedAfter: new Date(0), secondsGranularity: true }", module);
-        Assert.Contains("upload.uploadPart(1, \"part\", { ssecKey: ", module);
+        Assert.Contains("(($workers$receiver$4, $workers$arg1$4, $workers$arg2$4, $workers$arg3$2) => $workers$notNull($workers$receiver$4).uploadPart($workers$arg1$4, $workers$arg2$4, $workers$arg3$2))(upload, 1, \"part\", { ssecKey: \"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\" })", module);
     }
 
     [Fact]
@@ -62,11 +62,11 @@ public sealed class RuntimeCoverageTests
             }
             """);
 
-        Assert.Contains("getByName(\"main\", { routingMode: \"primary-only\" })", module);
-        Assert.Contains("this.ctx.storage.setAlarm(new Date(1000), { allowUnconfirmed: true })", module);
-        Assert.Contains("transaction.getAlarm({ allowConcurrency: true }).then(value => value == null ? null : new Date(value))", module);
-        Assert.Contains("transaction.deleteAlarm()", module);
-        Assert.Contains("transaction.setAlarm(new Date(2000))", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver).getByName($workers$arg1, $workers$arg2))($workers$notNull(this.env)[\"PEERS\"], \"main\", { routingMode: \"primary-only\" })", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2, $workers$arg2$2) => $workers$notNull($workers$receiver$2).setAlarm($workers$arg1$2, $workers$arg2$2))($workers$notNull(this.ctx).storage, new Date(1000), { allowUnconfirmed: true })", module);
+        Assert.Contains("(($workers$receiver$3, $workers$arg1$3) => $workers$notNull($workers$receiver$3).getAlarm($workers$arg1$3).then(value => value == null ? null : new Date(value)))(transaction, { allowConcurrency: true })", module);
+        Assert.Contains("$workers$notNull(transaction).deleteAlarm()", module);
+        Assert.Contains("(($workers$receiver$4, $workers$arg1$4) => $workers$notNull($workers$receiver$4).setAlarm($workers$arg1$4))(transaction, new Date(2000))", module);
     }
 
     [Fact]
@@ -122,8 +122,8 @@ public sealed class RuntimeCoverageTests
             }
             """);
 
-        Assert.Contains(".request.getUnredacted()", module);
-        Assert.Contains("console.info(request.cf)", module);
+        Assert.Contains("(($workers$receiver) => $workers$receiver == null ? null : ($workers$notNull($workers$notNull($workers$receiver).request).getUnredacted() ?? null))((value => value != null && \"request\" in value ? value : null)($workers$notNull(item).event))", module);
+        Assert.Contains("console.info($workers$notNull(request).cf)", module);
     }
 
     [Fact]
@@ -171,19 +171,19 @@ public sealed class RuntimeCoverageTests
             }
             """);
 
-        Assert.Contains("let gateway = ai.gateway(\"main\");", module);
-        Assert.Contains("let logId = ai.aiGatewayLogId;", module);
-        Assert.Contains("gateway.patchLog(log.id, { feedback: 1, score: 90 })", module);
-        Assert.Contains("gateway.getUrl(\"openai\")", module);
+        Assert.Contains("let gateway = $workers$notNull(ai).gateway(\"main\");", module);
+        Assert.Contains("let logId = $workers$notNull(ai).aiGatewayLogId;", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver).patchLog($workers$arg1, $workers$arg2))(gateway, $workers$notNull(log).id, { feedback: 1, score: 90 })", module);
+        Assert.Contains("$workers$notNull(gateway).getUrl(\"openai\")", module);
         Assert.Contains("{ provider: \"workers-ai\", endpoint: \"@cf/meta/llama-3.1-8b-instruct\"", module);
         Assert.Contains("{ gateway: { skipCache: true } }", module);
-        Assert.Contains("ai.models({ task: \"Text Generation\", per_page: 5, hide_experimental: true })", module);
-        Assert.Contains("ai.toMarkdown({ name: \"page.html\", blob: new Blob([\"hello\"], { type: \"text/html\" ?? undefined }) }", module);
+        Assert.Contains("(($workers$receiver$3, $workers$arg1$3) => $workers$notNull($workers$receiver$3).models($workers$arg1$3))(ai, { task: \"Text Generation\", per_page: 5, hide_experimental: true })", module);
+        Assert.Contains("(($workers$receiver$4, $workers$arg1$4, $workers$arg2$3) => $workers$notNull($workers$receiver$4).toMarkdown($workers$arg1$4, $workers$arg2$3))(ai, { name: \"page.html\", blob: new Blob([\"hello\"], { type: \"text/html\" ?? undefined }) }, { conversionOptions: { output: { format: \"text\" }, html: { cssSelector: \"main\", images: { convertOGImage: true } } } })", module);
         Assert.Contains("conversionOptions: { output: { format: \"text\" }, html: { cssSelector: \"main\", images: { convertOGImage: true } } }", module);
-        Assert.Contains("ai.toMarkdown().supported()", module);
-        Assert.Contains("statusCode: log.status_code", module);
-        Assert.Contains("tokensIn: log.tokens_in", module);
-        Assert.Contains("new Date(log.created_at).toISOString()", module);
+        Assert.Contains("$workers$notNull($workers$notNull(ai).toMarkdown()).supported()", module);
+        Assert.Contains("statusCode: $workers$notNull(log).status_code", module);
+        Assert.Contains("tokensIn: $workers$notNull(log).tokens_in", module);
+        Assert.Contains("$workers$notNull(new Date($workers$notNull(log).created_at)).toISOString()", module);
         Assert.Contains(".property_id", module);
     }
 }

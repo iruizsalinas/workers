@@ -38,19 +38,19 @@ public sealed class ExtendedBindingTests
             }
             """);
 
-        Assert.Contains("env[\"DISPATCH\"].get(\"service\")", module);
-        Assert.Contains("env[\"EVENTS\"].writeDataPoint({ indexes: [\"index\"], doubles: [1], blobs: [\"blob\"] })", module);
-        Assert.Contains("env[\"MAIL\"].send({ from: \"from@example.com\", to: [\"to@example.com\"], subject: \"subject\", text: \"text\" })", module);
+        Assert.Contains("$workers$notNull($workers$notNull(env)[\"DISPATCH\"]).get(\"service\")", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).writeDataPoint($workers$arg1))($workers$notNull(env)[\"EVENTS\"], { indexes: [\"index\"], doubles: [1], blobs: [\"blob\"] })", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).send($workers$arg1$2))($workers$notNull(env)[\"MAIL\"], { from: \"from@example.com\", to: [\"to@example.com\"], subject: \"subject\", text: \"text\" })", module);
         Assert.Contains("import { EmailMessage as $workers$EmailMessage } from \"cloudflare:email\";", module);
-        Assert.Contains("env[\"MAIL\"].send(new $workers$EmailMessage(\"from@example.com\", \"to@example.com\", \"raw\"))", module);
-        Assert.Contains("let version = env[\"VERSION\"].id;", module);
-        Assert.Contains("env[\"AI\"].run(\"model\", { prompt: \"hello\" })", module);
-        Assert.Contains("env[\"FLOW\"].create({ id: \"job\" })", module);
-        Assert.Contains("env[\"IMAGES\"].info(request.body)", module);
-        Assert.Contains("env[\"MEDIA\"].input(request.body).output({ mode: \"video\" }).contentType()", module);
-        Assert.Contains("env[\"INDEX\"].query([1, 2], { topK: 3 })", module);
-        Assert.Contains("env[\"SECRETS\"].get()", module);
-        Assert.Contains("let database = env[\"DB\"].connectionString;", module);
+        Assert.Contains("(($workers$receiver$3, $workers$arg1$3) => $workers$notNull($workers$receiver$3).send($workers$arg1$3))($workers$notNull(env)[\"MAIL\"], new $workers$EmailMessage(\"from@example.com\", \"to@example.com\", \"raw\"))", module);
+        Assert.Contains("let version = $workers$notNull($workers$notNull(env)[\"VERSION\"]).id;", module);
+        Assert.Contains("(($workers$receiver$4, $workers$arg1$4, $workers$arg2) => $workers$notNull($workers$receiver$4).run($workers$arg1$4, $workers$arg2))($workers$notNull(env)[\"AI\"], \"model\", { prompt: \"hello\" })", module);
+        Assert.Contains("(($workers$receiver$5, $workers$arg1$5) => $workers$notNull($workers$receiver$5).create($workers$arg1$5))($workers$notNull(env)[\"FLOW\"], { id: \"job\" })", module);
+        Assert.Contains("(($workers$receiver$6, $workers$arg1$6) => $workers$notNull($workers$receiver$6).info($workers$arg1$6))($workers$notNull(env)[\"IMAGES\"], $workers$notNull(request).body)", module);
+        Assert.Contains("$workers$notNull((($workers$receiver$7, $workers$arg1$7) => $workers$notNull($workers$receiver$7).output($workers$arg1$7))((($workers$receiver$7, $workers$arg1$7) => $workers$notNull($workers$receiver$7).input($workers$arg1$7))($workers$notNull(env)[\"MEDIA\"], $workers$notNull(request).body), { mode: \"video\" })).contentType()", module);
+        Assert.Contains("(($workers$receiver$8, $workers$arg1$8, $workers$arg2$2) => $workers$notNull($workers$receiver$8).query($workers$arg1$8, $workers$arg2$2))($workers$notNull(env)[\"INDEX\"], [1, 2], { topK: 3 })", module);
+        Assert.Contains("$workers$notNull($workers$notNull(env)[\"SECRETS\"]).get()", module);
+        Assert.Contains("let database = $workers$notNull($workers$notNull(env)[\"DB\"]).connectionString;", module);
     }
 
 }

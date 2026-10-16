@@ -31,11 +31,11 @@ public sealed class LinqAdvancedTests
             public sealed record Item(string Name, int Value);
             """);
 
-        Assert.Contains("$workers$linqGroupBy(items, item => item.name, item => item.value)", module);
-        Assert.Contains("$workers$linqToLookup(items, item => item.name, item => item.value)", module);
+        Assert.Contains("$workers$linqGroupBy(items, item => $workers$notNull(item).name, item => $workers$notNull(item).value)", module);
+        Assert.Contains("$workers$linqToLookup(items, item => $workers$notNull(item).name, item => $workers$notNull(item).value)", module);
         Assert.Contains("$workers$linqToDictionary(", module);
-        Assert.Contains("lookup.contains(\"a\")", module);
-        Assert.Contains("lookup.get(\"a\")", module);
+        Assert.Contains("$workers$notNull(lookup).contains(\"a\")", module);
+        Assert.Contains("((receiver, key) => $workers$notNull(receiver).get(key))(lookup, \"a\")", module);
         Assert.Contains("$workers$linqJoin(items, $workers$listCreate([\"a\"])", module);
     }
 
@@ -69,7 +69,7 @@ public sealed class LinqAdvancedTests
             """);
 
         Assert.Contains("$workers$linqNumericAggregate(values, 0, null, 0, false, false)", module);
-        Assert.Contains("$workers$linqExtremum(items, item => item.score", module);
+        Assert.Contains("$workers$linqExtremum(items, item => $workers$notNull(item).score", module);
         Assert.Contains("$workers$linqSet(values", module);
         Assert.Contains("$workers$linqReverse(values)", module);
         Assert.Contains("$workers$linqDefaultIfEmpty($workers$listCreate([]), 0)", module);

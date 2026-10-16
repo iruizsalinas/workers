@@ -27,7 +27,7 @@ internal sealed partial class JavaScriptEmitter
     };
 
     private static bool IsStaticStateContainer(INamedTypeSymbol type) =>
-        type.TypeKind == TypeKind.Class
+        type.TypeKind is TypeKind.Class or TypeKind.Interface
         && type.DeclaringSyntaxReferences is [{ } reference]
         && reference.GetSyntax() is TypeDeclarationSyntax
         && !IsGeneratedInstanceType(type);
@@ -38,10 +38,10 @@ internal sealed partial class JavaScriptEmitter
             && property.DeclaringSyntaxReferences[0].GetSyntax() is PropertyDeclarationSyntax declaration
             && !IsAutoProperty(declaration))
         {
-            if (IsAssignmentTarget(source))
-                throw new NotSupportedException(
-                    $"WRK110: Static property '{property.ToDisplayString()}' has a custom accessor and cannot be assigned.");
-            return $"{StaticGetter(property)}()";
+            var accessors = new List<string>();
+            if (property.GetMethod is { } getter) accessors.Add($"get value() {{ return {QueueSourceAccessor(getter, source)}(); }}");
+            if (property.SetMethod is { } setter) accessors.Add($"set value(assigned) {{ {QueueSourceAccessor(setter, source)}(assigned); }}");
+            return $"({{ {string.Join(", ", accessors)} }}).value";
         }
         return $"{StaticHolder(member.ContainingType)}(){StaticMemberKey(member)}";
     }
@@ -112,6 +112,12 @@ internal sealed partial class JavaScriptEmitter
         var members = new List<(ISymbol Symbol, ITypeSymbol Type, ExpressionSyntax? Initializer, SyntaxNode Source)>();
         foreach (var member in declaration.Members)
         {
+            if (member is EventFieldDeclarationSyntax eventField)
+                foreach (var variable in eventField.Declaration.Variables)
+                {
+                    var symbol = (IEventSymbol)_model.GetDeclaredSymbol(variable)!;
+                    if (symbol.IsStatic) members.Add((symbol, symbol.Type, variable.Initializer?.Value, variable));
+                }
             if (member is FieldDeclarationSyntax field && field.Modifiers.Any(SyntaxKind.StaticKeyword)
                 && !field.Modifiers.Any(SyntaxKind.ConstKeyword))
                 foreach (var variable in field.Declaration.Variables)
@@ -139,7 +145,7 @@ internal sealed partial class JavaScriptEmitter
         _output.AppendLine("  try {");
         foreach (var member in members.Where(member => member.Initializer is not null))
             _output.Append("    ").Append(storage).Append(StaticMemberKey(member.Symbol)).Append(" = ")
-                .Append(Expression(member.Initializer!)).AppendLine(";");
+                .Append(ValueExpression(member.Initializer!)).AppendLine(";");
         var staticConstructor = declaration.Members.OfType<ConstructorDeclarationSyntax>()
             .SingleOrDefault(constructor => constructor.Modifiers.Any(SyntaxKind.StaticKeyword));
         if (staticConstructor?.ExpressionBody is not null)

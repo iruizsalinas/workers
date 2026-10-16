@@ -3,9 +3,9 @@ namespace Workers.Compiler.Tests;
 public sealed class GenericLanguageTests
 {
     [Fact]
-    public void DiagnosesUnsupportedStaticAbstractInterfaceDispatch()
+    public void SpecializesStaticAbstractInterfaceDispatch()
     {
-        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+        var module = Compile("""
             using Workers;
             public interface IValue { static abstract int Read(); }
             public sealed class Item : IValue { public static int Read() => 7; }
@@ -14,8 +14,8 @@ public sealed class GenericLanguageTests
                 private static int Read<T>() where T : IValue => T.Read();
                 [Fetch] public static Response Fetch(Request request) => new Response(Read<Item>().ToString());
             }
-            """));
-        Assert.StartsWith("WRK105:", error.Message);
+            """);
+        Assert.Contains("return 7;", module);
     }
     [Fact]
     public void AppliesObjectInitializersToNewConstrainedTypes() => DifferentialRunner.Equal("""

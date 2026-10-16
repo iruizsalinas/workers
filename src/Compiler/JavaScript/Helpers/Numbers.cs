@@ -2,9 +2,9 @@ internal static partial class HelperSource
 {
     private static string IntegerDivide(Func<string, string> name) => $$"""
         function {{name("integerDivide")}}(left, right, unsigned) {
-          if (right === 0) throw new RangeError("Integer division by zero.");
+          if (right === 0) throw new ({{name("exceptionType")}}("System.DivideByZeroException"))("Integer division by zero.");
           if (!unsigned && left === -2147483648 && right === -1) {
-            throw new RangeError("Integer division overflow.");
+            throw new ({{name("exceptionType")}}("System.OverflowException"))("Integer division overflow.");
           }
           const value = Math.trunc(left / right);
           return unsigned ? value >>> 0 : value | 0;
@@ -14,7 +14,7 @@ internal static partial class HelperSource
 
     private static string IntegerRemainder(Func<string, string> name) => $$"""
         function {{name("integerRemainder")}}(left, right, unsigned) {
-          if (right === 0) throw new RangeError("Integer division by zero.");
+          if (right === 0) throw new ({{name("exceptionType")}}("System.DivideByZeroException"))("Integer division by zero.");
           const value = left % right;
           return unsigned ? value >>> 0 : value | 0;
         }

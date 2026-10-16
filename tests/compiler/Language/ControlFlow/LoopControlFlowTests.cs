@@ -22,7 +22,8 @@ public sealed class LoopControlFlowTests
             }
             """);
 
-        Assert.Contains("for (let index; request.method.length > 0; )", module);
+        Assert.Contains("let index;", module);
+        Assert.Contains("for (; $workers$notNull($workers$notNull(request).method).length > 0; )", module);
     }
 
     [Fact]
@@ -50,7 +51,8 @@ public sealed class LoopControlFlowTests
             """);
 
         Assert.Contains("Uint8Array.from([...left, ...right])", module);
-        Assert.Contains("for (let index = 0; index < all.length; (($workers$value) =>", module);
+        Assert.Contains("let index = 0;", module);
+        Assert.Contains("for (; index < $workers$notNull(all).length; (($workers$value) =>", module);
         Assert.Contains("continue;", module);
     }
 

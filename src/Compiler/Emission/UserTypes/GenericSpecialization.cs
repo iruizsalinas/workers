@@ -27,6 +27,7 @@ internal sealed partial class JavaScriptEmitter
         if (type is IArrayTypeSymbol array)
             return _compilation.CreateArrayTypeSymbol(ResolveType(array.ElementType), array.Rank);
         if (type is not INamedTypeSymbol named || !named.IsGenericType) return type;
+        if (named.IsUnboundGenericType) return named;
         var definition = named.OriginalDefinition;
         if (named.ContainingType is { } containing)
         {
@@ -39,8 +40,14 @@ internal sealed partial class JavaScriptEmitter
     private IMethodSymbol ResolveMethod(IMethodSymbol method)
     {
         var owner = (INamedTypeSymbol)ResolveType(method.ContainingType);
-        var bound = SymbolEqualityComparer.Default.Equals(owner, method.ContainingType) ? method
-            : owner.GetMembers(method.Name).OfType<IMethodSymbol>().First(candidate =>
+        var bound = method.MethodKind == MethodKind.LocalFunction || SymbolEqualityComparer.Default.Equals(owner, method.ContainingType) ? method
+            : owner.GetMembers().SelectMany(member => member switch
+            {
+                IMethodSymbol callable => new[] { callable },
+                IPropertySymbol property => new[] { property.GetMethod, property.SetMethod }.OfType<IMethodSymbol>(),
+                IEventSymbol ev => new[] { ev.AddMethod, ev.RemoveMethod }.OfType<IMethodSymbol>(),
+                _ => Enumerable.Empty<IMethodSymbol>()
+            }).First(candidate =>
                 SymbolEqualityComparer.Default.Equals(candidate.OriginalDefinition, method.OriginalDefinition));
         return method.IsGenericMethod
             ? bound.ConstructedFrom.Construct(method.TypeArguments.Select(ResolveType).ToArray()) : bound;

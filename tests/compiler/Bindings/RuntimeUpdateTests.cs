@@ -30,9 +30,9 @@ public sealed class RuntimeUpdateTests
             }
             """);
 
-        Assert.Contains("sent.metadata.metrics.backlogCount", module);
-        Assert.Contains("batch.metadata.metrics.backlogBytes", module);
-        Assert.Contains("batch.metadata.metrics.oldestMessageTimestamp", module);
+        Assert.Contains("$workers$notNull($workers$notNull($workers$notNull(sent).metadata).metrics).backlogCount", module);
+        Assert.Contains("$workers$notNull($workers$notNull($workers$notNull(batch).metadata).metrics).backlogBytes", module);
+        Assert.Contains("$workers$notNull($workers$notNull($workers$notNull(batch).metadata).metrics).oldestMessageTimestamp", module);
     }
 
     [Fact]
@@ -74,15 +74,15 @@ public sealed class RuntimeUpdateTests
             }
             """);
 
-        Assert.Contains("flow.createBatch({ count: 3, params: { source: \"api\" }, retention: { successRetention: \"1 day\" }, locationHint: \"weur\" })", module);
-        Assert.Contains("flow.createBatch({ instances: [{ id: \"a\" }] })", module);
-        Assert.Contains("flow.deleteBatch([\"a\", \"b\"])", module);
-        Assert.Contains("instance.sendEvent({ type: \"approved\", payload: true })", module);
-        Assert.Contains("instance.subscribe({ cursor: 4, filter: [\"step_completed\", \"workflow_completed\"] })", module);
-        Assert.Contains("events.next().then(item => item.done ? null : item.value)", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).createBatch($workers$arg1))(flow, { count: 3, params: { source: \"api\" }, retention: { successRetention: \"1 day\" }, locationHint: \"weur\" })", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).createBatch($workers$arg1$2))(flow, { instances: [{ id: \"a\" }] })", module);
+        Assert.Contains("(($workers$receiver$3, $workers$arg1$3) => $workers$notNull($workers$receiver$3).deleteBatch($workers$arg1$3))(flow, [\"a\", \"b\"])", module);
+        Assert.Contains("(($workers$receiver$4, $workers$arg1$4) => $workers$notNull($workers$receiver$4).sendEvent($workers$arg1$4))(instance, { type: \"approved\", payload: true })", module);
+        Assert.Contains("(($workers$receiver$5, $workers$arg1$5) => $workers$notNull($workers$receiver$5).subscribe($workers$arg1$5))(instance, { cursor: 4, filter: [\"step_completed\", \"workflow_completed\"] })", module);
+        Assert.Contains("$workers$notNull(events).next().then(item => item.done ? null : item.value)", module);
         Assert.Contains("[Symbol.dispose]()", module);
         Assert.Contains("new Date(value)", module);
-        Assert.Contains("instance.delete()", module);
+        Assert.Contains("$workers$notNull(instance).delete()", module);
     }
 
     [Fact]
@@ -122,15 +122,15 @@ public sealed class RuntimeUpdateTests
             }
             """);
 
-        Assert.Contains("container.start({ image: $workers$dictionaryIndex(container.images, \"default\"), instance: \"standard-1\" })", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).start($workers$arg1))(container, { image: $workers$dictionaryIndex($workers$notNull(container).images, \"default\"), instance: \"standard-1\" })", module);
         Assert.Contains("instance: { vcpu: 1, memoryMib: 512, diskMb: 2000 }, containerSnapshot: { id: \"snap\" }", module);
-        Assert.Contains("container.snapshotContainer({ name: \"warm\" })", module);
-        Assert.Contains("container.inspect()", module);
+        Assert.Contains("(($workers$receiver$3, $workers$arg1$3) => $workers$notNull($workers$receiver$3).snapshotContainer($workers$arg1$3))(container, { name: \"warm\" })", module);
+        Assert.Contains("$workers$notNull(container).inspect()", module);
         Assert.Contains("{ stdin: \"pipe\", stderr: \"combined\", pty: { cols: 120 } }", module);
-        Assert.Contains("piped.stdin.close()", module);
-        Assert.Contains("piped.resize(100, 40)", module);
+        Assert.Contains("$workers$notNull($workers$notNull(piped).stdin).close()", module);
+        Assert.Contains("$workers$notNull(piped).resize(100, 40)", module);
         Assert.Contains("{ stdin: input, pty: true }", module);
-        Assert.Contains("piped.isPty", module);
+        Assert.Contains("$workers$notNull(piped).isPty", module);
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public sealed class RuntimeUpdateTests
         Assert.Contains("to: [\"a@example.com\", { name: \"B\", email: \"b@example.com\" }]", module);
         Assert.Contains("{ disposition: \"inline\", contentId: \"logo\", filename: \"logo.png\", type: \"image/png\", content: logo }", module);
         Assert.Contains("{ disposition: \"attachment\", filename: \"notes.txt\", type: \"text/plain\", content: \"notes\" }", module);
-        Assert.Contains("message.reply({ from: \"support@example.com\", subject: \"Re: ticket\", text: \"Received\" })", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).reply($workers$arg1$2))(message, { from: \"support@example.com\", subject: \"Re: ticket\", text: \"Received\" })", module);
     }
 
     [Fact]
@@ -207,11 +207,11 @@ public sealed class RuntimeUpdateTests
             }
             """);
 
-        Assert.Contains("images.text(\"Sale\", { font: { url: \"https://example.com/font.ttf\" }, size: 48, color: \"white\" })", module);
-        Assert.Contains("images.input(request.body, { encoding: \"base64\" }).draw(label, { composite: \"over\" })", module);
-        Assert.Contains(".output({ format: \"image/webp\", anim: false })", module);
-        Assert.Contains("result.image({ encoding: \"base64\" })", module);
-        Assert.Contains("result.response({ headers: headers })", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver).text($workers$arg1, $workers$arg2))(images, \"Sale\", { font: { url: \"https://example.com/font.ttf\" }, size: 48, color: \"white\" })", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).output($workers$arg1$2))((($workers$receiver$2, $workers$arg1$2, $workers$arg2$2) => $workers$notNull($workers$receiver$2).draw($workers$arg1$2, $workers$arg2$2))((($workers$receiver$2, $workers$arg1$2, $workers$arg2$2) => $workers$notNull($workers$receiver$2).input($workers$arg1$2, $workers$arg2$2))(images, $workers$notNull(request).body, { encoding: \"base64\" }), label, { composite: \"over\" }), { format: \"image/webp\", anim: false })", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).output($workers$arg1$2))((($workers$receiver$2, $workers$arg1$2, $workers$arg2$2) => $workers$notNull($workers$receiver$2).draw($workers$arg1$2, $workers$arg2$2))((($workers$receiver$2, $workers$arg1$2, $workers$arg2$2) => $workers$notNull($workers$receiver$2).input($workers$arg1$2, $workers$arg2$2))(images, $workers$notNull(request).body, { encoding: \"base64\" }), label, { composite: \"over\" }), { format: \"image/webp\", anim: false })", module);
+        Assert.Contains("(($workers$receiver$3, $workers$arg1$3) => $workers$notNull($workers$receiver$3).image($workers$arg1$3))(result, { encoding: \"base64\" })", module);
+        Assert.Contains("(($workers$receiver$4, $workers$arg1$4) => $workers$notNull($workers$receiver$4).response($workers$arg1$4))(result, { headers: headers })", module);
     }
 
     [Fact]
@@ -241,8 +241,8 @@ public sealed class RuntimeUpdateTests
             }
             """);
 
-        Assert.Contains("ai.run(\"@cf/meta/llama\", { prompt: \"hi\" }, { gateway: { id: \"main\", skipCache: true, cacheTtl: 60, retries: { maxAttempts: 3, backoff: \"exponential\" } }, tags: [\"chat\"] })", module);
-        Assert.Contains("ai.websearch({ gatewayId: \"main\", query: answer.response, limit: 5 })", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2, $workers$arg3) => $workers$notNull($workers$receiver).run($workers$arg1, $workers$arg2, $workers$arg3))(ai, \"@cf/meta/llama\", { prompt: \"hi\" }, { gateway: { id: \"main\", skipCache: true, cacheTtl: 60, retries: { maxAttempts: 3, backoff: \"exponential\" } }, tags: [\"chat\"] })", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).websearch($workers$arg1$2))(ai, { gatewayId: \"main\", query: $workers$notNull(answer).response, limit: 5 })", module);
     }
 
     [Fact]
@@ -307,11 +307,11 @@ public sealed class RuntimeUpdateTests
             }
             """);
 
-        Assert.Contains("item.scriptVersion", module);
-        Assert.Contains("item.executionModel", module);
-        Assert.Contains("item.durableObjectId", module);
-        Assert.Contains("item.dispatchNamespace", module);
-        Assert.Contains("log.errorInfo", module);
+        Assert.Contains("(($workers$receiver) => $workers$receiver == null ? null : ($workers$notNull($workers$receiver).id ?? null))($workers$notNull(item).scriptVersion)", module);
+        Assert.Contains("$workers$notNull(item).executionModel", module);
+        Assert.Contains("$workers$notNull(item).durableObjectId", module);
+        Assert.Contains("$workers$notNull(item).dispatchNamespace", module);
+        Assert.Contains("(($workers$subject) => (($workers$subject != null) && ((errors = $workers$subject), true)))($workers$notNull(log).errorInfo)", module);
     }
 
 }

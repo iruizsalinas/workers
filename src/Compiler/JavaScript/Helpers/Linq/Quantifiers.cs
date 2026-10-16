@@ -3,7 +3,7 @@ internal static partial class HelperSource
     private static string LinqAny(Func<string, string> name) => $$"""
         function {{name("linqAny")}}(source, predicate, hasPredicate) {
           if (source == null || (hasPredicate && predicate == null))
-            throw new TypeError("LINQ argument cannot be null.");
+            throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           let index = 0;
           for (const value of {{name("linqValues")}}(source))
             if (predicate === null || predicate(value, index++)) return true;
@@ -14,7 +14,7 @@ internal static partial class HelperSource
 
     private static string LinqAll(Func<string, string> name) => $$"""
         function {{name("linqAll")}}(source, predicate) {
-          if (source == null || predicate == null) throw new TypeError("LINQ argument cannot be null.");
+          if (source == null || predicate == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           let index = 0;
           for (const value of {{name("linqValues")}}(source)) if (!predicate(value, index++)) return false;
           return true;
@@ -25,11 +25,11 @@ internal static partial class HelperSource
     private static string LinqCount(Func<string, string> name) => $$"""
         function {{name("linqCount")}}(source, predicate, hasPredicate) {
           if (source == null || (hasPredicate && predicate == null))
-            throw new TypeError("LINQ argument cannot be null.");
+            throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           let count = 0, index = 0;
           for (const value of {{name("linqValues")}}(source))
             if (predicate === null || predicate(value, index++)) {
-            if (count === 2147483647) throw new RangeError("Enumerable count overflow.");
+            if (count === 2147483647) throw new ({{name("exceptionType")}}("System.OverflowException"))("Enumerable count overflow.");
             count++;
           }
           return count;
@@ -39,7 +39,7 @@ internal static partial class HelperSource
 
     private static string LinqContains(Func<string, string> name) => $$"""
         function {{name("linqContains")}}(source, target) {
-          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          if (source == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ source cannot be null.");
           for (const value of {{name("linqValues")}}(source))
             if (value === target || (value !== value && target !== target)) return true;
           return false;
@@ -49,7 +49,7 @@ internal static partial class HelperSource
 
     private static string LinqDistinct(Func<string, string> name) => $$"""
         function {{name("linqDistinct")}}(source) {
-          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          if (source == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ source cannot be null.");
           return { *[Symbol.iterator]() {
             const seen = new Set();
             for (const value of {{name("linqValues")}}(source))
@@ -62,7 +62,7 @@ internal static partial class HelperSource
 
     private static string LinqDistinctBy(Func<string, string> name) => $$"""
         function {{name("linqDistinctBy")}}(source, keySelector) {
-          if (source == null || keySelector == null) throw new TypeError("LINQ argument cannot be null.");
+          if (source == null || keySelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           return { *[Symbol.iterator]() {
             const seen = new Set();
             for (const value of {{name("linqValues")}}(source)) {
@@ -77,7 +77,7 @@ internal static partial class HelperSource
 
     private static string LinqSequenceEqual(Func<string, string> name) => $$"""
         function {{name("linqSequenceEqual")}}(first, second) {
-          if (first == null || second == null) throw new TypeError("LINQ source cannot be null.");
+          if (first == null || second == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ source cannot be null.");
           const left = {{name("linqValues")}}(first), right = {{name("linqValues")}}(second);
           try {
             while (true) {

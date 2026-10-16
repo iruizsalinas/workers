@@ -15,8 +15,16 @@ internal sealed partial class JavaScriptEmitter
                 "Exception types may derive from System.Exception.");
         ValidateJsonAttributes(type);
         ValidateUserEnumerationProtocol(type);
-        if (declaration is ClassDeclarationSyntax { ParameterList: not null })
-            throw new NotSupportedException($"WRK119: Primary class constructors are outside the Workers profile; use an explicit constructor on '{type}'.");
+        if (type.GetMembers().OfType<IPropertySymbol>().Any(property => property.IsIndexer
+            && (property.ReturnsByRef || property.ReturnsByRefReadonly || property.Parameters.Any(parameter => parameter.RefKind != RefKind.None)
+                || property.GetMethod?.IsExtern == true || property.SetMethod?.IsExtern == true)))
+            throw new NotSupportedException($"WRK119: User indexers on '{type}' require value parameters, value returns, and source-defined accessors.");
+        if (type.GetMembers().OfType<IEventSymbol>().Any(symbol => symbol.AddMethod?.IsExtern == true || symbol.RemoveMethod?.IsExtern == true))
+            throw new NotSupportedException($"WRK119: User events on '{type}' require source-defined accessors.");
+        if (type.InstanceConstructors.Any(constructor => constructor.Parameters.Any(parameter => parameter.RefKind != RefKind.None
+                || parameter.IsParams && parameter.Type is not IArrayTypeSymbol))
+            || type.GetMembers().OfType<IMethodSymbol>().Any(method => method.Parameters.Any(parameter => parameter.IsParams && parameter.Type is not IArrayTypeSymbol)))
+            throw new NotSupportedException($"WRK119: User type '{type}' requires supported value parameters and array params parameters.");
         if (declaration is RecordDeclarationSyntax { ParameterList: { } recordParameters }
             && recordParameters.Parameters.Any(parameter =>
                 LowerFirst(parameter.Identifier.ValueText) == "toJSON"))
@@ -27,8 +35,7 @@ internal sealed partial class JavaScriptEmitter
                 || constructor.ParameterList.Parameters.Any(parameter => parameter.Modifiers.Any(modifier =>
                     modifier.IsKind(SyntaxKind.RefKeyword)
                     || modifier.IsKind(SyntaxKind.OutKeyword)
-                    || modifier.IsKind(SyntaxKind.InKeyword)
-                    || modifier.IsKind(SyntaxKind.ParamsKeyword)))))
+                    || modifier.IsKind(SyntaxKind.InKeyword)))))
             throw new NotSupportedException($"WRK119: User type '{type}' contains an unsupported constructor.");
 
         var unsupported = declaration.Members.FirstOrDefault(member => member switch
@@ -37,6 +44,9 @@ internal sealed partial class JavaScriptEmitter
             ConstructorDeclarationSyntax => false,
             MethodDeclarationSyntax method => !IsSupportedUserMethod(method),
             PropertyDeclarationSyntax property => !IsSupportedUserProperty(property),
+            IndexerDeclarationSyntax => false,
+            OperatorDeclarationSyntax or ConversionOperatorDeclarationSyntax => false,
+            EventDeclarationSyntax or EventFieldDeclarationSyntax => false,
             _ => true
         });
         if (unsupported is not null)
@@ -59,13 +69,12 @@ internal sealed partial class JavaScriptEmitter
 
     private static bool IsSupportedUserMethod(MethodDeclarationSyntax declaration)
     {
-        if (declaration.Modifiers.Any(SyntaxKind.ExternKeyword)
+        if (declaration.ReturnType is RefTypeSyntax || declaration.Modifiers.Any(SyntaxKind.ExternKeyword)
             || declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
             return false;
         return declaration.ParameterList.Parameters.All(parameter =>
             parameter.Modifiers.All(modifier => !modifier.IsKind(SyntaxKind.RefKeyword)
-                && !modifier.IsKind(SyntaxKind.InKeyword)
-                && !modifier.IsKind(SyntaxKind.ParamsKeyword)));
+                && !modifier.IsKind(SyntaxKind.InKeyword)));
     }
 
     private static bool IsSupportedUserProperty(PropertyDeclarationSyntax property)
@@ -75,8 +84,8 @@ internal sealed partial class JavaScriptEmitter
         if (IsAutoProperty(property)) return true;
         if (property.Initializer is not null) return false;
         if (property.ExpressionBody is not null) return true;
-        return property.AccessorList?.Accessors is [{ } getter]
-            && getter.IsKind(SyntaxKind.GetAccessorDeclaration)
-            && (getter.Body is not null || getter.ExpressionBody is not null);
+        return property.AccessorList?.Accessors.All(accessor =>
+            (accessor.IsKind(SyntaxKind.GetAccessorDeclaration) || accessor.IsKind(SyntaxKind.SetAccessorDeclaration) || accessor.IsKind(SyntaxKind.InitAccessorDeclaration))
+            && (accessor.Body is not null || accessor.ExpressionBody is not null)) == true;
     }
 }

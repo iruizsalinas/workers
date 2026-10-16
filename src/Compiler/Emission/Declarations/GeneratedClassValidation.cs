@@ -34,6 +34,8 @@ internal sealed partial class JavaScriptEmitter
     private static void ValidateGeneratedClass(ClassDeclarationSyntax declaration, SemanticModel model, string typeName)
     {
         var type = model.GetDeclaredSymbol(declaration)!;
+        if (declaration.ParameterList is not null)
+            throw new NotSupportedException($"WRK116: Generated runtime class '{typeName}' requires an explicit constructor; primary constructors are supported on source-defined user classes.");
         ValidateUserEnumerationProtocol(type);
         var expectedBase = type.BaseType?.ToDisplayString() is "Workers.DurableObject" or "Workers.WorkerEntrypoint"
             ? type.BaseType.ToDisplayString()

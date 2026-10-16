@@ -31,10 +31,10 @@ public sealed class RuntimeContextTests
             }
             """);
 
-        Assert.Contains("let plain = ctx.exports[\"Greeter\"];", module);
-        Assert.Contains("let scoped = ctx.exports[\"Greeter\"]({ props: { tenant: \"acme\" } });", module);
-        Assert.Contains("let counter = ctx.exports[\"Counter\"].getByName(\"main\");", module);
-        Assert.Contains("let flow = ctx.exports[\"Pipeline\"];", module);
+        Assert.Contains("let plain = $workers$notNull($workers$notNull(ctx).exports)[\"Greeter\"];", module);
+        Assert.Contains("let scoped = (($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver)[$workers$arg1]({ props: $workers$arg2 }))($workers$notNull(ctx).exports, \"Greeter\", { tenant: \"acme\" });", module);
+        Assert.Contains("let counter = $workers$notNull($workers$notNull($workers$notNull(ctx).exports)[\"Counter\"]).getByName(\"main\");", module);
+        Assert.Contains("let flow = $workers$notNull($workers$notNull(ctx).exports)[\"Pipeline\"];", module);
     }
 
     [Fact]
@@ -62,9 +62,9 @@ public sealed class RuntimeContextTests
             }
             """);
 
-        Assert.Contains("this.ctx.exports[\"Room\"].getByName(\"peer\")", module);
-        Assert.Contains("this.ctx.abort(\"reset\", { retryAlarm: false })", module);
-        Assert.Contains("ctx.abort(\"stop\")", module);
+        Assert.Contains("$workers$notNull($workers$notNull($workers$notNull(this.ctx).exports)[\"Room\"]).getByName(\"peer\")", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver).abort($workers$arg1, $workers$arg2))(this.ctx, \"reset\", { retryAlarm: false })", module);
+        Assert.Contains("$workers$notNull(ctx).abort(\"stop\")", module);
     }
 
     [Fact]
@@ -93,8 +93,8 @@ public sealed class RuntimeContextTests
             }
             """);
 
-        Assert.Contains("cache.purge({ tags: [\"product-1\"] })", module);
-        Assert.Contains("cache.invalidate({ pathPrefixes: [\"/images/\"] })", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).purge($workers$arg1))(cache, { tags: [\"product-1\"] })", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).invalidate($workers$arg1$2))(cache, { pathPrefixes: [\"/images/\"] })", module);
         Assert.Contains(".getIdentity()", module);
         Assert.Contains(".user_uuid", module);
         Assert.Contains(".is_warp", module);
@@ -133,13 +133,13 @@ public sealed class RuntimeContextTests
             }
             """);
 
-        Assert.Contains("await ctx.tracing.enterSpan(\"load\", async span =>", module);
-        Assert.Contains("span.setAttribute(\"cache.hit\", false).setAttribute(\"attempt\", 2)", module);
-        Assert.Contains("span.setAttributes({ route: \"/users\" })", module);
-        Assert.Contains("let manual = ctx.tracing.startSpan(\"render\");", module);
-        Assert.Contains("manual.recordException(", module);
-        Assert.Contains("manual.setStatus({ code: \"ok\" })", module);
-        Assert.Contains("manual.end()", module);
-        Assert.Contains("ctx.tracing.getActiveSpan()", module);
+        Assert.Contains("await $workers$notNull($workers$notNull(ctx).tracing).enterSpan(\"load\", async span =>", module);
+        Assert.Contains("$workers$notNull($workers$notNull(span).setAttribute(\"cache.hit\", false)).setAttribute(\"attempt\", 2)", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).setAttributes($workers$arg1))(span, { route: \"/users\" })", module);
+        Assert.Contains("let manual = $workers$notNull($workers$notNull(ctx).tracing).startSpan(\"render\");", module);
+        Assert.Contains("$workers$notNull(manual).recordException(", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).setStatus($workers$arg1$2))(manual, { code: \"ok\" })", module);
+        Assert.Contains("$workers$notNull(manual).end()", module);
+        Assert.Contains("(($workers$receiver$3) => $workers$receiver$3 == null ? null : ($workers$notNull($workers$receiver$3).isTraced ?? null))($workers$notNull($workers$notNull(ctx).tracing).getActiveSpan())", module);
     }
 }

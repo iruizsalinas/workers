@@ -26,7 +26,7 @@ public sealed class RuntimeValueTests
         Assert.Contains("async () => await", module);
         Assert.Contains("async value => await", module);
         Assert.Contains("let completed = Promise.resolve();", module);
-        Assert.Contains("context.waitUntil(completed)", module);
+        Assert.Contains("$workers$notNull(context).waitUntil(completed)", module);
     }
 
     [Fact]

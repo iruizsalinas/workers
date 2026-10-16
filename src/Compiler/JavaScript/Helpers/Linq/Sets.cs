@@ -2,7 +2,7 @@ internal static partial class HelperSource
 {
     private static string LinqReverse(Func<string, string> name) => $$"""
         function {{name("linqReverse")}}(source) {
-          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          if (source == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ source cannot be null.");
           return { *[Symbol.iterator]() {
             const values = Array.from({{name("linqValues")}}(source));
             for (let index = values.length - 1; index >= 0; index--) yield values[index];
@@ -14,7 +14,7 @@ internal static partial class HelperSource
 
     private static string LinqDefaultIfEmpty(Func<string, string> name) => $$"""
         function {{name("linqDefaultIfEmpty")}}(source, defaultValue) {
-          if (source == null) throw new TypeError("LINQ source cannot be null.");
+          if (source == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ source cannot be null.");
           return { *[Symbol.iterator]() {
             let found = false;
             for (const value of {{name("linqValues")}}(source)) { found = true; yield value; }
@@ -27,8 +27,8 @@ internal static partial class HelperSource
 
     private static string LinqChunk(Func<string, string> name) => $$"""
         function {{name("linqChunk")}}(source, size, bytes = false) {
-          if (source == null) throw new TypeError("LINQ source cannot be null.");
-          if (size < 1) throw new RangeError("Chunk size must be positive.");
+          if (source == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ source cannot be null.");
+          if (size < 1) throw new ({{name("exceptionType")}}("System.ArgumentOutOfRangeException"))("Chunk size must be positive.");
           return { *[Symbol.iterator]() {
             let chunk = [];
             for (const value of {{name("linqValues")}}(source)) {
@@ -44,7 +44,7 @@ internal static partial class HelperSource
 
     private static string LinqZip(Func<string, string> name) => $$"""
         function {{name("linqZip")}}(first, second, selector) {
-          if (first == null || second == null || selector == null) throw new TypeError("LINQ argument cannot be null.");
+          if (first == null || second == null || selector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           return { *[Symbol.iterator]() {
             const left = {{name("linqValues")}}(first), right = {{name("linqValues")}}(second);
             try {
@@ -68,13 +68,13 @@ internal static partial class HelperSource
     private static string LinqAggregate(Func<string, string> name) => $$"""
         function {{name("linqAggregate")}}(source, accumulator, seed, hasSeed, resultSelector, hasResultSelector) {
           if (source == null || accumulator == null || hasResultSelector && resultSelector == null)
-            throw new TypeError("LINQ argument cannot be null.");
+            throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           const iterator = {{name("linqValues")}}(source);
           let result = seed;
           try {
             if (!hasSeed) {
               const first = iterator.next();
-              if (first.done) throw new TypeError("Sequence contains no elements.");
+              if (first.done) throw new ({{name("exceptionType")}}("System.InvalidOperationException"))("Sequence contains no elements.");
               result = first.value;
             }
             for (let item = iterator.next(); !item.done; item = iterator.next())

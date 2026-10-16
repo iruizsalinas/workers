@@ -130,7 +130,9 @@ internal sealed partial class JavaScriptEmitter
             var expression = type is INamedTypeSymbol { TypeArguments.Length: 2 }
                 ? $"Object.fromEntries(Object.entries(values).map(([key, item]) => [key, {converted}]))"
                 : $"Array.from(values, item => {converted})";
-            if (isSet) expression = $"new Set({expression})";
+            if (isSet) expression = IsCompositeKey(element)
+                ? KeyCollection((INamedTypeSymbol)type, _diagnosticNode ?? _model.SyntaxTree.GetRoot(), expression)
+                : CreateSet(expression);
             if (isList) expression = CreateList(expression);
             return $"(values => values == null ? values : {expression})({value})";
         }

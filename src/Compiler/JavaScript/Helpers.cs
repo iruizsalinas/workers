@@ -1,8 +1,8 @@
 internal enum JavaScriptHelper
 {
-    RequestCookies, SetCookie, TaskWhenAll, AsyncExpressionResult, StreamFrom, SequenceIndex, DictionaryIndex, IntegerDivide, IntegerRemainder,
+    RequestCookies, SetCookie, TaskWhenAll, AsyncExpressionResult, StreamFrom, SequenceIndex, IndexRange, DictionaryIndex, IntegerDivide, IntegerRemainder,
     SetAdd, QueueStack, RpcArguments, JsonExpect, TryCall, CollectionMembers, ListState, StringReplace,
-    StringOrdinal,
+    StringOrdinal, Tuple, Delegates, StructuralKeys, TypeOf, Exceptions, SetState,
     Router, HttpError, Cors, BoundedBody, Redirect,
     NumericParse, LinqValues, LinqWhere, LinqSelect, LinqSelectMany, LinqAppend, LinqPrepend, LinqSkip, LinqTake,
     LinqSkipWhile, LinqTakeWhile, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains, LinqDistinct,
@@ -18,10 +18,16 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
     public string Require(JavaScriptHelper helper)
     {
         _required.Add(helper);
+        if (helper.IsLinqOperator() || helper is JavaScriptHelper.NumericParse or JavaScriptHelper.CollectionMembers
+            or JavaScriptHelper.DictionaryIndex or JavaScriptHelper.StructuralKeys or JavaScriptHelper.SequenceIndex
+            or JavaScriptHelper.IndexRange or JavaScriptHelper.IntegerDivide or JavaScriptHelper.IntegerRemainder
+            or JavaScriptHelper.ListState or JavaScriptHelper.QueueStack or JavaScriptHelper.Delegates or JavaScriptHelper.TaskWhenAll or JavaScriptHelper.TryCall or JavaScriptHelper.SetState)
+            _required.Add(JavaScriptHelper.Exceptions);
         if (helper is JavaScriptHelper.Router) _required.Add(JavaScriptHelper.HttpError);
         if (helper is JavaScriptHelper.BoundedBody) _required.Add(JavaScriptHelper.HttpError);
         if (helper is JavaScriptHelper.CollectionMembers or JavaScriptHelper.QueueStack)
             _required.Add(JavaScriptHelper.LinqValues);
+        if (helper is JavaScriptHelper.StructuralKeys) _required.Add(JavaScriptHelper.LinqValues);
         if (helper.IsLinqOperator())
             _required.Add(JavaScriptHelper.LinqValues);
         if (helper is JavaScriptHelper.SequenceIndex or JavaScriptHelper.CollectionMembers)
@@ -30,6 +36,7 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
     }
 
     public string Name(string name) => names.Get("helper:" + name, name);
+    public bool IsRequired(JavaScriptHelper helper) => _required.Contains(helper);
 
     public string Emit() => string.Concat(_required.Order().Select(helper => HelperSource.Emit(helper, Name)));
 }
@@ -44,6 +51,13 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.AsyncExpressionResult => "asyncExpressionResult",
         JavaScriptHelper.StreamFrom => "streamFrom",
         JavaScriptHelper.SequenceIndex => "sequenceIndex",
+        JavaScriptHelper.IndexRange => "indexCreate",
+        JavaScriptHelper.Tuple => "tupleCreate",
+        JavaScriptHelper.TypeOf => "typeOf",
+        JavaScriptHelper.Exceptions => "exceptionType",
+        JavaScriptHelper.SetState => "setCreate",
+        JavaScriptHelper.Delegates => "delegateCreate",
+        JavaScriptHelper.StructuralKeys => "keyCollection",
         JavaScriptHelper.DictionaryIndex => "dictionaryIndex",
         JavaScriptHelper.IntegerDivide => "integerDivide",
         JavaScriptHelper.IntegerRemainder => "integerRemainder",

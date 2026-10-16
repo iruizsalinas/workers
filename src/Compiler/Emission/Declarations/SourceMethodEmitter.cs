@@ -7,6 +7,10 @@ internal sealed partial class JavaScriptEmitter
     private string DefaultFieldValue(ITypeSymbol type, SyntaxNode source)
     {
         type = ResolveType(type);
+        if (IsIndexType(type)) return "[0, false]";
+        if (IsRangeType(type)) return "[[0, false], [0, false]]";
+        if (type is INamedTypeSymbol { IsTupleType: true } tuple)
+            return TupleValue(tuple.TupleElements.Select(element => DefaultFieldValue(element.Type, source)));
         if (type.IsReferenceType || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) return "null";
         if (type.SpecialType == SpecialType.System_Boolean) return "false";
         if (type.SpecialType == SpecialType.System_Char) return "\"\\u0000\"";
@@ -41,7 +45,7 @@ internal sealed partial class JavaScriptEmitter
             EmitExplicitStaticInitialization(type, 1);
             if (asyncWrapper) _output.AppendLine("  return (async () => {");
             if (method.ExpressionBody is not null)
-                _output.Append("  return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
+                _output.Append("  return ").Append(ValueExpression(method.ExpressionBody.Expression)).AppendLine(";");
             else
                 EmitStatements(method.Body?.Statements ?? [], 1);
             if (asyncWrapper) _output.AppendLine("  })();");
@@ -53,7 +57,9 @@ internal sealed partial class JavaScriptEmitter
     {
         method = ResolveMethod(method);
         if (method.MethodKind is not (MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation) || method.IsAbstract
-            || method.Parameters.Any(parameter => parameter.RefKind is not (RefKind.None or RefKind.Out) || parameter.IsParams)
+            || method.ReturnsByRef || method.ReturnsByRefReadonly
+            || method.Parameters.Any(parameter => parameter.RefKind is not (RefKind.None or RefKind.Out)
+                || parameter.IsParams && parameter.Type is not IArrayTypeSymbol)
             || method.DeclaringSyntaxReferences.Length != 1
             || method.DeclaringSyntaxReferences[0].GetSyntax() is not MethodDeclarationSyntax)
             throw UnsupportedSymbol(method, callSite);
@@ -89,7 +95,7 @@ internal sealed partial class JavaScriptEmitter
             _output.Append(isAsync && !isEnumerable && !asyncWrapper ? "async " : "").Append(isIterator && !isEnumerable ? "function* " : "function ")
                 .Append(_userMethods[symbol]).Append('(').Append(parameters).AppendLine(") {");
             if (!symbol.IsStatic)
-                _output.AppendLine("  if (this == null) throw new TypeError(\"Object reference not set to an instance of an object.\");");
+                _output.AppendLine($"  if (this == null) throw {NullReferenceException()};");
             EmitWithExpressionScope(1, () =>
             {
                 EmitExplicitStaticInitialization(symbol.ContainingType, 1);
@@ -97,7 +103,7 @@ internal sealed partial class JavaScriptEmitter
                 if (isEnumerable)
                     EmitEnumerableIteratorBody(declaration, 1);
                 else if (declaration.ExpressionBody is not null)
-                    _output.Append("  return ").Append(Expression(declaration.ExpressionBody.Expression)).AppendLine(";");
+                    _output.Append("  return ").Append(ValueExpression(declaration.ExpressionBody.Expression)).AppendLine(";");
                 else
                     EmitStatements(declaration.Body?.Statements ?? [], 1);
                 if (asyncWrapper) _output.AppendLine("  })();");

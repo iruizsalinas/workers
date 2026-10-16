@@ -7,19 +7,49 @@ using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private string Member(IOperation operation)
+    private string Member(IOperation operation, string? receiverOverride = null)
     {
         var member = operation.Syntax;
         var symbol = operation is IPropertyReferenceOperation propertyReference ? (ISymbol)propertyReference.Property : ((IFieldReferenceOperation)operation).Field;
         var instance = operation is IPropertyReferenceOperation propertyInstance ? propertyInstance.Instance : ((IFieldReferenceOperation)operation).Instance;
-        string Receiver() => instance is null ? "this" : Operand(instance);
+        string Receiver() => receiverOverride ?? (instance is null ? "this" : NeedsNullCheck(instance) ? NotNull(Operand(instance)) : Operand(instance));
+        if (symbol.ContainingType.IsAnonymousType)
+        {
+            var syntax = symbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+            var name = syntax is AnonymousObjectMemberDeclaratorSyntax { NameEquals: null, Expression: MemberAccessExpressionSyntax }
+                ? LowerFirst(symbol.Name) : symbol.Name;
+            return IsJavaScriptPropertyIdentifier(name) ? $"{Receiver()}.{name}" : $"{Receiver()}[{JsonSerializer.Serialize(name)}]";
+        }
         if (operation is IPropertyReferenceOperation { Property.IsIndexer: true } indexer) return ElementAccess(indexer);
         if (symbol is IPropertySymbol { IsStatic: true, Name: "Ordinal" or "OrdinalIgnoreCase", ContainingType: { } comparerType }
             && comparerType.ToDisplayString() == "System.StringComparer")
             return $"\"{symbol.Name}\"";
+        symbol = StaticInterfaceImplementation(symbol, StaticMemberConstraint(member), member);
         if (IsUserStaticState(symbol))
             return StaticMemberAccess(symbol!, member);
         var property = symbol as IPropertySymbol;
+        if ((property?.ContainingType.ToDisplayString() == "System.Type" || property?.ContainingType.ToDisplayString() == "System.Reflection.MemberInfo" && instance?.Type?.ToDisplayString() == "System.Type")
+            && property.Name is "Name" or "Namespace" or "IsArray" or "IsValueType" or "IsEnum" or "IsInterface" or "IsGenericType")
+            return $"{Receiver()}.{LowerFirst(property.Name)}";
+        if (UsesKeyDictionary(instance?.Type))
+        {
+            if (property?.Name == "Count") return $"{Receiver()}.size";
+            if (property?.Name is "Keys" or "Values") return $"{Receiver()}.{property.Name.ToLowerInvariant()}()";
+        }
+        if (property?.ContainingType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T)
+        {
+            if (property.Name == "HasValue") return $"({Receiver()} != null)";
+            if (property.Name == "Value")
+                return $"((value) => {{ if (value == null) throw {NewBuiltInException("System.InvalidOperationException", "Nullable object must have a value.")}; return {CopyValue(property.Type, "value")}; }})({Receiver()})";
+        }
+        if (symbol is IFieldSymbol tupleField && tupleField.ContainingType.IsTupleType)
+            return TupleFieldAccess(Receiver(), tupleField, member);
+        if (property is not null && IsIndexType(property.ContainingType))
+            return property.Name switch { "Value" => $"{Receiver()}[0]", "IsFromEnd" => $"{Receiver()}[1]",
+                "Start" => "[0, false]", "End" => "[0, true]", _ => throw UnsupportedSymbol(property, member) };
+        if (property is not null && IsRangeType(property.ContainingType))
+            return property.Name switch { "Start" => $"{Receiver()}[0]", "End" => $"{Receiver()}[1]",
+                "All" => "[[0, false], [0, true]]", _ => throw UnsupportedSymbol(property, member) };
         if (property is not null && member is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
             && (property.IsVirtual || property.IsOverride || property.DeclaringSyntaxReferences.Any(reference =>
                 reference.GetSyntax() is PropertyDeclarationSyntax declaration && !IsAutoProperty(declaration))))
@@ -31,7 +61,7 @@ internal sealed partial class JavaScriptEmitter
             if (!symbol.IsStatic) return UserMemberAccess(Receiver(), symbol);
             if (property is not null) throw UnsupportedSymbol(property, member);
         }
-        if (property is not null && NativeMember(instance, property) is { } native) return native;
+        if (property is not null && NativeMember(property, Receiver()) is { } native) return native;
         if (property?.ContainingType.ToDisplayString() == "Workers.CacheStorage" && property.Name == "Default")
             return "caches.default";
         if (symbol is IFieldSymbol { ContainingType: { } comparisonType, Name: "Ordinal" }
@@ -117,6 +147,13 @@ internal sealed partial class JavaScriptEmitter
             return $"{Receiver()}.{nativeName}";
         if (property?.ContainingType.ToDisplayString() == "System.Exception" && property.Name == "Message")
             return $"{Receiver()}.message";
+        if (property is not null && IsException(property.ContainingType))
+        {
+            if (property.Name == "Message") return $"{Receiver()}.message";
+            if (property.Name == "InnerException") return $"({Receiver()}.cause ?? null)";
+            if (property.Name == "ParamName") return $"({Receiver()}.paramName ?? null)";
+            if (property.Name == "ActualValue") return $"({Receiver()}.actualValue ?? null)";
+        }
         if (property is { Name: "Keys" or "Values" } && IsDictionary(instance?.Type))
             return $"Object.{(property.Name == "Keys" ? "keys" : "values")}({Receiver()})";
         if (property is { Name: "Count" } && IsDictionary(instance?.Type))

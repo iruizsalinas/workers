@@ -12,6 +12,13 @@ internal sealed partial class JavaScriptEmitter
         var type = constructor?.ContainingType;
         var arguments = value.ArgumentList?.Arguments.ToArray() ?? [];
         var typeName = type?.ToDisplayString();
+        if (IsIndexType(type))
+        {
+            _helpers.Require(JavaScriptHelper.IndexRange);
+            return PositionalObjectCreation(value, constructor, arguments,
+                values => $"{_helpers.Name("indexCreate")}({string.Join(", ", values)})");
+        }
+        if (IsRangeType(type)) return PositionalObjectCreation(value, constructor, arguments, values => $"[{string.Join(", ", values)}]");
         if (type?.SpecialType == SpecialType.System_Object && arguments.Length == 0) return "{}";
         if (typeName is "Workers.Date" or "Workers.RegExp" or "Workers.AbortController" or "Workers.FormData"
             or "Workers.TextEncoder" or "Workers.WebSocketPair" or "Workers.WebSocketRequestResponsePair"
@@ -40,8 +47,10 @@ internal sealed partial class JavaScriptEmitter
         if (IsException(type))
             return FrameworkException(constructor, type!, arguments);
         if (typeName == "Workers.Url") return CreateUrl(value, constructor, arguments);
+        if (type is not null && (UsesKeyDictionary(type) || IsSet(type) && IsCompositeKey(type.TypeArguments[0])))
+            return CreateKeyCollection(type, value, constructor!, arguments);
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>" && arguments.Length == 0)
-            return CreateList($"[{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}]");
+            return CreateList($"[{string.Join(", ", value.Initializer?.Expressions.Select(ValueExpression) ?? [])}]");
         if (type?.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.List<T>" or "System.Collections.Generic.HashSet<T>"
             && arguments.Length == 1 && value.Initializer is null && constructor?.Parameters.Length == 1)
         {
@@ -49,11 +58,11 @@ internal sealed partial class JavaScriptEmitter
             if (set && !SupportsLinqEquality(type.TypeArguments[0])) throw UnsupportedSymbol(constructor, value);
             var parameter = constructor.Parameters[0].Type;
             if (parameter.SpecialType == SpecialType.System_Int32 && !set)
-                return $"((capacity) => {{ if (capacity < 0) throw new RangeError(\"capacity must be non-negative.\"); return {CreateList("[]")}; }})({Expression(arguments[0].Expression)})";
+                return $"((capacity) => {{ if (capacity < 0) throw {NewBuiltInException("System.ArgumentOutOfRangeException", "capacity must be non-negative.")}; return {CreateList("[]")}; }})({Expression(arguments[0].Expression)})";
             if (parameter.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
             {
                 var copy = Linq(JavaScriptHelper.LinqToArray, Expression(arguments[0].Expression), []);
-                return set ? $"new Set({copy})" : CreateList(copy);
+                return set ? CreateSet(copy) : CreateList(CopySequenceValues(type.TypeArguments[0], copy));
             }
         }
         if (type?.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.Queue<T>" or
@@ -62,7 +71,7 @@ internal sealed partial class JavaScriptEmitter
                 type.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Stack<T>");
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>"
             && arguments.Length == 0 && SupportsLinqEquality(type.TypeArguments[0]))
-            return $"new Set([{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}])";
+            return CreateSet($"[{string.Join(", ", value.Initializer?.Expressions.Select(Expression) ?? [])}]");
         if (type?.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Dictionary<TKey, TValue>"
             && type.TypeArguments[0].SpecialType == SpecialType.System_String && arguments.Length == 0)
         {
@@ -169,28 +178,20 @@ internal sealed partial class JavaScriptEmitter
 
     private string FrameworkException(IMethodSymbol? constructor, INamedTypeSymbol type, ArgumentSyntax[] arguments)
     {
-        ExpressionSyntax? Argument(string name)
-        {
-            if (constructor is null) return null;
-            for (var index = 0; index < arguments.Length; index++)
-                if (BoundParameter(arguments[index]).Name == name)
-                    return arguments[index].Expression;
-            return null;
-        }
-
+        var values = arguments.Select(ArgumentValue).ToArray();
+        var temporaries = arguments.Select((_, index) => _names.Get($"exception-argument:{arguments[index].SyntaxTree.FilePath}:{arguments[index].SpanStart}", "argument")).ToArray();
+        string? Argument(string name) => arguments.Select((argument, index) => (Name: BoundParameter(argument).Name, Value: temporaries[index]))
+            .Where(item => item.Name == name).Select(item => item.Value).SingleOrDefault();
+        if (arguments.Any(argument => BoundParameter(argument).Name is not ("message" or "paramName" or "innerException" or "actualValue")))
+            throw UnsupportedSymbol(constructor, arguments[0]);
         var fallback = JsonSerializer.Serialize(DefaultExceptionMessage(type));
-        var message = Argument("message") switch
-        {
-            null => fallback,
-            var text when _model.GetConstantValue(text) is { HasValue: true, Value: string constant } =>
-                JsonSerializer.Serialize(constant),
-            var text => $"(({Expression(text)}) ?? {fallback})"
-        };
+        var message = Argument("message") is { } text ? $"({text} ?? {fallback})" : fallback;
         if (Argument("paramName") is { } parameter)
-            message = $"((message, parameter) => parameter == null ? message : `${{message}} (Parameter '${{parameter}}')`)({message}, {Expression(parameter)})";
-        return Argument("innerException") is { } inner
-            ? $"new Error({message}, {{ cause: {Expression(inner)} }})"
-            : $"new Error({message})";
+            message = $"((message, parameter) => parameter == null ? message : `${{message}} (Parameter '${{parameter}}')`)({message}, {parameter})";
+        var inner = Argument("innerException");
+        var result = $"new ({BuiltInExceptionType(type)})({message}, {(inner is null ? "undefined" : "{ cause: " + inner + " }")}, {Argument("paramName") ?? "undefined"})";
+        if (Argument("actualValue") is { } actual) result = $"Object.assign({result}, {{ actualValue: {actual} }})";
+        return arguments.Length == 0 ? result : $"(({string.Join(", ", temporaries)}) => {result})({string.Join(", ", values)})";
     }
 
     internal static string DefaultExceptionMessage(INamedTypeSymbol type) => type.ToDisplayString() switch

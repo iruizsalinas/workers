@@ -25,10 +25,10 @@ public sealed class PlatformBindingTests
             }
             """);
 
-        Assert.Contains("env[\"FILES\"].get(\"key\", { range: { offset: 0, length: 10 } })", module);
-        Assert.Contains("env[\"JOBS\"].send({ key: \"value\" }, { delaySeconds: 5 })", module);
-        Assert.Contains("caches.default.match(request, { ignoreMethod: true }).then(value => value ?? null)", module);
-        Assert.Contains("env[\"API\"].fetch(\"https://example.com\")", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver).get($workers$arg1, $workers$arg2).then(value => value != null && \"body\" in value ? value : null))($workers$notNull(env)[\"FILES\"], \"key\", { range: { offset: 0, length: 10 } })", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2, $workers$arg2$2) => $workers$notNull($workers$receiver$2).send($workers$arg1$2, $workers$arg2$2))($workers$notNull(env)[\"JOBS\"], { key: \"value\" }, { delaySeconds: 5 })", module);
+        Assert.Contains("(($workers$receiver$3, $workers$arg1$3, $workers$arg2$3) => $workers$notNull($workers$receiver$3).match($workers$arg1$3, $workers$arg2$3).then(value => value ?? null))(caches.default, request, { ignoreMethod: true })", module);
+        Assert.Contains("$workers$notNull($workers$notNull(env)[\"API\"]).fetch(\"https://example.com\")", module);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class PlatformBindingTests
             }
             """);
 
-        Assert.Contains("await caches.default.match(request).then(value => value ?? null)", module);
+        Assert.Contains("await $workers$notNull(caches.default).match(request).then(value => value ?? null)", module);
         Assert.Contains("cached != null", module);
     }
 
@@ -75,11 +75,11 @@ public sealed class PlatformBindingTests
             }
             """);
 
-        Assert.Contains("let count = batch.messages.length", module);
-        Assert.Contains("let first = $workers$sequenceIndex(batch.messages, 0)", module);
-        Assert.Contains("for (const message of batch.messages)", module);
-        Assert.Contains("message.retry({ delaySeconds: 30 })", module);
-        Assert.Contains("message.ack();", module);
+        Assert.Contains("let count = $workers$notNull($workers$notNull(batch).messages).length", module);
+        Assert.Contains("let first = $workers$sequenceIndex($workers$notNull(batch).messages, 0)", module);
+        Assert.Contains("for (const message of $workers$notNull($workers$notNull(batch).messages))", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).retry($workers$arg1))(message, { delaySeconds: 30 })", module);
+        Assert.Contains("$workers$notNull(message).ack();", module);
     }
 
     [Fact]
@@ -99,8 +99,8 @@ public sealed class PlatformBindingTests
             }
             """);
 
-        Assert.Contains("env[\"LIMITER\"].limit({ key: \"customer\" })", module);
-        Assert.Contains("Response.json({ success: outcome.success })", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).limit($workers$arg1))($workers$notNull(env)[\"LIMITER\"], { key: \"customer\" })", module);
+        Assert.Contains("Response.json({ success: $workers$notNull(outcome).success })", module);
         Assert.DoesNotContain("outcome.Success:", module);
     }
 

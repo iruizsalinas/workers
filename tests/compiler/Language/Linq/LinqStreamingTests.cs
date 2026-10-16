@@ -64,7 +64,7 @@ public sealed class LinqStreamingTests
         Assert.Contains("$workers$linqAny(values, null, false)", module);
         Assert.Contains("$workers$linqAll(values, value => value > 0)", module);
         Assert.Contains("$workers$linqCount(values, value => value > 1, true)", module);
-        Assert.Contains("$workers$linqContains(values, 2)", module);
+        Assert.Contains("$workers$linqContains($workers$notNull(values), 2)", module);
         Assert.Contains("$workers$linqFirst(empty, null, false, 0, true)", module);
         Assert.Contains("$workers$linqFirst(empty, null, false, 42, true)", module);
         Assert.Contains("$workers$linqLast(emptyFlags, null, false, false, true)", module);

@@ -24,10 +24,10 @@ public sealed class WebPlatformProfileTests
             }
             """);
 
-        Assert.Contains("new URL(request.url)", module);
-        Assert.Contains("searchParams.set(\"lang\", \"en\")", module);
+        Assert.Contains("new URL($workers$notNull(request).url)", module);
+        Assert.Contains("$workers$notNull($workers$notNull(url).searchParams).set(\"lang\", \"en\")", module);
         Assert.Contains("subtle.importKey", module);
-        Assert.Contains("pipeThrough(new CompressionStream(\"gzip\"))", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).pipeThrough($workers$arg1))($workers$notNull(request).body, new CompressionStream(\"gzip\"))", module);
     }
 
     [Fact]
@@ -51,8 +51,8 @@ public sealed class WebPlatformProfileTests
             """);
 
         Assert.Contains("instanceof File ?", module);
-        Assert.Contains(")(entry[1])", module);
-        Assert.Contains("file.slice(0, 8).bytes()", module);
+        Assert.Contains(")($workers$notNull(entry[1]))", module);
+        Assert.Contains("$workers$notNull((($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver).slice($workers$arg1, $workers$arg2))(file, 0, 8)).bytes()", module);
     }
 
     [Fact]

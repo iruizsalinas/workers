@@ -21,11 +21,11 @@ internal sealed partial class JavaScriptEmitter
         switch (operation)
         {
             case IReturnOperation value when value.Kind == OperationKind.YieldReturn:
-                _output.Append(indent).Append("yield ").Append(Expression(value.ReturnedValue!)).AppendLine(";");
+                _output.Append(indent).Append("yield ").Append(ValueExpression(value.ReturnedValue!)).AppendLine(";");
                 break;
             case IReturnOperation value when value.Kind == OperationKind.Return:
                 _output.Append(indent).Append("return");
-                if (value.ReturnedValue is not null) _output.Append(' ').Append(Expression(value.ReturnedValue));
+                if (value.ReturnedValue is not null) _output.Append(' ').Append(ValueExpression(value.ReturnedValue));
                 _output.AppendLine(";");
                 break;
             case IVariableDeclarationGroupOperation declarations:
@@ -33,6 +33,8 @@ internal sealed partial class JavaScriptEmitter
                     _output.Append(indent).Append("let ").Append(VariableDeclaration(variable)).AppendLine(";");
                 break;
             case IExpressionStatementOperation expression:
+                if (expression.Operation is IDeconstructionAssignmentOperation deconstruction)
+                    EmitDeconstructionLocals(deconstruction.Target, depth);
                 _output.Append(indent).Append(Expression(expression.Operation)).AppendLine(";");
                 break;
             case IConditionalOperation conditional:
@@ -55,16 +57,38 @@ internal sealed partial class JavaScriptEmitter
                         "use iterator methods returning IEnumerable<T> or IAsyncEnumerable<T> instead.");
                 var collection = loop.Collection;
                 while (collection is IConversionOperation { IsImplicit: true } conversion) collection = conversion.Operand;
-                var enumerable = Expression(collection);
+                var enumerable = NeedsNullCheck(collection) ? NotNull(Expression(collection)) : Expression(collection);
                 if (collection.Type?.SpecialType == SpecialType.System_String)
                     enumerable = $"{_helpers.Require(JavaScriptHelper.LinqValues)}({enumerable})";
-                else if (IsDictionary(collection.Type)) enumerable = $"Object.entries({enumerable})";
+                else if (IsDictionary(collection.Type) && !UsesKeyDictionary(collection.Type)) enumerable = $"Object.entries({enumerable})";
+                if (loop.Syntax is ForEachVariableStatementSyntax deconstructingLoop)
+                {
+                    var element = _names.Get($"foreach-deconstruction:{loop.Syntax.SyntaxTree.FilePath}:{loop.Syntax.SpanStart}", "element");
+                    _output.Append(indent).Append(loop.IsAsynchronous ? "for await (const " : "for (const ")
+                        .Append(element).Append(" of ").Append(enumerable).AppendLine(") {");
+                    EmitDeconstructionLocals(loop.LoopControlVariable, depth + 1);
+                    _output.Append(indent).Append("  ").Append(DeconstructValue(loop.LoopControlVariable,
+                        ResolveType(info.ElementType!), element, _model.GetDeconstructionInfo(deconstructingLoop), loop.Syntax)).AppendLine(";");
+                    EmitEmbedded(loop.Body, depth + 1);
+                    _output.Append(indent).AppendLine("}");
+                    break;
+                }
                 if (loop.Locals.Length != 1 || loop.LoopControlVariable is not IVariableDeclaratorOperation)
                     throw Unsupported("WRK108", loop.Syntax);
                 var local = UserIdentifier(loop.Locals[0], loop.Locals[0].Name);
                 var item = local;
                 string? converted = null;
-                if (!info.ElementConversion.IsIdentity
+                if (ResolveType(loop.Locals[0].Type).SpecialType == SpecialType.System_Object && info.ElementType is not null)
+                {
+                    var candidate = _names.Get($"foreach-object:{loop.Syntax.SyntaxTree.FilePath}:{loop.Syntax.SpanStart}", "item");
+                    var boxed = ObjectConversion(info.ElementType, candidate, loop.Syntax);
+                    if (boxed != candidate)
+                    {
+                        item = candidate;
+                        converted = boxed;
+                    }
+                }
+                else if (!info.ElementConversion.IsIdentity
                     && !(info.ElementConversion.IsImplicit && info.ElementConversion.IsReference)
                     && loop.Locals[0].Type.SpecialType != SpecialType.System_Object)
                 {
@@ -78,6 +102,11 @@ internal sealed partial class JavaScriptEmitter
                     item = _names.Get($"foreach:{loop.Syntax.SyntaxTree.FilePath}:{loop.Syntax.SpanStart}", "item");
                     converted = ForeachElementConversion(info.ElementType, loop.Locals[0].Type, item, loop.Syntax,
                         info.ElementConversion.IsImplicit);
+                }
+                if (converted is null && CopyValue(loop.Locals[0].Type, "value") != "value")
+                {
+                    item = _names.Get($"foreach-copy:{loop.Syntax.SyntaxTree.FilePath}:{loop.Syntax.SpanStart}", "item");
+                    converted = CopyValue(loop.Locals[0].Type, item);
                 }
                 _output.Append(indent).Append(loop.IsAsynchronous ? "for await (const " : "for (const ")
                     .Append(item).Append(" of ").Append(enumerable).AppendLine(") {");
@@ -99,7 +128,7 @@ internal sealed partial class JavaScriptEmitter
                 _output.Append(indent).AppendLine("continue;");
                 break;
             case IThrowOperation value:
-                var exception = value.Exception is not null ? Expression(value.Exception)
+                var exception = value.Exception is not null ? ThrowValue(value.Exception)
                     : _caughtExceptions.TryPeek(out var caught) ? caught : throw Unsupported("WRK108", value.Syntax);
                 _output.Append(indent).Append("throw ").Append(exception).AppendLine(";");
                 break;
@@ -114,10 +143,14 @@ internal sealed partial class JavaScriptEmitter
                 _output.Append(indent).AppendLine("}");
                 break;
             case IForLoopOperation loop:
-                _output.Append(indent).Append("for (").Append(string.Join(", ", loop.Before.Select(ForInitializer))).Append("; ")
+                // C# shares initializer locals across iterations; JS header let does not.
+                _output.Append(indent).AppendLine("{");
+                foreach (var initializer in loop.Before) EmitStatement(initializer, depth + 1);
+                _output.Append(indent).Append("  for (; ")
                     .Append(loop.Condition is null ? "" : Expression(loop.Condition)).Append("; ")
                     .Append(string.Join(", ", loop.AtLoopBottom.Select(ForInitializer))).AppendLine(") {");
-                EmitEmbedded(loop.Body, depth + 1);
+                EmitEmbedded(loop.Body, depth + 2);
+                _output.Append(indent).AppendLine("  }");
                 _output.Append(indent).AppendLine("}");
                 break;
             case IUsingOperation { Resources: IVariableDeclarationGroupOperation } value:
@@ -140,6 +173,11 @@ internal sealed partial class JavaScriptEmitter
 
     private string ForeachElementConversion(ITypeSymbol source, ITypeSymbol target, string value, SyntaxNode node, bool implicitConversion)
     {
+        source = ResolveType(source);
+        target = ResolveType(target);
+        if (target.SpecialType == SpecialType.System_Object) return ObjectConversion(source, value, node);
+        if (source.IsReferenceType && target.IsReferenceType)
+            return implicitConversion ? value : CheckedReferenceConversion(target, value, node);
         var from = UnwrapNullable(source);
         var to = UnwrapNullable(target);
         var widening = implicitConversion && from.SpecialType is SpecialType.System_Int32 or SpecialType.System_UInt32
@@ -148,12 +186,12 @@ internal sealed partial class JavaScriptEmitter
         if (!IsNullable(source)) return converted;
         return IsNullable(target)
             ? $"{value} == null ? null : {converted}"
-            : $"(() => {{ if ({value} == null) throw new TypeError(\"Nullable object must have a value.\"); return {converted}; }})()";
+            : $"(() => {{ if ({value} == null) throw {NewBuiltInException("System.InvalidOperationException", "Nullable object must have a value.")}; return {converted}; }})()";
     }
 
     private string VariableDeclaration(IVariableDeclaratorOperation variable) =>
         UserIdentifier(variable.Symbol, variable.Symbol.Name)
-        + (variable.Initializer is null ? "" : " = " + Expression(variable.Initializer.Value));
+        + (variable.Initializer is null ? "" : " = " + ValueExpression(variable.Initializer.Value));
 
     private string ForInitializer(IOperation operation) => operation switch
     {
@@ -179,17 +217,28 @@ internal sealed partial class JavaScriptEmitter
     // Using declarations own the remaining operations in their enclosing block.
     private void EmitStatements(IReadOnlyList<IOperation> statements, int depth)
     {
-        for (var index = 0; index < statements.Count; index++)
+        var frame = new LocalFunctionFrame(statements.OfType<ILocalFunctionOperation>());
+        _localFunctionFrames.Push(frame);
+        try
         {
-            if (statements[index] is IUsingDeclarationOperation resource)
+            for (var index = 0; index < statements.Count; index++)
             {
-                _diagnosticNode = resource.Syntax;
-                var local = (LocalDeclarationStatementSyntax)resource.Syntax;
-                var rest = statements.Skip(index + 1).ToArray();
-                EmitUsing(local.Declaration, resource.IsAsynchronous, body => EmitStatements(rest, body), depth);
-                return;
+                if (statements[index] is ILocalFunctionOperation) continue;
+                if (statements[index] is IUsingDeclarationOperation resource)
+                {
+                    _diagnosticNode = resource.Syntax;
+                    var local = (LocalDeclarationStatementSyntax)resource.Syntax;
+                    var rest = statements.Skip(index + 1).ToArray();
+                    EmitUsing(local.Declaration, resource.IsAsynchronous, body => EmitStatements(rest, body), depth);
+                    return;
+                }
+                EmitStatement(statements[index], depth);
             }
-            EmitStatement(statements[index], depth);
+        }
+        finally
+        {
+            EmitLocalFunctions(frame, depth);
+            _localFunctionFrames.Pop();
         }
     }
 

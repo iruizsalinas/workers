@@ -25,7 +25,7 @@ public sealed class LinqOrderingTests
             """);
 
         Assert.Contains("$workers$linqDistinct(values)", module);
-        Assert.Contains("$workers$linqDistinctBy(words, word => word.length)", module);
+        Assert.Contains("$workers$linqDistinctBy(words, word => $workers$notNull(word).length)", module);
         Assert.Contains("$workers$linqSequenceEqual(values, $workers$listCreate([1, 2, 1]))", module);
         Assert.Contains("const seen = new Set()", module);
     }
@@ -75,9 +75,9 @@ public sealed class LinqOrderingTests
             public sealed record Item(int Group, int Score, char Code);
             """);
 
-        Assert.Contains("$workers$linqOrder(values, value => value.group, false, 0, false)", module);
-        Assert.Contains(", value => value.score, true, 0, true)", module);
-        Assert.Contains(", value => value.code, false, 1, true)", module);
+        Assert.Contains("$workers$linqOrder(values, value => $workers$notNull(value).group, false, 0, false)", module);
+        Assert.Contains(", value => $workers$notNull(value).score, true, 0, true)", module);
+        Assert.Contains(", value => $workers$notNull(value).code, false, 1, true)", module);
         Assert.Contains("const $workers$linqOrderState = Symbol()", module);
         Assert.Contains("keys: criteria.map(criterion => criterion.selector(value))", module);
         Assert.Contains("return left.index - right.index", module);
@@ -85,6 +85,7 @@ public sealed class LinqOrderingTests
 
     [Theory]
     [InlineData("words.OrderBy(value => value)")]
+    [InlineData("(from word in words orderby word select word)")]
     [InlineData("items.OrderBy(value => value)")]
     [InlineData("numbers.OrderBy(value => value, Comparer<int>.Default)")]
     public void RejectsOrderingWithoutFaithfulDefaultComparerSemantics(string operation)

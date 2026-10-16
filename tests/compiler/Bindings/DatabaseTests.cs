@@ -148,10 +148,10 @@ public sealed class DatabaseTests
             }
             """);
 
-        Assert.Contains("lastRowId: inserted.meta.last_row_id", module);
-        Assert.Contains("sqlDurationMs: inserted.meta.timings.sql_duration_ms", module);
-        Assert.Contains(".meta.rows_read", module);
-        Assert.Contains("db.batch([db.prepare(\"select id from rows\")]).then(value => value.map(result => (result.results = result.results.map(", module);
+        Assert.Contains("lastRowId: $workers$notNull($workers$notNull(inserted).meta).last_row_id", module);
+        Assert.Contains("sqlDurationMs: $workers$notNull($workers$notNull($workers$notNull(inserted).meta).timings).sql_duration_ms", module);
+        Assert.Contains("$workers$notNull($workers$notNull($workers$sequenceIndex(batch, 0)).meta).rows_read", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).batch($workers$arg1))(db, [$workers$notNull(db).prepare(\"select id from rows\")]).then(value => value.map(result => (result.results = result.results.map(value => value == null ? value : $workers$Row.$fromRow(value)), result)))", module);
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public sealed class DatabaseTests
             }
             """);
 
-        Assert.Contains("let socket = hyperdrive.connect();", module);
-        Assert.Contains("`${(hyperdrive.host) ?? \"\"}:${hyperdrive.port}/${(hyperdrive.database) ?? \"\"}`", module);
+        Assert.Contains("let socket = $workers$notNull(hyperdrive).connect();", module);
+        Assert.Contains("`${($workers$notNull(hyperdrive).host) ?? \"\"}:${$workers$notNull(hyperdrive).port}/${($workers$notNull(hyperdrive).database) ?? \"\"}`", module);
     }
 }

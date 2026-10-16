@@ -7,6 +7,8 @@ internal sealed partial class JavaScriptEmitter
 {
     private string UserOutReference(IOperation target)
     {
+        if (target is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true }) return AssignmentReference(target);
+        if (target is IParameterReferenceOperation primary && IsClassPrimaryParameter(primary.Parameter)) return AssignmentReference(target);
         if (target is IDeclarationExpressionOperation declaration)
         {
             if (declaration.Expression is ILocalReferenceOperation local) DeclareExpressionOutLocal(local);
@@ -31,7 +33,7 @@ internal sealed partial class JavaScriptEmitter
             }
             var receiver = _names.Get(key + ":receiver", "receiver");
             QueueUserType(field.Field.ContainingType, field.Syntax);
-            return $"(({receiver}) => {{ if ({receiver} == null) throw new TypeError(\"Object reference not set to an instance of an object.\"); " +
+            return $"(({receiver}) => {{ if ({receiver} == null) throw {NullReferenceException()}; " +
                 $"return {Reference(UserMemberAccess(receiver, field.Field))}; }})({Expression(field.Instance!)})";
         }
         if (target is IArrayElementReferenceOperation { Indices.Length: 1 } array)

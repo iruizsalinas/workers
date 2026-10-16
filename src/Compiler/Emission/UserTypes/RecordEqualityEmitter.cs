@@ -91,6 +91,8 @@ internal sealed partial class JavaScriptEmitter
             if (member.IsStatic) continue;
             if (member is IFieldSymbol { AssociatedSymbol: IPropertySymbol property })
                 yield return (property, property.Type);
+            else if (member is IEventSymbol ev && ev.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is VariableDeclaratorSyntax))
+                yield return (ev, ev.Type);
             else if (member is IFieldSymbol { IsImplicitlyDeclared: false } field)
                 yield return (field, field.Type);
         }
@@ -99,12 +101,19 @@ internal sealed partial class JavaScriptEmitter
     private string ValueEquality(ITypeSymbol type, string left, string right, SyntaxNode source)
     {
         type = ResolveType(type);
+        if (type.TypeKind == TypeKind.Delegate) return $"{DelegateHelper("delegateEquals")}({left}, {right})";
+        if (IsIndexType(type)) return $"((a, b) => a[0] === b[0] && a[1] === b[1])({left}, {right})";
+        if (IsRangeType(type)) return $"((a, b) => a[0][0] === b[0][0] && a[0][1] === b[0][1] && a[1][0] === b[1][0] && a[1][1] === b[1][1])({left}, {right})";
+        if (type is INamedTypeSymbol { IsTupleType: true } tuple)
+            return $"((a, b) => {string.Join(" && ", tuple.TupleElements.Select((field, index) => ValueEquality(field.Type, $"a[{index}]", $"b[{index}]", source)))})({left}, {right})";
         if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
             return $"((a, b) => a == null || b == null ? a == b : {ValueEquality(nullable.TypeArguments[0], "a", "b", source)})({left}, {right})";
         if (type.SpecialType is SpecialType.System_Single or SpecialType.System_Double)
             return $"((a, b) => a === b || a !== a && b !== b)({left}, {right})";
         if (type is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record))
             return $"((left, right) => left == null || right == null ? left == right : {RecordEquals(record, "left", "right", source)})({left}, {right})";
+        if (type is INamedTypeSymbol user && IsUserInstanceType(user))
+            return UserKeyEquality(user, left, right, source);
         if (type is INamedTypeSymbol pair
             && pair.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
             return $"((a, b) => {ValueEquality(pair.TypeArguments[0], "a[0]", "b[0]", source)} " +

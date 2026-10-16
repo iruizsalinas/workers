@@ -67,14 +67,20 @@ internal sealed partial class JavaScriptEmitter
         BindingIntrinsic intrinsic)
     {
         var arguments = BindingArguments(invocation, method);
+        var instance = (_model.GetOperation(invocation) as IInvocationOperation)?.Instance;
+        var checkReceiver = !method.IsStatic && NeedsNullCheck(instance);
         var parameterOrdinals = invocation.ArgumentList.Arguments.Select(argument => BoundParameter(argument).Ordinal).ToArray();
-        if (parameterOrdinals.Where((ordinal, index) => ordinal != index).Any())
+        if (parameterOrdinals.Where((ordinal, index) => ordinal != index).Any()
+            || checkReceiver && invocation.ArgumentList.Arguments.Any(argument => !IsTrivialArgumentValue(BoundArgument(argument).Value)))
         {
             var key = $"binding:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}";
             var receiverTemporary = _names.Get(key + ":receiver", "receiver");
             var argumentTemporaries = arguments.Select((_, index) =>
                 _names.Get($"{key}:argument:{index}", $"arg{index + 1}")).ToArray();
-            var rebound = arguments.Select((argument, index) => (argument.Parameter, Value: argumentTemporaries[index])).ToArray();
+            // Capture an explicit params array as one value, then spread it in the
+            // native call. Spreading into the capture lambda would drop its tail.
+            var rebound = arguments.Select((argument, index) => (argument.Parameter,
+                Value: (argument.Value.StartsWith("...", StringComparison.Ordinal) ? "..." : "") + argumentTemporaries[index])).ToArray();
             var lastOrdinal = rebound.Max(argument => argument.Parameter.Ordinal);
             var ordered = new List<(IParameterSymbol Parameter, string Value)>();
             foreach (var parameter in method.Parameters.Take(lastOrdinal + 1))
@@ -83,11 +89,11 @@ internal sealed partial class JavaScriptEmitter
                 if (supplied.Length == 0) ordered.Add((parameter, "undefined"));
                 else ordered.AddRange(supplied);
             }
-            var body = EmitBindingIntrinsic(receiverTemporary, method, intrinsic, ordered);
+            var body = EmitBindingIntrinsic(checkReceiver ? NotNull(receiverTemporary) : receiverTemporary, method, intrinsic, ordered);
             return $"(({string.Join(", ", new[] { receiverTemporary }.Concat(argumentTemporaries))}) => {body})"
-                + $"({string.Join(", ", new[] { receiver }.Concat(arguments.Select(argument => argument.Value)))})";
+                + $"({string.Join(", ", new[] { receiver }.Concat(arguments.Select(argument => argument.Value.StartsWith("...", StringComparison.Ordinal) ? argument.Value[3..] : argument.Value)))})";
         }
-        return EmitBindingIntrinsic(receiver, method, intrinsic, arguments);
+        return EmitBindingIntrinsic(checkReceiver ? NotNull(receiver) : receiver, method, intrinsic, arguments);
     }
 
     private string EmitBindingIntrinsic(

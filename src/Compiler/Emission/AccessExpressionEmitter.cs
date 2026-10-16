@@ -54,14 +54,16 @@ internal sealed partial class JavaScriptEmitter
 
     private string ElementAccess(IPropertyReferenceOperation operation)
     {
+        if (IsUserIndexer(operation.Property)) return UserIndexerReference(operation) + ".value";
         if (operation.Instance is null) throw Unsupported("WRK101", operation.Syntax);
         var receiver = Expression(operation.Instance);
         var arguments = operation.Arguments.Select(argument => Expression(argument.Value)).ToArray();
         var type = operation.Instance.Type;
+        if (UsesKeyDictionary(type)) return $"((receiver, key) => {NotNull("receiver")}.get(key))({receiver}, {arguments.Single()})";
         if (type?.ToDisplayString() == "Workers.Headers")
-            return $"{receiver}.get({arguments.Single()})";
+            return $"((receiver, key) => {NotNull("receiver")}.get(key))({receiver}, {arguments.Single()})";
         if (type is INamedTypeSymbol lookup && lookup.OriginalDefinition.ToDisplayString() == "System.Linq.ILookup<TKey, TElement>")
-            return $"{receiver}.get({string.Join(", ", arguments)})";
+            return $"((receiver, key) => {NotNull("receiver")}.get(key))({receiver}, {arguments.Single()})";
         if (IsSequenceType(type)) return HelperInvocation(JavaScriptHelper.SequenceIndex, [receiver, arguments.Single()]);
         if (IsDictionary(type)) return HelperInvocation(JavaScriptHelper.DictionaryIndex, [receiver, arguments.Single()]);
         if (arguments.Length != 1) throw Unsupported("WRK101", operation.Syntax);

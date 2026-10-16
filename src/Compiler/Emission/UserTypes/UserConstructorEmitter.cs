@@ -30,13 +30,14 @@ internal sealed partial class JavaScriptEmitter
             .SingleOrDefault(candidate => !candidate.Modifiers.Any(SyntaxKind.StaticKeyword)
                 && !IsUserRecordCopyConstructor((IMethodSymbol)_model.GetDeclaredSymbol(candidate)!));
         var record = declaration as RecordDeclarationSyntax;
-        var parameters = constructor?.ParameterList.Parameters ?? record?.ParameterList?.Parameters ?? default;
+        var parameters = constructor?.ParameterList.Parameters ?? PrimaryParameters(declaration);
         _output.Append("  constructor(")
             .Append(parameters.Count == 0 ? "" : string.Join(", ", parameters.Select(ParameterDeclaration)))
             .AppendLine(") {");
         EmitExplicitStaticInitialization(type, 2);
         EmitWithExpressionScope(2, () =>
         {
+            EmitPrimaryParameterInitialization(declaration);
             EmitUserInstanceInitializers(type, declaration, record?.ParameterList?.Parameters ?? default);
             EmitUserConstructorStatements(constructor);
         });
@@ -57,6 +58,14 @@ internal sealed partial class JavaScriptEmitter
 
         foreach (var member in declaration.Members)
         {
+            if (member is EventFieldDeclarationSyntax eventField)
+                foreach (var variable in eventField.Declaration.Variables)
+                {
+                    var symbol = (IEventSymbol)_model.GetDeclaredSymbol(variable)!;
+                    if (symbol.IsStatic) continue;
+                    _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
+                        .Append(variable.Initializer is null ? "null" : Expression(variable.Initializer.Value)).AppendLine(";");
+                }
             if (member is FieldDeclarationSyntax field)
                 foreach (var variable in field.Declaration.Variables)
                 {
@@ -65,7 +74,7 @@ internal sealed partial class JavaScriptEmitter
                     _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
                         .Append(variable.Initializer is null
                             ? DefaultFieldValue(symbol.Type, variable)
-                            : Expression(variable.Initializer.Value)).AppendLine(";");
+                            : ValueExpression(variable.Initializer.Value)).AppendLine(";");
                 }
             else if (member is PropertyDeclarationSyntax property && IsAutoProperty(property))
             {
@@ -74,7 +83,7 @@ internal sealed partial class JavaScriptEmitter
                 _output.Append("    ").Append(UserPropertyStorage("this", symbol)).Append(" = ")
                     .Append(property.Initializer is null
                         ? DefaultFieldValue(symbol.Type, property)
-                        : Expression(property.Initializer.Value)).AppendLine(";");
+                        : ValueExpression(property.Initializer.Value)).AppendLine(";");
             }
         }
 

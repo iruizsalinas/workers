@@ -54,15 +54,40 @@ internal sealed partial class JavaScriptEmitter
     private string MethodGroup(ExpressionSyntax syntax, IMethodSymbol method, ExpressionSyntax? receiver)
     {
         method = _model.GetSymbolInfo(syntax).Symbol as IMethodSymbol ?? method;
+        method = (IMethodSymbol)StaticInterfaceImplementation(method, receiver is null ? null : _model.GetTypeInfo(receiver).Type, syntax);
         var reduced = method.ReducedFrom is not null;
-        method = method.GetConstructedReducedFrom() ?? method;
+        method = ResolveMethod(method.GetConstructedReducedFrom() ?? method);
+        var target = _names.Get($"delegate-target:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}", "delegateTarget");
+        var core = MethodGroupCore(syntax, method, receiver, target, reduced);
+        string identity;
+        var localThis = false;
+        var localValues = false;
+        if (method.MethodKind == MethodKind.LocalFunction) identity = LocalDelegateIdentity(method, syntax, out localThis, out localValues);
+        else if (method.IsGenericMethod && !method.IsStatic) identity = receiver is BaseExpressionSyntax ? QueueUserMethod(method, syntax) : GenericMethodTarget(method);
+        else if (method.IsStatic) identity = QueueUserMethod(method, syntax);
+        else identity = receiver is BaseExpressionSyntax
+            ? $"{QueueUserType(method.ContainingType, syntax)}.prototype.{UserInstanceMethodName(method)}"
+            : $"{target}.{UserInstanceMethodName(method)}";
+        var instance = reduced || !method.IsStatic ? receiver is null ? "this" : Expression(receiver) : "null";
+        if (method.MethodKind == MethodKind.LocalFunction && !localThis && !localValues) instance = "null";
+        if (!reduced && !method.IsStatic && method.MethodKind != MethodKind.LocalFunction)
+        {
+            var exception = method.IsVirtual || method.IsOverride || method.IsAbstract ? NullReferenceException()
+                : NewBuiltInException("System.ArgumentException", "Delegate to an instance method cannot have null 'this'.");
+            // Validate before reading the method identity from the target's prototype.
+            return $"(({target}) => {{ if ({target} == null) throw {exception}; return {DelegateHelper("delegateCreate")}({target}, {identity}, {core}); }})({instance})";
+        }
+        return $"(({target}) => {DelegateHelper("delegateCreate")}({target}, {identity}, {core}))({instance})";
+    }
+
+    private string MethodGroupCore(ExpressionSyntax syntax, IMethodSymbol method, ExpressionSyntax? receiver, string receiverValue, bool reduced)
+    {
+        if (method.MethodKind == MethodKind.LocalFunction)
+            return $"{LocalFunctionTarget(method, syntax)}.bind({receiverValue})";
         if (!method.IsStatic && method.IsGenericMethod && method.DeclaringSyntaxReferences.Length != 0)
         {
             var helper = receiver is BaseExpressionSyntax ? QueueUserMethod(method, syntax) : GenericMethodTarget(method);
-            var key = $"generic-group:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
-            var target = _names.Get(key + ":target", "target");
-            return $"(({target}) => {{ if ({target} == null) throw new TypeError(\"Object reference not set to an instance of an object.\"); " +
-                $"return {helper}.bind({target}); }})({(receiver is null ? "this" : Expression(receiver))})";
+            return $"{helper}.bind({receiverValue})";
         }
         if (reduced && method.DeclaringSyntaxReferences.Length != 0)
         {
@@ -73,7 +98,7 @@ internal sealed partial class JavaScriptEmitter
                 _names.Get($"{key}:{index}", $"arg{index + 1}")).ToArray();
             return $"(({target}) => ({string.Join(", ", parameters)}) => " +
                 $"{helper}({string.Join(", ", new[] { target }.Concat(parameters))}))" +
-                $"({(receiver is null ? "this" : Expression(receiver))})";
+                $"({receiverValue})";
         }
         if (method.IsStatic && method.MethodKind == MethodKind.Ordinary
             && method.DeclaringSyntaxReferences is [{ } reference]
@@ -85,14 +110,11 @@ internal sealed partial class JavaScriptEmitter
         {
             if (!IsSourceInterface(type)) QueueUserType(type, syntax);
             var key = $"method-group:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
-            var target = _names.Get($"{key}:target", "target");
             var parameters = string.Join(", ", method.Parameters.Select((_, index) => _names.Get($"{key}:{index}", $"arg{index + 1}")));
             var call = receiver is BaseExpressionSyntax
-                ? $"{QueueUserType(type, syntax)}.prototype.{UserInstanceMethodName(method)}.call({target}{(parameters.Length == 0 ? "" : ", " + parameters)})"
-                : $"{target}.{UserInstanceMethodName(method)}({parameters})";
-            return $"(({target}) => {{ if ({target} == null) throw new TypeError(\"Object reference not set to an instance of an object.\"); " +
-                   $"return ({parameters}) => {call}; }})" +
-                   $"({(receiver is null ? "this" : Expression(receiver))})";
+                ? $"{QueueUserType(type, syntax)}.prototype.{UserInstanceMethodName(method)}.call({receiverValue}{(parameters.Length == 0 ? "" : ", " + parameters)})"
+                : $"{receiverValue}.{UserInstanceMethodName(method)}({parameters})";
+            return $"({parameters}) => {call}";
         }
         throw new NotSupportedException(
             $"WRK105: Converting the method group '{method.ToDisplayString()}' to a delegate is not supported; use a lambda instead.");

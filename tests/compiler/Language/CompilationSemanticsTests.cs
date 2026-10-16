@@ -57,7 +57,7 @@ public sealed class CompilationSemanticsTests
             """);
 
         Assert.Contains("let values = $workers$listCreate([2, 4, 6])", module);
-        Assert.Contains("((configured) ?? ((request.method === \"POST\") || (request.method === \"PUT\")))", module);
+        Assert.Contains("((configured) ?? (($workers$notNull(request).method === \"POST\") || ($workers$notNull(request).method === \"PUT\")))", module);
     }
 
     [Fact]

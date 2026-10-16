@@ -33,8 +33,9 @@ public sealed class UserTypeTests
         Assert.Contains("this.label = \"counter\";", module);
         Assert.Contains("get doubled()", module);
         Assert.Contains("Math.imul(this._value, 2)", module);
-        Assert.Contains("$workers$value.label = \"items\";", module);
-        Assert.Contains("counter.$workers$cs$Counter$add(3)", module);
+        Assert.Contains("$workers$notNull(receiver).label = value;", module);
+        Assert.Contains("($workers$value), \"items\")", module);
+        Assert.Contains("$workers$notNull(counter).$workers$cs$Counter$add(3)", module);
         Assert.Contains("return { label: this.label, doubled: this.doubled };", module);
     }
 
@@ -65,18 +66,17 @@ public sealed class UserTypeTests
         Assert.Contains("=> new $workers$Person($workers$arg2, $workers$arg1)", module);
         Assert.Contains("this.first = First;", module);
         Assert.Contains("this.last = Last;", module);
-        Assert.Contains("$workers$value.age = 36;", module);
+        Assert.Contains("$workers$notNull(receiver).age = value;", module);
+        Assert.Contains("($workers$value), 36)", module);
         Assert.Contains("get fullName()", module);
-        Assert.Contains("person.$workers$cs$Person$greet(\"Hello\")", module);
+        Assert.Contains("$workers$notNull(person).$workers$cs$Person$greet(\"Hello\")", module);
         Assert.Contains("first: this.first", module);
         Assert.Contains("fullName: this.fullName", module);
     }
 
     [Theory]
     [InlineData("public partial class Split { } public partial class Split { }")]
-    [InlineData("public class Indexed { public int this[int index] => index; }")]
-    [InlineData("public class Mutable { private int _value; public int Value { get => _value; set => _value = value; } }")]
-    [InlineData("public class Mutable(int value = 0) { }")]
+
     public void RejectsUnsupportedUserTypeShapes(string declaration)
     {
         var typeName = declaration.Contains("Child", StringComparison.Ordinal) ? "Child"
@@ -171,8 +171,10 @@ public sealed class UserTypeTests
         Assert.Contains("Math.imul(this.count$2, 2)", module);
         Assert.Contains("this.value = 0;", module);
         Assert.Contains("this.value$2 = 0;", module);
-        Assert.Contains("$workers$value.value = 3;", module);
-        Assert.Contains("$workers$value.value$2 = 4;", module);
+        Assert.Contains("$workers$notNull(receiver).value = value;", module);
+        Assert.Contains("$workers$notNull(receiver).value$2 = value;", module);
+        Assert.Contains("($workers$value), 3)", module);
+        Assert.Contains("($workers$value), 4)", module);
         Assert.Contains("Pair has more than one property named value in JSON.", module);
     }
 

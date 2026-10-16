@@ -58,10 +58,16 @@ internal sealed partial class JavaScriptEmitter
         if (type is INamedTypeSymbol contract && IsSourceInterface(contract))
             return $"({value} != null && {value}[{InterfaceMarker(contract)}] === true)";
         if (type.SpecialType == SpecialType.System_Object) return $"{value} != null";
+        if (type.ToDisplayString() == "System.Exception") return $"{value} instanceof Error";
+        if (type is INamedTypeSymbol builtIn && IsException(builtIn) && builtIn.DeclaringSyntaxReferences.Length == 0
+            && builtIn.ToDisplayString() != "Workers.HttpError")
+            return $"{value} instanceof ({BuiltInExceptionType(builtIn)})";
         if (type.ToDisplayString() == "Workers.HttpError")
             return $"{value} instanceof {_helpers.Require(JavaScriptHelper.HttpError)}";
         if (type is INamedTypeSymbol named && IsUserInstanceType(named) && (IsException(named) || RequiresUserClass(named)))
             return $"{value} instanceof {QueueUserType(named, source)}";
+        if (type is INamedTypeSymbol { IsRecord: true } plain && IsUserInstanceType(plain))
+            return $"({value} != null && {value}[{PlainRecordIdentitySlot}] === {PlainRecordIdentity(plain)})";
         throw new NotSupportedException(
             $"WRK104: Testing for type '{type.ToDisplayString()}' is not supported at runtime; only string, bool and Worker class types can be tested.");
     }
@@ -77,10 +83,10 @@ internal sealed partial class JavaScriptEmitter
 
     private string RecursivePatternTest(IRecursivePatternOperation operation, string value)
     {
-        var recursive = (RecursivePatternSyntax)operation.Syntax;
+        var recursive = operation.Syntax;
         var conditions = new List<string>();
         var type = operation.MatchedType;
-        if (recursive.Type is not null)
+        if (recursive is RecursivePatternSyntax { Type: not null })
         {
             conditions.Add(TypePatternTest(type, value, operation.InputType, recursive));
         }
@@ -88,14 +94,12 @@ internal sealed partial class JavaScriptEmitter
             conditions.Add($"{value} != null");
         if (operation.DeconstructionSubpatterns.Length != 0)
         {
-            if (type is not INamedTypeSymbol { IsRecord: true } record || !IsUserInstanceType(record)
-                || operation.DeconstructSymbol is not IMethodSymbol { IsImplicitlyDeclared: true } deconstruct)
-                throw Unsupported("WRK104", recursive);
-            for (var index = 0; index < operation.DeconstructionSubpatterns.Length; index++)
-            {
-                var property = record.GetMembers(deconstruct.Parameters[index].Name).OfType<IPropertySymbol>().Single();
-                conditions.Add(SubpatternTest(operation.DeconstructionSubpatterns[index], UserMemberAccess(value, property)));
-            }
+            var components = type is INamedTypeSymbol { IsTupleType: true } ? value
+                : operation.DeconstructSymbol is IMethodSymbol method ? DeconstructComponents(method, value, recursive)
+                : throw Unsupported("WRK104", recursive);
+            var extracted = _names.Get($"pattern-deconstruction:{recursive.SyntaxTree.FilePath}:{recursive.SpanStart}", "components");
+            var tests = operation.DeconstructionSubpatterns.Select((pattern, index) => SubpatternTest(pattern, $"{extracted}[{index}]"));
+            conditions.Add($"(({extracted}) => {string.Join(" && ", tests)})({components})");
         }
         foreach (var subpattern in operation.PropertySubpatterns)
         {

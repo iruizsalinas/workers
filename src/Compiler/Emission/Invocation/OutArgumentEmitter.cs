@@ -69,6 +69,10 @@ internal sealed partial class JavaScriptEmitter
             call = $"((environment, key) => environment[key] !== undefined ? [true, environment[key]] : [false, {fallback}])({receiver}, {inputs[0]})";
         else if (attempt is not null)
             call = $"{_helpers.Require(JavaScriptHelper.TryCall)}({attempt}, {fallback})";
+        else if (IsSet(method.ContainingType) && IsCompositeKey(method.ContainingType.TypeArguments[0]) && method.Name == "TryGetValue" && inputs.Length == 1)
+            call = $"{receiver}.take({inputs[0]}, {fallback}, false)";
+        else if (UsesKeyDictionary(method.ContainingType) && method.Name is "TryGetValue" or "Remove" && inputs.Length == 1)
+            call = $"{receiver}.take({inputs[0]}, {fallback}, {(method.Name == "Remove" ? "true" : "false")})";
         else if (IsDictionary(method.ContainingType) && method.Name is "TryGetValue" or "Remove" && inputs.Length == 1)
             call = $"{RequireHelperName(JavaScriptHelper.TryCall, "dictionaryTake")}({receiver}, {inputs[0]}, {fallback}, {(method.Name == "Remove" ? "true" : "false")})";
         else
@@ -101,7 +105,8 @@ internal sealed partial class JavaScriptEmitter
         var outcome = _names.Get(key + ":outcome", "outcome");
         var body = target is null
             ? $"{call}[0]"
-            : $"(({outcome}) => ({target} = {outcome}[1], {outcome}[0]))({call})";
+            : $"(({outcome}) => ({target} = {CopyValue(outType, outcome + "[1]")}, {outcome}[0]))({call})";
+        if (receiver is not null) body = $"({NotNull(receiver)}, {body})";
         var parameters = receiver is null ? inputs : [receiver, .. inputs];
         var values = receiver is null ? sourceInputs : [Expression(operation.Instance!), .. sourceInputs];
         if (outputReceiver is not null)
@@ -109,7 +114,7 @@ internal sealed partial class JavaScriptEmitter
             parameters = [.. parameters, outputReceiver];
             values = [.. values, outputValue!];
             // Form the field reference before invoking the Try-method, even if it fails.
-            body = $"{{ if ({outputReceiver} == null) throw new TypeError(\"Object reference not set to an instance of an object.\"); return {body}; }}";
+            body = $"{{ if ({outputReceiver} == null) throw {NullReferenceException()}; return {body}; }}";
         }
         // Evaluate inputs outside TryCall, so exceptions from evaluating arguments propagate.
         result = $"(({string.Join(", ", parameters)}) => {body})({string.Join(", ", values)})";

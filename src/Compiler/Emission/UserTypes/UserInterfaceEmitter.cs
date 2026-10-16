@@ -27,14 +27,40 @@ internal sealed partial class JavaScriptEmitter
                     .AppendLine(", { value: true });");
                 foreach (var member in contract.GetMembers())
                 {
+                    if (member.IsStatic) continue;
                     var implementation = FindInterfaceImplementation(type, member);
                     if (member is IMethodSymbol { MethodKind: MethodKind.Ordinary, IsGenericMethod: false } method
                         && implementation is IMethodSymbol target)
                     {
+                        _interfaceDelegateAliases.Add((type, method, target));
                         var parameters = method.Parameters.Select((_, index) => $"$arg{index}").ToArray();
                         _output.Append(prototype).Append('.').Append(UserInstanceMethodName(method)).Append(" = function(")
                             .Append(string.Join(", ", parameters)).Append(") { return this.")
                             .Append(UserInstanceMethodName(target)).Append('(').Append(string.Join(", ", parameters)).AppendLine("); };");
+                    }
+                    else if (member is IPropertySymbol { IsIndexer: true } indexer && implementation is IPropertySymbol targetIndexer)
+                    {
+                        foreach (var getter in new[] { true, false })
+                        {
+                            var accessor = getter ? indexer.GetMethod : indexer.SetMethod;
+                            if (accessor is null) continue;
+                            var targetAccessor = PropertyAccessor(targetIndexer, getter)!;
+                            var arguments = accessor.Parameters.Select((_, i) => $"arg{i}").ToArray();
+                            _output.Append(prototype).Append('.').Append(UserInstanceMethodName(accessor)).Append(" = function(")
+                                .Append(string.Join(", ", arguments)).Append(") { return ")
+                                .Append(IsSourceInterface(targetAccessor.ContainingType) ? _sourceAccessors[targetAccessor] + ".call(this, " : "this." + UserInstanceMethodName(targetAccessor) + "(")
+                                .Append(string.Join(", ", arguments)).AppendLine("); };");
+                        }
+                    }
+                    else if (member is IEventSymbol ev && implementation is IEventSymbol targetEvent)
+                    {
+                        foreach (var adds in new[] { true, false })
+                        {
+                            var accessor = (adds ? ev.AddMethod : ev.RemoveMethod)!;
+                            var targetAccessor = (adds ? targetEvent.AddMethod : targetEvent.RemoveMethod)!;
+                            _output.Append(prototype).Append('.').Append(UserInstanceMethodName(accessor)).Append(" = function(handler) { return this.")
+                                .Append(UserInstanceMethodName(targetAccessor)).AppendLine("(handler); };");
+                        }
                     }
                     else if (member is IPropertySymbol property && implementation is IPropertySymbol targetProperty)
                     {
@@ -63,8 +89,19 @@ internal sealed partial class JavaScriptEmitter
                 var implementation = type.FindImplementationForInterfaceMember(member);
                 switch (member)
                 {
+                    case IEventSymbol ev when implementation is IEventSymbol targetEvent:
+                        foreach (var getter in new[] { true, false })
+                        {
+                            var accessor = (getter ? ev.AddMethod : ev.RemoveMethod)!;
+                            var targetAccessor = (getter ? targetEvent.AddMethod : targetEvent.RemoveMethod)!;
+                            _output.Append("  ").Append(UserInstanceMethodName(accessor)).Append("(handler) { return ")
+                                .Append(IsSourceInterface(targetEvent.ContainingType) ? QueueSourceAccessor(targetAccessor, declaration) + ".call(this, handler)"
+                                    : "this." + UserInstanceMethodName(targetAccessor) + "(handler)").AppendLine("; }");
+                        }
+                        break;
                     case IMethodSymbol { MethodKind: MethodKind.Ordinary, IsGenericMethod: false } method
                         when implementation is IMethodSymbol target:
+                        _interfaceDelegateAliases.Add((type, method, target));
                         var parameters = method.Parameters.Select((_, index) => $"$arg{index}").ToArray();
                         _output.Append("  ").Append(UserInstanceMethodName(method)).Append('(')
                             .Append(string.Join(", ", parameters)).Append(") { return ");
@@ -76,6 +113,9 @@ internal sealed partial class JavaScriptEmitter
                                 .Append(string.Join(", ", parameters));
                         _output.AppendLine("); }");
                         break;
+                    case IPropertySymbol { IsIndexer: true } indexer when implementation is IPropertySymbol targetIndexer:
+                        EmitInterfaceIndexer(indexer, targetIndexer, declaration);
+                        break;
                     case IPropertySymbol { IsIndexer: false } property when implementation is IPropertySymbol target:
                         var name = UserMemberName(property);
                         if (property.GetMethod is not null)
@@ -86,7 +126,7 @@ internal sealed partial class JavaScriptEmitter
                             _output.Append("  set ").Append(name).Append("($value) { ")
                                 .Append(UserMemberAccess("this", target)).AppendLine(" = $value; }");
                         break;
-                    case IMethodSymbol { MethodKind: MethodKind.PropertyGet or MethodKind.PropertySet }:
+                    case IMethodSymbol { MethodKind: MethodKind.PropertyGet or MethodKind.PropertySet or MethodKind.EventAdd or MethodKind.EventRemove }:
                     case IMethodSymbol { IsGenericMethod: true }:
                         break;
                     default:

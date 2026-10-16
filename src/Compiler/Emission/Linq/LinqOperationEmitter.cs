@@ -90,6 +90,12 @@ internal sealed partial class JavaScriptEmitter
         SyntaxNode sourceNode, IMethodSymbol method, IParameterSymbol[] parameters,
         string source, string[] arguments)
     {
+        if (method.TypeArguments.Length >= 2 && IsCompositeKey(method.TypeArguments[1])
+            && arguments.Length is 1 or 2 && parameters.All(parameter => HasDelegateArity(parameter.Type, 1)))
+        {
+            var resultType = (INamedTypeSymbol)ResolveType(method.ReturnType);
+            return $"{RequireHelperName(JavaScriptHelper.StructuralKeys, "keyToDictionary")}({source}, {arguments[0]}, {(arguments.Length == 2 ? arguments[1] : "null")}, () => {KeyCollection(resultType, sourceNode)})";
+        }
         if (arguments.Length is not (1 or 2) || parameters.Length != arguments.Length
             || parameters.Any(parameter => !HasDelegateArity(parameter.Type, 1))
             || method.TypeArguments.Length < 2

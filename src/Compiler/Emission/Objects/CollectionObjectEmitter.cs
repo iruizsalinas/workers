@@ -17,7 +17,7 @@ internal sealed partial class JavaScriptEmitter
         var argument = Expression(arguments[0].Expression);
         return constructor.Parameters[0].Type.SpecialType == SpecialType.System_Int32
             ? $"{helper}(null, {stack.ToString().ToLowerInvariant()}, {argument})"
-            : $"{helper}({argument}, {stack.ToString().ToLowerInvariant()}, null)";
+            : CopySequenceValues(constructor.ContainingType.TypeArguments[0], $"{helper}({argument}, {stack.ToString().ToLowerInvariant()}, null)");
     }
 
     private string CreateUrl(SyntaxNode source, IMethodSymbol? constructor, ArgumentSyntax[] arguments) =>

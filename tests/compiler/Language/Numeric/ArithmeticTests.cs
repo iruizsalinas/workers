@@ -81,12 +81,12 @@ public sealed class ArithmeticTests
             """);
 
         Assert.Contains("function $workers$integerRemainder(left, right, unsigned)", module);
-        Assert.Contains("if (right === 0) throw new RangeError", module);
+        Assert.Contains("if (right === 0) throw new ($workers$exceptionType(\"System.DivideByZeroException\"))", module);
         Assert.Contains("$workers$integerRemainder(left, right, false)", module);
     }
 
     [Fact]
-    public void LowersRecordEqualityAndRejectsUserDefinedOperators()
+    public void LowersRecordEqualityAndUserDefinedOperators()
     {
         var module = Compile("""
             using Workers;
@@ -101,7 +101,7 @@ public sealed class ArithmeticTests
         Assert.Contains("function $workers$recordEquals$Key(left, right)", module);
         Assert.Contains("!$workers$recordEquals$Key(", module);
 
-        var error = Assert.Throws<NotSupportedException>(() => Compile("""
+        var custom = Compile("""
             using Workers;
             public static class Worker
             {
@@ -115,9 +115,8 @@ public sealed class ArithmeticTests
                 public static bool operator ==(Money left, Money right) => left.Cents == right.Cents;
                 public static bool operator !=(Money left, Money right) => !(left == right);
             }
-            """));
-        Assert.StartsWith("WRK105:", error.Message);
-        Assert.Contains("Money.operator ==", error.Message);
+            """);
+        Assert.Contains("$workers$notNull(left).cents === $workers$notNull(right).cents", custom);
     }
 
     [Fact]

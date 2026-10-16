@@ -62,7 +62,7 @@ public sealed class TextEmissionTests
             """);
 
         Assert.Contains("function $workers$fetch($workers$user$default, env, ctx)", module);
-        Assert.Contains("let $workers$user$delete = new URL($workers$user$default.url).pathname;", module);
+        Assert.Contains("let $workers$user$delete = new URL($workers$notNull($workers$user$default).url).pathname;", module);
         Assert.DoesNotContain("@default", module);
     }
 }

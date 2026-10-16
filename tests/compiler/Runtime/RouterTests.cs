@@ -27,8 +27,8 @@ public sealed class RouterTests
         Assert.Contains("$workers$corsAllow(", module);
         Assert.Contains("$workers$routerUse(", module);
         Assert.Contains("$workers$routerOnError(", module);
-        Assert.Contains("$workers$requestJson(request)", module);
-        Assert.Contains("error.message", module);
+        Assert.Contains("$workers$notNull($workers$routerAdd($workers$notNull($workers$routerOnError($workers$notNull($workers$routerUse($workers$notNull($workers$routerUse($workers$routerCreate(), (($workers$arg1, $workers$arg2, $workers$arg3) => $workers$corsAllow($workers$arg2, null, $workers$arg1, $workers$arg3))(true, [\"https://app.example\"], [\"content-type\"]))), async (request, route, next) => {\n  let response = await (($workers$receiver) => $workers$notNull($workers$receiver)())(next);\r\n  return (($workers$body, $workers$source) => new Response($workers$body, { status: $workers$source.status, statusText: $workers$source.statusText, headers: $workers$source.headers, webSocket: $workers$source.webSocket, cf: $workers$source.cf, headers: (($workers$value) => { $workers$value.set(\"x-router\", \"csharp\"); return $workers$value; })(new Headers($workers$source.headers)) }))($workers$notNull(response).body, response);\n})), (error, request, route) => (($workers$arg1$2, $workers$arg2$2) => Response.json($workers$arg1$2, { status: $workers$arg2$2 }))({ error: $workers$notNull(error).message }, $workers$notNull(error).status))), \"POST\", $workers$route, async (request, route) => Response.json(await $workers$requestJson($workers$notNull(request)))))", module);
+        Assert.Contains("$workers$notNull($workers$routerAdd($workers$notNull($workers$routerOnError($workers$notNull($workers$routerUse($workers$notNull($workers$routerUse($workers$routerCreate(), (($workers$arg1, $workers$arg2, $workers$arg3) => $workers$corsAllow($workers$arg2, null, $workers$arg1, $workers$arg3))(true, [\"https://app.example\"], [\"content-type\"]))), async (request, route, next) => {\n  let response = await (($workers$receiver) => $workers$notNull($workers$receiver)())(next);\r\n  return (($workers$body, $workers$source) => new Response($workers$body, { status: $workers$source.status, statusText: $workers$source.statusText, headers: $workers$source.headers, webSocket: $workers$source.webSocket, cf: $workers$source.cf, headers: (($workers$value) => { $workers$value.set(\"x-router\", \"csharp\"); return $workers$value; })(new Headers($workers$source.headers)) }))($workers$notNull(response).body, response);\n})), (error, request, route) => (($workers$arg1$2, $workers$arg2$2) => Response.json($workers$arg1$2, { status: $workers$arg2$2 }))({ error: $workers$notNull(error).message }, $workers$notNull(error).status))), \"POST\", $workers$route, async (request, route) => Response.json(await $workers$requestJson($workers$notNull(request)))))", module);
         Assert.Contains("status: error.status", module);
         Assert.Contains("[\"https://app.example\"]", module);
     }
@@ -56,8 +56,8 @@ public sealed class RouterTests
 
         Assert.Contains("new $workers$HttpError(", module);
         Assert.Contains("instanceof $workers$HttpError", module);
-        Assert.Contains("http.status", module);
-        Assert.Contains("http.message", module);
+        Assert.Contains("$workers$notNull(http).status", module);
+        Assert.Contains("$workers$notNull(http).message", module);
     }
 
     [Fact]
@@ -81,10 +81,10 @@ public sealed class RouterTests
         Assert.Contains("const $workers$route = { pattern: \"/users/{id:int}\", key: \"/users/{:int}\", rank: [0, 1], segments: [\"users\", { name: \"id\", test: (value) => { try { $workers$numericParse(value, 0); return true; } catch { return false; } } }] };", module);
         Assert.Contains("const $workers$route$2 = { pattern: \"/files/{*path}\", key: \"/files/{*}\", rank: [0, 3], segments: [\"files\", { name: \"path\", rest: true }] };", module);
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(module, "pattern: \"/users/"));
-        Assert.Contains("$workers$routerAdd($workers$routerCreate(), \"GET\", $workers$route, (request, route) => new Response($workers$routerParameter(route, \"id\")))", module);
+        Assert.Contains("$workers$notNull($workers$routerFallback($workers$notNull($workers$routerAdd($workers$notNull($workers$routerAdd($workers$notNull($workers$routerAdd($workers$routerCreate(), \"GET\", $workers$route, (request, route) => new Response($workers$routerParameter($workers$notNull(route), \"id\")))), \"DELETE\", $workers$route, async (request, route) => new Response(null, { status: 204 }))), null, $workers$route$2, (request, route) => new Response($workers$routerParameter($workers$notNull(route), \"path\")))), (request, route) => new Response(\"missing\", { status: 404 })))", module);
         Assert.Contains("\"DELETE\", $workers$route, async (request, route) =>", module);
         Assert.Contains("null, $workers$route$2, (request, route) =>", module);
-        Assert.Contains("return $workers$routerHandle($workers$routerFallback(", module);
+        Assert.Contains("return $workers$routerHandle($workers$notNull($workers$routerFallback($workers$notNull($workers$routerAdd($workers$notNull($workers$routerAdd($workers$notNull($workers$routerAdd($workers$routerCreate(), \"GET\", $workers$route, (request, route) => new Response($workers$routerParameter($workers$notNull(route), \"id\")))), \"DELETE\", $workers$route, async (request, route) => new Response(null, { status: 204 }))), null, $workers$route$2, (request, route) => new Response($workers$routerParameter($workers$notNull(route), \"path\")))), (request, route) => new Response(\"missing\", { status: 404 })))", module);
         Assert.Contains("request, env, context);", module);
     }
 
@@ -116,7 +116,7 @@ public sealed class RouterTests
 
         Assert.Contains("rank: [], segments: [] };", module);
         Assert.Contains("[0-9a-f]{8}", module);
-        Assert.Contains("route.env[\"ITEMS\"]", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2, $workers$arg2$2) => $workers$notNull($workers$receiver$2).put($workers$arg1$2, $workers$arg2$2))($workers$notNull($workers$notNull(route).env)[\"ITEMS\"], id, await $workers$notNull(request).text())", module);
         Assert.Contains("$workers$routerHandle(", module);
     }
 

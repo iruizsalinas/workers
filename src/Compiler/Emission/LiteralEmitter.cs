@@ -45,21 +45,7 @@ internal sealed partial class JavaScriptEmitter
 
     private string InterpolationValue(IInterpolationOperation item)
     {
-        var value = Unbox(item.Expression);
-        var expression = Expression(value);
-        var type = value.Type is { } boundType ? ResolveType(boundType) : null;
-        var underlying = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
-            ? nullable.TypeArguments[0]
-            : type;
-        var mayBeNull = type is null || !type.IsValueType || !SymbolEqualityComparer.Default.Equals(type, underlying);
-        if (underlying?.SpecialType == SpecialType.System_Boolean)
-            return mayBeNull
-                ? $"(($workers$value) => $workers$value == null ? \"\" : ($workers$value ? \"True\" : \"False\"))({expression})"
-                : $"({expression} ? \"True\" : \"False\")";
-        if (underlying?.SpecialType is SpecialType.System_String or SpecialType.System_Char
-            or >= SpecialType.System_SByte and <= SpecialType.System_Double)
-            return mayBeNull ? $"({expression}) ?? \"\"" : expression;
-        throw Unsupported("WRK108", item.Syntax);
+        return StringConcatOperand(item.Expression, Expression(item.Expression), item.Syntax, interpolation: true);
     }
 
     private static IOperation Unbox(IOperation operation)

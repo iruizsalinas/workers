@@ -2,7 +2,7 @@ internal static partial class HelperSource
 {
     private static string LinqNumericAggregate(Func<string, string> name) => $$"""
         function {{name("linqNumericAggregate")}}(source, operation, selector, kind, nullable, hasSelector) {
-          if (source == null || hasSelector && selector == null) throw new TypeError("LINQ argument cannot be null.");
+          if (source == null || hasSelector && selector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           let total = 0, count = 0;
           for (const item of {{name("linqValues")}}(source)) {
             const value = selector == null ? item : selector(item);
@@ -10,11 +10,11 @@ internal static partial class HelperSource
             total += value;
             count++;
             if (kind === 0 && (total < -2147483648 || total > 2147483647))
-              throw new RangeError("Arithmetic operation resulted in an overflow.");
+              throw new ({{name("exceptionType")}}("System.OverflowException"))("Arithmetic operation resulted in an overflow.");
           }
           if (operation === 1 && count === 0) {
             if (nullable) return null;
-            throw new TypeError("Sequence contains no elements.");
+            throw new ({{name("exceptionType")}}("System.InvalidOperationException"))("Sequence contains no elements.");
           }
           const result = operation === 0 ? total : total / count;
           return kind === 0 ? result | 0 : kind === 1 ? Math.fround(result) : result;
@@ -33,7 +33,7 @@ internal static partial class HelperSource
           return left < right ? -1 : 1;
         }
         function {{name("linqExtremum")}}(source, selector, maximum, kind, canBeNull, by, returnKey, floating) {
-          if (source == null || (by || returnKey) && selector == null) throw new TypeError("LINQ argument cannot be null.");
+          if (source == null || (by || returnKey) && selector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           let found = false, hasValue = false, result = null, resultKey = null;
           for (const value of {{name("linqValues")}}(source)) {
             if (!hasValue) { hasValue = true; if (by) result = value; }
@@ -46,7 +46,7 @@ internal static partial class HelperSource
           }
           if (found || by && hasValue) return returnKey ? resultKey : result;
           if (canBeNull) return null;
-          throw new TypeError("Sequence contains no elements.");
+          throw new ({{name("exceptionType")}}("System.InvalidOperationException"))("Sequence contains no elements.");
         }
 
         """;
@@ -54,7 +54,7 @@ internal static partial class HelperSource
     private static string LinqSet(Func<string, string> name) => $$"""
         function {{name("linqSet")}}(first, second, keySelector, operation, secondContainsKeys, hasKeySelector) {
           if (first == null || second == null || hasKeySelector && keySelector == null)
-            throw new TypeError("LINQ argument cannot be null.");
+            throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           const key = keySelector == null ? value => value : keySelector;
           return { *[Symbol.iterator]() {
             if (operation === 0) {

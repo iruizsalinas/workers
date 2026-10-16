@@ -30,15 +30,23 @@ internal sealed partial class JavaScriptEmitter
             return operation switch
             {
                 IConversionOperation value => Conversion(value),
+                ITranslatedQueryOperation value => Expression(value.Operation),
+                ITypeOfOperation value => TypeOf(value),
+                ICoalesceAssignmentOperation value => CoalesceAssignment(value),
                 IParenthesizedOperation value => $"({Expression(value.Operand)})",
                 ILiteralOperation value => LiteralConstant(value.ConstantValue.Value, value.Syntax),
                 INameOfOperation value => LiteralConstant(value.ConstantValue.Value, value.Syntax),
                 IDefaultValueOperation value => DefaultFieldValue(value.Type!, value.Syntax),
                 ILocalReferenceOperation value => UserIdentifier(value.Local, value.Local.Name),
+                IParameterReferenceOperation value when IsClassPrimaryParameter(value.Parameter) => PrimaryParameterStorage(value.Parameter),
                 IParameterReferenceOperation value => UserIdentifier(value.Parameter, value.Parameter.Name)
                     + (value.Parameter.RefKind == RefKind.Out ? ".value" : ""),
+                IInstanceReferenceOperation { ReferenceKind: InstanceReferenceKind.ImplicitReceiver } when _initializerReceivers.TryPeek(out var receiver) => receiver,
                 IInstanceReferenceOperation => "this",
                 IUnaryOperation value => Unary(value),
+                IRangeOperation value => RangeValue(value),
+                ITupleOperation value => TupleValue(value.Elements.Select(ValueExpression)),
+                IDeconstructionAssignmentOperation value => Deconstruction(value),
                 IIncrementOrDecrementOperation value => NumericMutation(value),
                 IAwaitOperation value => $"await {Operand(value.Operation)}",
                 IBinaryOperation value => Binary(value),
@@ -51,20 +59,23 @@ internal sealed partial class JavaScriptEmitter
                 IWithOperation value => WithExpression(value),
                 ISwitchExpressionOperation value => SwitchExpression(value),
                 IArrayCreationOperation value => ArrayCreation(value),
-                IThrowOperation value => $"(($workers$exception) => {{ throw $workers$exception; }})({Expression(value.Exception!)})",
+                IThrowOperation value => $"(($workers$exception) => {{ throw $workers$exception; }})({ThrowValue(value.Exception!)})",
                 IIsPatternOperation value => IsPattern(value),
                 IIsTypeOperation value => IsType(value),
+                IEventReferenceOperation value => EventAccess(value),
+                IEventAssignmentOperation value => EventAssignment(value),
                 IFieldReferenceOperation value => Member(value),
                 IPropertyReferenceOperation value => Member(value),
                 IInvocationOperation value => Invocation(value),
-                IArrayElementReferenceOperation value => HelperInvocation(JavaScriptHelper.SequenceIndex,
-                    [Expression(value.ArrayReference), Expression(value.Indices.Single())]),
+                IArrayElementReferenceOperation value => SequenceAccess(value.ArrayReference, value.Indices.Single()),
+                IImplicitIndexerReferenceOperation value when value.Instance.Type is IArrayTypeSymbol
+                    || value.Instance.Type?.SpecialType == SpecialType.System_String => SequenceAccess(value.Instance, value.Argument),
                 IAnonymousObjectCreationOperation value => AnonymousObject(value),
                 IInterpolatedStringOperation value => "`" + string.Concat(value.Parts.Select(InterpolatedPart)) + "`",
                 ICollectionExpressionOperation value => Collection(value),
                 IObjectCreationOperation value => ObjectCreation(value),
                 ITypeParameterObjectCreationOperation value => GenericConstruction(value),
-                IDelegateCreationOperation value => Expression(value.Target),
+                IDelegateCreationOperation value => DelegateCreation(value),
                 IMethodReferenceOperation value => MethodGroup((ExpressionSyntax)value.Syntax, value.Method,
                     value.Syntax is MemberAccessExpressionSyntax member ? member.Expression : null),
                 IAnonymousFunctionOperation value => AnonymousFunction(value),
@@ -103,16 +114,22 @@ internal sealed partial class JavaScriptEmitter
         return $"(({value}) ?? ({Expression(operation.WhenNull)}))";
     }
 
-    private string AnonymousObject(IAnonymousObjectCreationOperation operation) =>
-        "{ " + string.Join(", ", operation.Initializers.Select(initializer =>
+    private string AnonymousObject(IAnonymousObjectCreationOperation operation)
+    {
+        var printed = new List<(string Name, string Storage, ITypeSymbol Type)>();
+        var properties = operation.Initializers.Select(initializer =>
         {
             if (initializer is not ISimpleAssignmentOperation { Target: IPropertyReferenceOperation property } assignment)
                 throw Unsupported("WRK101", initializer.Syntax);
             var name = property.Property.Name;
             if (initializer.Syntax is AnonymousObjectMemberDeclaratorSyntax { NameEquals: null, Expression: MemberAccessExpressionSyntax })
                 name = LowerFirst(name);
-            return $"{JavaScriptObjectKey(name)}: {Expression(assignment.Value)}";
-        })) + " }";
+            printed.Add((property.Property.Name, name, ResolveType(property.Property.Type)));
+            return $"{JavaScriptObjectKey(name)}: {ValueExpression(assignment.Value)}";
+        }).ToArray();
+        RegisterAnonymousText((INamedTypeSymbol)ResolveType(operation.Type!), printed, operation.Syntax);
+        return "{ " + string.Join(", ", properties) + " }";
+    }
 
     private string AnonymousFunction(IAnonymousFunctionOperation operation) => operation.Syntax switch
     {
@@ -122,7 +139,7 @@ internal sealed partial class JavaScriptEmitter
         SimpleLambdaExpressionSyntax { ExpressionBody: not null } value =>
             $"{AsyncPrefix(value.AsyncKeyword)}{ParameterName(value.Parameter)} => {LambdaExpressionBody(value.ExpressionBody)}",
         SimpleLambdaExpressionSyntax value => Lambda(value),
-        _ => throw Unsupported("WRK101", operation.Syntax)
+        _ => BoundQueryLambda(operation)
     };
 
     private string LambdaExpressionBody(ExpressionSyntax expression)
@@ -130,7 +147,7 @@ internal sealed partial class JavaScriptEmitter
         var temporaries = new List<string>();
         _expressionTemporaryScopes.Push(temporaries);
         string body;
-        try { body = Expression(expression); }
+        try { body = ValueExpression(expression); }
         finally { _expressionTemporaryScopes.Pop(); }
         if (temporaries.Count != 0)
             return $"{{ let {string.Join(", ", temporaries)}; return {body}; }}";
@@ -140,12 +157,20 @@ internal sealed partial class JavaScriptEmitter
 
     private string SimpleAssignment(ISimpleAssignmentOperation operation)
     {
-        var right = Expression(operation.Value);
+        var right = ValueExpression(operation.Value);
+        if (operation.Target is IPropertyReferenceOperation userIndexer && IsUserIndexer(userIndexer.Property))
+            return $"((reference, value) => reference.value = value)({UserIndexerReference(userIndexer)}, {right})";
+        if (operation.Target is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true })
+            return $"((reference, value) => reference.value = value)({AssignmentReference(operation.Target)}, {right})";
         if (operation.Target is IPropertyReferenceOperation baseProperty
             && baseProperty.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
             && (baseProperty.Property.IsVirtual || baseProperty.Property.IsOverride))
             return BasePropertySet(baseProperty.Property, operation.Syntax, right);
         if (operation.Target is IDiscardOperation) return $"({right})";
+        if (operation.Target is IMemberReferenceOperation member && NeedsNullCheck(member.Instance)
+            && operation.Target is not IPropertyReferenceOperation { Property.IsIndexer: true })
+            // Form the storage reference first; check its receiver only after evaluating the RHS.
+            return $"((reference, value) => reference.value = value)({AssignmentReference(operation.Target)}, {right})";
         if (operation.Target is IArrayElementReferenceOperation array)
         {
             _helpers.Require(JavaScriptHelper.SequenceIndex);
@@ -153,17 +178,17 @@ internal sealed partial class JavaScriptEmitter
         }
         if (operation.Target is IPropertyReferenceOperation { Property.IsIndexer: true } property)
         {
+            if (UsesKeyDictionary(property.Instance?.Type))
+                return $"((map, key, value) => {{ {NotNull("map")}.set(key, value); return value; }})({Expression(property.Instance!)}, {Expression(property.Arguments.Single().Value)}, {right})";
             if (property.Property.ContainingType.ToDisplayString() == "Workers.Headers")
             {
                 var receiver = Expression(property.Instance!);
                 var name = Expression(property.Arguments.Single().Value);
-                if (operation.Parent is IExpressionStatementOperation)
-                    return $"{receiver}.set({name}, {right})";
                 var key = $"header-assignment:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}";
                 var headers = _names.Get(key + ":headers", "headers");
                 var header = _names.Get(key + ":name", "name");
                 var value = _names.Get(key + ":value", "value");
-                return $"(({headers}, {header}, {value}) => {{ {headers}.set({header}, {value}); return {value}; }})({receiver}, {name}, {right})";
+                return $"(({headers}, {header}, {value}) => {{ {NotNull(headers)}.set({header}, {value}); return {value}; }})({receiver}, {name}, {right})";
             }
             if (IsSequenceType(property.Instance?.Type))
             {
@@ -181,6 +206,9 @@ internal sealed partial class JavaScriptEmitter
 
     private string Unary(IUnaryOperation operation)
     {
+        if (IsIndexType(operation.Type)) return IndexValue(Expression(operation.Operand), true);
+        if (operation.OperatorMethod is { } sourceOperator && sourceOperator.DeclaringSyntaxReferences.Length != 0)
+            return SourceOperator(sourceOperator, operation.ConstrainedToType, operation.Syntax, operation.Operand);
         if (operation.OperatorMethod is not null) throw UnsupportedSymbol(operation.OperatorMethod, operation.Syntax);
         if (operation.Type?.SpecialType is SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal)
             throw Unsupported("WRK108", operation.Syntax);
@@ -202,6 +230,14 @@ internal sealed partial class JavaScriptEmitter
 
     private string NumericMutation(IIncrementOrDecrementOperation operation)
     {
+        if (operation.OperatorMethod is { DeclaringSyntaxReferences.Length: > 0 } method && !operation.IsLifted && IsSimpleMutationTarget(operation.Target))
+        {
+            var key = $"operator-mutation:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}";
+            var old = _names.Get(key + ":old", "old");
+            var updatedName = _names.Get(key + ":updated", "updated");
+            var next = SourceOperatorCall(method, operation.ConstrainedToType, operation.Syntax, old);
+            return Mutate(operation.Target, target => $"(({old}) => {{ const {updatedName} = {next}; {target} = {updatedName}; return {(operation.IsPostfix ? old : updatedName)}; }})({target})");
+        }
         if (operation.OperatorMethod is not null || operation.IsChecked || operation.IsLifted
             || !IsSimpleMutationTarget(operation.Target))
             throw Unsupported("WRK108", operation.Syntax);
@@ -215,6 +251,14 @@ internal sealed partial class JavaScriptEmitter
 
     private string CompoundAssignment(ICompoundAssignmentOperation operation)
     {
+        if (operation.OperatorMethod is null && operation.OperatorKind is BinaryOperatorKind.And or BinaryOperatorKind.Or or BinaryOperatorKind.ExclusiveOr
+            or BinaryOperatorKind.LeftShift or BinaryOperatorKind.RightShift or BinaryOperatorKind.UnsignedRightShift)
+            return BitwiseAssignment(operation);
+        if (operation.OperatorMethod is { DeclaringSyntaxReferences.Length: > 0 } method
+            && operation.InConversion.IsIdentity && operation.OutConversion.IsIdentity && !operation.IsLifted && IsSimpleMutationTarget(operation.Target))
+            return Mutate(operation.Target, target => $"({target} = {SourceOperatorCall(method, operation.ConstrainedToType, operation.Syntax, CopyValue(operation.Target.Type, target), ValueExpression(operation.Value))})", ContainsAwait(operation.Value));
+        if (operation.Type?.TypeKind == TypeKind.Delegate && IsSimpleMutationTarget(operation.Target))
+            return Mutate(operation.Target, target => CompoundAssignment(operation, target), ContainsAwait(operation.Value));
         if (!IsSimpleMutationTarget(operation.Target)
             || operation.OperatorMethod is not null || !operation.InConversion.IsIdentity
             || !operation.OutConversion.IsIdentity || operation.IsChecked || operation.IsLifted)
@@ -224,8 +268,11 @@ internal sealed partial class JavaScriptEmitter
 
     private string CompoundAssignment(ICompoundAssignmentOperation operation, string target)
     {
-        var type = operation.Type?.SpecialType ?? SpecialType.None;
+        var type = operation.Type is INamedTypeSymbol { EnumUnderlyingType: { } underlying }
+            ? underlying.SpecialType : operation.Type?.SpecialType ?? SpecialType.None;
         var right = Operand(operation.Value);
+        if (operation.Type?.TypeKind == TypeKind.Delegate && operation.OperatorKind is BinaryOperatorKind.Add or BinaryOperatorKind.Subtract)
+            return $"({target} = {DelegateHelper(operation.OperatorKind == BinaryOperatorKind.Add ? "delegateCombine" : "delegateRemove")}({target}, {right}))";
         if (type == SpecialType.System_String && operation.OperatorKind == BinaryOperatorKind.Add)
             return $"({target} = ({target} ?? \"\") + {StringConcatOperand(operation.Value, right, operation.Syntax)})";
         var integral = type is SpecialType.System_Int32 or SpecialType.System_UInt32;
@@ -248,6 +295,20 @@ internal sealed partial class JavaScriptEmitter
     // Capture a member receiver before a getter or RHS can change the original variable.
     private string Mutate(IOperation operation, Func<string, string> emit, bool isAsync = false)
     {
+        if (operation is IArrayElementReferenceOperation || operation is IPropertyReferenceOperation { Property.IsIndexer: true })
+        {
+            var reference = _names.Get($"indexer-mutation:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "reference");
+            var mutation = emit(reference + ".value");
+            return isAsync ? $"(await (async ({reference}) => {mutation})({AssignmentReference(operation)}))"
+                : $"(({reference}) => {mutation})({AssignmentReference(operation)})";
+        }
+        if (operation is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true })
+        {
+            var reference = _names.Get($"tuple-mutation:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "reference");
+            var mutation = emit(reference + ".value");
+            return isAsync ? $"(await (async ({reference}) => {mutation})({AssignmentReference(operation)}))"
+                : $"(({reference}) => {mutation})({AssignmentReference(operation)})";
+        }
         if (operation is IPropertyReferenceOperation propertyReference
             && operation.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
             && (propertyReference.Property.IsVirtual || propertyReference.Property.IsOverride))
@@ -269,7 +330,7 @@ internal sealed partial class JavaScriptEmitter
             : ((IPropertyReferenceOperation)operation).Property;
         var source = operation.Syntax;
         var receiver = _names.Get($"mutation:{source.SyntaxTree.FilePath}:{source.SpanStart}", "receiver");
-        var body = emit(UserMemberAccess(receiver, symbol));
+        var body = emit(UserMemberAccess(NeedsNullCheck(instance) ? NotNull(receiver) : receiver, symbol));
         return isAsync
             ? $"(await (async ({receiver}) => {body})({Expression(instance)}))"
             : $"(({receiver}) => {body})({Expression(instance)})";
@@ -288,19 +349,23 @@ internal sealed partial class JavaScriptEmitter
         var assignments = operation.Initializer.Initializers.Select(expression => expression switch
         {
             ISimpleAssignmentOperation { Target: IMemberReferenceOperation member } assignment =>
-                $"{UserMemberAccess(temporary, member.Member)} = {Expression(assignment.Value)};",
+                $"{UserMemberAccess(temporary, member.Member)} = {ValueExpression(assignment.Value)};",
             _ => throw Unsupported("WRK106", expression.Syntax)
         });
         string clone;
         if (UsesUserHierarchy(type))
-            clone = $"((source) => {{ if (source == null) throw new TypeError(\"Cannot copy a null record.\"); return source.{RecordCloneSlot}(); }})({Expression(operation.Operand)})";
+            clone = $"((source) => {{ if (source == null) throw {NullReferenceException()}; return source.{RecordCloneSlot}(); }})({Expression(operation.Operand)})";
         else if (type.InstanceConstructors.Any(constructor => !constructor.IsImplicitlyDeclared && IsUserRecordCopyConstructor(constructor)))
         {
             var record = QueueUserType(type, value);
             clone = $"{record}.$copy({Expression(operation.Operand)})";
         }
         else
-            clone = $"((source) => Object.assign(Object.create(Object.getPrototypeOf(source)), source))({Expression(operation.Operand)})";
+        {
+            var copy = "Object.assign(Object.create(Object.getPrototypeOf(source)), source)";
+            if (!RequiresUserClass(type)) copy = $"Object.defineProperty({copy}, {PlainRecordIdentitySlot}, {{ value: source[{PlainRecordIdentitySlot}] }})";
+            clone = $"((source) => {copy})({NotNull(Expression(operation.Operand))})";
+        }
         var isAsync = ContainsAwait(operation.Initializer);
         var initialized = $"({(isAsync ? "async " : "")}({temporary}) => {{ {string.Join(" ", assignments)} return {temporary}; }})({clone})";
         return isAsync ? $"(await {initialized})" : initialized;
@@ -308,9 +373,13 @@ internal sealed partial class JavaScriptEmitter
 
     private static bool IsSimpleMutationTarget(IOperation target) => target switch
     {
+        IArrayElementReferenceOperation => true,
+        IPropertyReferenceOperation { Property.IsIndexer: true } property when IsSequenceType(property.Instance?.Type) => true,
+        IPropertyReferenceOperation { Property.IsIndexer: true } property when IsDictionary(property.Instance?.Type) => true,
         ILocalReferenceOperation or IParameterReferenceOperation => true,
+        IFieldReferenceOperation { Field.ContainingType.IsTupleType: true } => true,
         IFieldReferenceOperation { Field.HasConstantValue: false } field => field.Field.DeclaringSyntaxReferences.Length != 0,
-        IPropertyReferenceOperation { Property.IsIndexer: false } property =>
+        IPropertyReferenceOperation property =>
             property.Property.DeclaringSyntaxReferences.Length != 0
             && PropertyAccessor(property.Property, getter: false) is not null,
         _ => false
@@ -357,7 +426,7 @@ internal sealed partial class JavaScriptEmitter
         var bytes = array.ElementType.SpecialType == SpecialType.System_Byte;
         if (operation.Initializer is { } initializer)
         {
-            var items = "[" + string.Join(", ", initializer.ElementValues.Select(Expression)) + "]";
+            var items = "[" + string.Join(", ", initializer.ElementValues.Select(ValueExpression)) + "]";
             return bytes ? $"Uint8Array.from({items})" : items;
         }
         var length = Expression(operation.DimensionSizes.Single());
@@ -372,12 +441,13 @@ internal sealed partial class JavaScriptEmitter
         var elementType = operation.Type is IArrayTypeSymbol array ? array.ElementType
             : (operation.Type as INamedTypeSymbol)?.TypeArguments.FirstOrDefault();
         var items = "[" + string.Join(", ", operation.Elements.Select(element => element is ISpreadOperation spread
-            ? "..." + Spread(spread, elementType) : Expression(element))) + "]";
+            ? "..." + Spread(spread, elementType) : ValueExpression(element))) + "]";
         if (operation.Type is INamedTypeSymbol set
             && set.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>")
         {
+            if (IsCompositeKey(set.TypeArguments[0])) return KeyCollection(set, operation.Syntax, items);
             if (!SupportsLinqEquality(set.TypeArguments[0])) throw UnsupportedSymbol(set, operation.Syntax);
-            return $"new Set({items})";
+            return CreateSet(items);
         }
         return operation.Type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
             ? $"Uint8Array.from({items})"
@@ -390,7 +460,7 @@ internal sealed partial class JavaScriptEmitter
         if (operation.Operand.Type?.SpecialType == SpecialType.System_String)
             values = HelperInvocation(JavaScriptHelper.LinqValues, [values]);
         if (operation.ElementConversion.IsIdentity || operation.ElementConversion.IsReference
-            || elementType?.SpecialType == SpecialType.System_Object) return values;
+            || elementType?.SpecialType == SpecialType.System_Object) return elementType is null ? values : CopySequenceValues(elementType, values);
         if (elementType is null || operation.ElementType is null || operation.ElementConversion.IsUserDefined)
             throw Unsupported("WRK108", operation.Syntax);
         var converted = ConvertValue(operation.ElementType, elementType, "value", operation.Syntax);
