@@ -14,6 +14,7 @@ internal sealed partial class JavaScriptEmitter
     private static bool RequiresUserClass(INamedTypeSymbol type)
     {
         if (!type.IsRecord) return true;
+        if (type.IsGenericType || UsesUserHierarchy(type) || type.AllInterfaces.Any(IsSourceInterface)) return true;
         if (type.GetMembers().OfType<IPropertySymbol>().Any(property =>
                 LowerFirst(property.Name) is "__proto__" or "constructor"
                 || HasAttribute(property, "Workers.JsonIgnoreAttribute")
@@ -29,11 +30,12 @@ internal sealed partial class JavaScriptEmitter
 
     private string QueueUserType(INamedTypeSymbol type, SyntaxNode source)
     {
-        type = type.OriginalDefinition;
+        type = (INamedTypeSymbol)ResolveType(type);
         if (!IsUserInstanceType(type))
             throw UnsupportedSymbol(type, source);
         if (_userTypes.TryGetValue(type, out var existing))
             return existing;
+        CountSpecialization(type, source);
         var name = _names.Get($"user-type:{type.ToDisplayString()}", type.Name);
         _userTypes.Add(type, name);
         _pendingUserTypes.Enqueue(type);
@@ -42,6 +44,13 @@ internal sealed partial class JavaScriptEmitter
 
     private string UserInstanceMethodName(IMethodSymbol method)
     {
+        if (IsSourceInterface(method.ContainingType))
+        {
+            method = ResolveMethod(method);
+            _requestedInterfaces.Add(method.ContainingType);
+            return _names.Get($"interface-method:{method.ToDisplayString()}", $"interface${method.ContainingType.Name}${method.Name}");
+        }
+        while (method.OverriddenMethod is { } overridden) method = overridden;
         method = method.OriginalDefinition;
         if (_userInstanceMethods.TryGetValue(method, out var existing))
             return existing;
@@ -55,6 +64,18 @@ internal sealed partial class JavaScriptEmitter
 
     private string UserMemberName(ISymbol member)
     {
+        if (member.ContainingType is { TypeKind: TypeKind.Interface } contract)
+        {
+            contract = (INamedTypeSymbol)ResolveType(contract);
+            _requestedInterfaces.Add(contract);
+            return _names.Get($"interface-property:{contract}:{member.Name}", $"interface${contract.Name}${member.Name}");
+        }
+        if (member is IPropertySymbol property)
+        {
+            while (property.OverriddenProperty is { } overridden) property = overridden;
+            member = property;
+        }
+        member = member.OriginalDefinition;
         PrepareUserMemberNames(member.ContainingType);
         return _userMemberNames.TryGetValue(member, out var name)
             ? name
@@ -77,12 +98,17 @@ internal sealed partial class JavaScriptEmitter
         ? $"[{JsonSerializer.Serialize(value)}]"
         : IsJavaScriptPropertyIdentifier(value) ? value : JsonSerializer.Serialize(value);
 
-    private static bool HasAttribute(ISymbol symbol, string name) => symbol.GetAttributes()
-        .Any(attribute => attribute.AttributeClass?.ToDisplayString() == name);
+    private static AttributeData? JsonAttribute(ISymbol symbol, string name)
+    {
+        for (ISymbol? current = symbol; current is not null; current = (current as IPropertySymbol)?.OverriddenProperty)
+            if (current.GetAttributes().FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString() == name) is { } attribute)
+                return attribute;
+        return null;
+    }
 
-    private static string? JsonPropertyName(ISymbol symbol) => symbol.GetAttributes()
-        .SingleOrDefault(attribute => attribute.AttributeClass?.ToDisplayString()
-            == "Workers.JsonNameAttribute")
+    private static bool HasAttribute(ISymbol symbol, string name) => JsonAttribute(symbol, name) is not null;
+
+    private static string? JsonPropertyName(ISymbol symbol) => JsonAttribute(symbol, "Workers.JsonNameAttribute")
         ?.ConstructorArguments.SingleOrDefault().Value as string;
 
     private void PrepareUserMemberNames(INamedTypeSymbol type)
@@ -91,6 +117,14 @@ internal sealed partial class JavaScriptEmitter
         if (!_preparedUserMemberNames.Add(type)) return;
 
         var used = new HashSet<string>(["__proto__", "constructor", "toJSON"], StringComparer.Ordinal);
+        if (type.BaseType is { } parent && IsUserInstanceType(parent))
+        {
+            PrepareUserMemberNames(parent);
+            for (var ancestor = parent; ancestor is not null && IsUserInstanceType(ancestor); ancestor = ancestor.BaseType)
+                foreach (var name in _userMemberNames.Where(pair =>
+                             SymbolEqualityComparer.Default.Equals(pair.Key.ContainingType, ancestor.OriginalDefinition)).Select(pair => pair.Value))
+                    used.Add(name);
+        }
         var members = type.GetMembers()
             .Where(member => !member.IsStatic && member.DeclaringSyntaxReferences.Length != 0)
             .OrderBy(member => member is IPropertySymbol property
@@ -99,6 +133,7 @@ internal sealed partial class JavaScriptEmitter
             .ThenBy(member => member.DeclaringSyntaxReferences[0].Span.Start);
         foreach (var member in members)
         {
+            if (member is IPropertySymbol { OverriddenProperty: not null }) continue;
             var preferred = member switch
             {
                 IPropertySymbol property => IsJsonContractProperty(property)

@@ -14,6 +14,13 @@ internal sealed partial class JavaScriptEmitter
 
     private string RecordEquals(INamedTypeSymbol type, string left, string right, SyntaxNode source, bool referenceComparison = false)
     {
+        type = (INamedTypeSymbol)ResolveType(type);
+        if (UsesUserHierarchy(type))
+        {
+            QueueUserType(type, source);
+            var compare = $"left == null ? right == null : left.{RecordEqualitySlot}(right)";
+            return $"((left, right) => {(referenceComparison ? "left === right || " : "") }({compare}))({left}, {right})";
+        }
         var helper = RecordEqualityFunction(type, source);
         // The synthesized == operator short-circuits identical references. A custom typed
         // Equals invoked by EqualityComparer must still run, including for the same instance.
@@ -25,11 +32,11 @@ internal sealed partial class JavaScriptEmitter
     private static IMethodSymbol? UserRecordEqualsMethod(INamedTypeSymbol type) =>
         type.GetMembers("Equals").OfType<IMethodSymbol>().SingleOrDefault(method =>
             !method.IsImplicitlyDeclared && !method.IsStatic && method.Parameters is [{ } parameter]
-            && SymbolEqualityComparer.Default.Equals(parameter.Type.OriginalDefinition, type));
+            && SymbolEqualityComparer.Default.Equals(parameter.Type.OriginalDefinition, type.OriginalDefinition));
 
     private string RecordEqualityFunction(INamedTypeSymbol type, SyntaxNode source)
     {
-        type = type.OriginalDefinition;
+        type = (INamedTypeSymbol)ResolveType(type);
         if (_recordEqualityFunctions.TryGetValue(type, out var existing))
             return existing;
         var name = _names.Get($"record-equals:{type.ToDisplayString()}", $"recordEquals${type.Name}");
@@ -45,6 +52,7 @@ internal sealed partial class JavaScriptEmitter
         {
             emitted = true;
             var (type, source) = pending;
+            using var specialization = SpecializationScope(type);
             var declaration = (TypeDeclarationSyntax)type.DeclaringSyntaxReferences[0].GetSyntax();
             _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
             var customEquals = UserRecordEqualsMethod(type);
@@ -53,17 +61,22 @@ internal sealed partial class JavaScriptEmitter
                 QueueUserType(type, source);
                 _output.Append("function ").Append(_recordEqualityFunctions[type]).AppendLine("(left, right) {");
                 _output.AppendLine("  if (left == null) return right == null;");
-                _output.Append("  return left.").Append(UserInstanceMethodName(customEquals)).AppendLine("(right);");
+                _output.Append("  return ").Append(QueueUserMethod(customEquals, source)).AppendLine(".call(left, right);");
                 _output.AppendLine("}").AppendLine();
                 continue;
             }
             var comparisons = RecordEqualityMembers(type)
                 .Select(member => ValueEquality(member.Type,
-                    UserMemberAccess("left", member.Symbol), UserMemberAccess("right", member.Symbol), source))
+                    member.Symbol is IPropertySymbol property ? UserPropertyStorage("left", property) : UserMemberAccess("left", member.Symbol),
+                    member.Symbol is IPropertySymbol otherProperty ? UserPropertyStorage("right", otherProperty) : UserMemberAccess("right", member.Symbol), source))
                 .ToArray();
+            if (type.BaseType is { IsRecord: true } parent)
+                comparisons = [$"{RecordEqualityFunction(parent, source)}(left, right)", .. comparisons];
             _output.Append("function ").Append(_recordEqualityFunctions[type]).AppendLine("(left, right) {");
             _output.AppendLine("  if (left === right) return true;");
             _output.AppendLine("  if (left == null || right == null) return false;");
+            if (RequiresUserClass(type))
+                _output.AppendLine("  if (Object.getPrototypeOf(left) !== Object.getPrototypeOf(right)) return false;");
             _output.Append("  return ").Append(comparisons.Length == 0 ? "true" : string.Join("\n    && ", comparisons)).AppendLine(";");
             _output.AppendLine("}").AppendLine();
         }
@@ -85,12 +98,13 @@ internal sealed partial class JavaScriptEmitter
 
     private string ValueEquality(ITypeSymbol type, string left, string right, SyntaxNode source)
     {
+        type = ResolveType(type);
         if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
             return $"((a, b) => a == null || b == null ? a == b : {ValueEquality(nullable.TypeArguments[0], "a", "b", source)})({left}, {right})";
         if (type.SpecialType is SpecialType.System_Single or SpecialType.System_Double)
             return $"((a, b) => a === b || a !== a && b !== b)({left}, {right})";
         if (type is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record))
-            return RecordEquals(record, left, right, source);
+            return $"((left, right) => left == null || right == null ? left == right : {RecordEquals(record, "left", "right", source)})({left}, {right})";
         if (type is INamedTypeSymbol pair
             && pair.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
             return $"((a, b) => {ValueEquality(pair.TypeArguments[0], "a[0]", "b[0]", source)} " +

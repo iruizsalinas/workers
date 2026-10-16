@@ -1,42 +1,38 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Text.Json;
 
 internal sealed partial class JavaScriptEmitter
 {
     private static void ValidateUserType(INamedTypeSymbol type, TypeDeclarationSyntax declaration)
     {
         var exception = IsUserException(type);
-        if (type.IsAbstract || type.IsStatic || type.Arity != 0
-            || type.BaseType?.SpecialType != SpecialType.System_Object && !exception)
+        if (type.IsStatic
+            || type.BaseType?.SpecialType != SpecialType.System_Object && !exception
+                && !(type.BaseType is { } parent && IsUserInstanceType(parent)))
             throw new NotSupportedException(
-                $"WRK119: User type '{type}' must be a non-abstract, non-generic class or record without inheritance. " +
-                "Exception types may derive directly from System.Exception.");
+                $"WRK119: User type '{type}' must be a class or record with a supported source-defined base type. " +
+                "Exception types may derive from System.Exception.");
         ValidateJsonAttributes(type);
+        if (declaration is ClassDeclarationSyntax { ParameterList: not null })
+            throw new NotSupportedException($"WRK119: Primary class constructors are outside the Workers profile; use an explicit constructor on '{type}'.");
         if (declaration is RecordDeclarationSyntax { ParameterList: { } recordParameters }
             && recordParameters.Parameters.Any(parameter =>
                 LowerFirst(parameter.Identifier.ValueText) == "toJSON"))
             throw new NotSupportedException($"WRK119: User type '{type}' contains a property that conflicts with generated JavaScript behavior.");
         var constructors = declaration.Members.OfType<ConstructorDeclarationSyntax>().ToArray();
-        if (constructors.Length > 1 || constructors.Any(constructor =>
-                constructor.Initializer is not null
-                    && !(exception && constructor.Initializer.IsKind(SyntaxKind.BaseConstructorInitializer))
-                || constructor.Modifiers.Any(SyntaxKind.StaticKeyword)
-                || constructor.Modifiers.Any(SyntaxKind.ExternKeyword)
+        if (constructors.Any(constructor =>
+                constructor.Modifiers.Any(SyntaxKind.ExternKeyword)
                 || constructor.ParameterList.Parameters.Any(parameter => parameter.Modifiers.Any(modifier =>
                     modifier.IsKind(SyntaxKind.RefKeyword)
                     || modifier.IsKind(SyntaxKind.OutKeyword)
                     || modifier.IsKind(SyntaxKind.InKeyword)
                     || modifier.IsKind(SyntaxKind.ParamsKeyword)))))
-            throw new NotSupportedException($"WRK119: User type '{type}' must have at most one constructor without constructor chaining.");
+            throw new NotSupportedException($"WRK119: User type '{type}' contains an unsupported constructor.");
 
         var unsupported = declaration.Members.FirstOrDefault(member => member switch
         {
-            FieldDeclarationSyntax field => field.Declaration.Variables.Any(variable =>
-                variable.Parent?.Parent is not FieldDeclarationSyntax
-                || field.Modifiers.Any(SyntaxKind.ConstKeyword)
-                || field.Modifiers.Any(SyntaxKind.StaticKeyword)),
+            FieldDeclarationSyntax => false,
             ConstructorDeclarationSyntax => false,
             MethodDeclarationSyntax method => !IsSupportedUserMethod(method),
             PropertyDeclarationSyntax property => !IsSupportedUserProperty(property),
@@ -51,15 +47,11 @@ internal sealed partial class JavaScriptEmitter
 
     private static bool IsSupportedUserMethod(MethodDeclarationSyntax declaration)
     {
-        if (declaration.Modifiers.Any(SyntaxKind.AbstractKeyword)
-            || declaration.Modifiers.Any(SyntaxKind.ExternKeyword)
-            || declaration.Modifiers.Any(SyntaxKind.VirtualKeyword)
-            || declaration.Modifiers.Any(SyntaxKind.OverrideKeyword)
+        if (declaration.Modifiers.Any(SyntaxKind.ExternKeyword)
             || declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
             return false;
         return declaration.ParameterList.Parameters.All(parameter =>
             parameter.Modifiers.All(modifier => !modifier.IsKind(SyntaxKind.RefKeyword)
-                && !modifier.IsKind(SyntaxKind.OutKeyword)
                 && !modifier.IsKind(SyntaxKind.InKeyword)
                 && !modifier.IsKind(SyntaxKind.ParamsKeyword)));
     }
@@ -68,11 +60,6 @@ internal sealed partial class JavaScriptEmitter
     {
         var emittedName = LowerFirst(property.Identifier.ValueText);
         if (emittedName is "constructor" or "toJSON") return false;
-        if (property.Modifiers.Any(SyntaxKind.StaticKeyword)
-            || property.Modifiers.Any(SyntaxKind.AbstractKeyword)
-            || property.Modifiers.Any(SyntaxKind.VirtualKeyword)
-            || property.Modifiers.Any(SyntaxKind.OverrideKeyword))
-            return false;
         if (IsAutoProperty(property)) return true;
         if (property.Initializer is not null) return false;
         if (property.ExpressionBody is not null) return true;

@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.Operations;
 // labels declare them before the enclosing statement.
 internal sealed partial class JavaScriptEmitter
 {
-    private readonly HashSet<ISymbol> _declaredPatternVariables = new(SymbolEqualityComparer.Default);
+    private HashSet<ISymbol> _declaredPatternVariables = new(SymbolEqualityComparer.Default);
 
     private string PatternTest(IPatternOperation operation, string value) => operation switch
     {
@@ -49,17 +49,30 @@ internal sealed partial class JavaScriptEmitter
 
     private string TypePatternTest(ITypeSymbol type, string value, ITypeSymbol? input, SyntaxNode source)
     {
+        type = ResolveType(type);
         var unwrappedInput = input is null ? null : UnwrapNullable(input);
         if (unwrappedInput is not null && SymbolEqualityComparer.Default.Equals(unwrappedInput, type))
             return $"{value} != null";
         if (type.SpecialType == SpecialType.System_String) return $"typeof {value} === \"string\"";
         if (type.SpecialType == SpecialType.System_Boolean) return $"typeof {value} === \"boolean\"";
+        if (type is INamedTypeSymbol contract && IsSourceInterface(contract))
+            return $"({value} != null && {value}[{InterfaceMarker(contract)}] === true)";
+        if (type.SpecialType == SpecialType.System_Object) return $"{value} != null";
         if (type.ToDisplayString() == "Workers.HttpError")
             return $"{value} instanceof {_helpers.Require(JavaScriptHelper.HttpError)}";
         if (type is INamedTypeSymbol named && IsUserInstanceType(named) && (IsException(named) || RequiresUserClass(named)))
             return $"{value} instanceof {QueueUserType(named, source)}";
         throw new NotSupportedException(
             $"WRK104: Testing for type '{type.ToDisplayString()}' is not supported at runtime; only string, bool and Worker class types can be tested.");
+    }
+
+    private string IsType(IIsTypeOperation operation)
+    {
+        var subject = Expression(operation.ValueOperand);
+        if (operation.ValueOperand is ILocalReferenceOperation or IParameterReferenceOperation or IInstanceReferenceOperation)
+            return TypePatternTest(operation.TypeOperand, subject, operation.ValueOperand.Type, operation.Syntax);
+        var temporary = _names.Get($"type-test:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "subject");
+        return $"(({temporary}) => {TypePatternTest(operation.TypeOperand, temporary, operation.ValueOperand.Type, operation.Syntax)})({subject})";
     }
 
     private string RecursivePatternTest(IRecursivePatternOperation operation, string value)

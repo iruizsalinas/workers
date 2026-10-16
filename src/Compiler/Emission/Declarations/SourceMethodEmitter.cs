@@ -4,8 +4,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 internal sealed partial class JavaScriptEmitter
 {
-    private static string DefaultFieldValue(ITypeSymbol type, SyntaxNode source)
+    private string DefaultFieldValue(ITypeSymbol type, SyntaxNode source)
     {
+        type = ResolveType(type);
         if (type.IsReferenceType || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) return "null";
         if (type.SpecialType == SpecialType.System_Boolean) return "false";
         if (type.SpecialType == SpecialType.System_Char) return "\"\\u0000\"";
@@ -50,14 +51,15 @@ internal sealed partial class JavaScriptEmitter
 
     private string QueueUserMethod(IMethodSymbol method, SyntaxNode callSite)
     {
-        method = method.OriginalDefinition;
-        if (!method.IsStatic || method.IsGenericMethod || method.IsExtensionMethod || method.ContainingType.IsGenericType
-            || method.Parameters.Any(parameter => parameter.RefKind != RefKind.None || parameter.IsParams)
+        method = ResolveMethod(method);
+        if (method.MethodKind is not (MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation) || method.IsAbstract
+            || method.Parameters.Any(parameter => parameter.RefKind is not (RefKind.None or RefKind.Out) || parameter.IsParams)
             || method.DeclaringSyntaxReferences.Length != 1
             || method.DeclaringSyntaxReferences[0].GetSyntax() is not MethodDeclarationSyntax)
             throw UnsupportedSymbol(method, callSite);
         if (_userMethods.TryGetValue(method, out var existing))
             return existing;
+        CountSpecialization(method, callSite);
         var name = _names.ForMethod(method, _userMethods.Count);
         _userMethods.Add(method, name);
         _pendingUserMethods.Enqueue(method);
@@ -75,6 +77,7 @@ internal sealed partial class JavaScriptEmitter
         {
             var symbol = _pendingUserMethods.Dequeue();
             if (!_emittedUserMethods.Add(symbol)) continue;
+            using var specialization = SpecializationScope(symbol.ContainingType, symbol);
             var declaration = (MethodDeclarationSyntax)symbol.DeclaringSyntaxReferences.Single().GetSyntax();
             _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
             _diagnosticNode = declaration;
@@ -85,6 +88,8 @@ internal sealed partial class JavaScriptEmitter
             var asyncWrapper = isAsync && !isEnumerable && HasExplicitStaticConstructor(symbol.ContainingType);
             _output.Append(isAsync && !isEnumerable && !asyncWrapper ? "async " : "").Append(isIterator && !isEnumerable ? "function* " : "function ")
                 .Append(_userMethods[symbol]).Append('(').Append(parameters).AppendLine(") {");
+            if (!symbol.IsStatic)
+                _output.AppendLine("  if (this == null) throw new TypeError(\"Object reference not set to an instance of an object.\");");
             EmitWithExpressionScope(1, () =>
             {
                 EmitExplicitStaticInitialization(symbol.ContainingType, 1);

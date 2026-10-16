@@ -47,7 +47,7 @@ internal sealed partial class JavaScriptEmitter
     {
         var value = Unbox(item.Expression);
         var expression = Expression(value);
-        var type = value.Type;
+        var type = value.Type is { } boundType ? ResolveType(boundType) : null;
         var underlying = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
             ? nullable.TypeArguments[0]
             : type;

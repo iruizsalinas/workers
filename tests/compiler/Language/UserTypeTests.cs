@@ -73,12 +73,10 @@ public sealed class UserTypeTests
     }
 
     [Theory]
-    [InlineData("public class Child : Base { } public class Base { }")]
-    [InlineData("public class Box<T> { }")]
     [InlineData("public partial class Split { } public partial class Split { }")]
-    [InlineData("public class Overloaded { public Overloaded() { } public Overloaded(int value) { } }")]
     [InlineData("public class Indexed { public int this[int index] => index; }")]
     [InlineData("public class Mutable { private int _value; public int Value { get => _value; set => _value = value; } }")]
+    [InlineData("public class Mutable(int value = 0) { }")]
     public void RejectsUnsupportedUserTypeShapes(string declaration)
     {
         var typeName = declaration.Contains("Child", StringComparison.Ordinal) ? "Child"

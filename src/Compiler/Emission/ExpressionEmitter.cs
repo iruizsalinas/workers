@@ -35,7 +35,8 @@ internal sealed partial class JavaScriptEmitter
                 INameOfOperation value => LiteralConstant(value.ConstantValue.Value, value.Syntax),
                 IDefaultValueOperation value => DefaultFieldValue(value.Type!, value.Syntax),
                 ILocalReferenceOperation value => UserIdentifier(value.Local, value.Local.Name),
-                IParameterReferenceOperation value => UserIdentifier(value.Parameter, value.Parameter.Name),
+                IParameterReferenceOperation value => UserIdentifier(value.Parameter, value.Parameter.Name)
+                    + (value.Parameter.RefKind == RefKind.Out ? ".value" : ""),
                 IInstanceReferenceOperation => "this",
                 IUnaryOperation value => Unary(value),
                 IIncrementOrDecrementOperation value => NumericMutation(value),
@@ -52,6 +53,7 @@ internal sealed partial class JavaScriptEmitter
                 IArrayCreationOperation value => ArrayCreation(value),
                 IThrowOperation value => $"(($workers$exception) => {{ throw $workers$exception; }})({Expression(value.Exception!)})",
                 IIsPatternOperation value => IsPattern(value),
+                IIsTypeOperation value => IsType(value),
                 IFieldReferenceOperation value => Member(value),
                 IPropertyReferenceOperation value => Member(value),
                 IInvocationOperation value => Invocation(value),
@@ -61,6 +63,7 @@ internal sealed partial class JavaScriptEmitter
                 IInterpolatedStringOperation value => "`" + string.Concat(value.Parts.Select(InterpolatedPart)) + "`",
                 ICollectionExpressionOperation value => Collection(value),
                 IObjectCreationOperation value => ObjectCreation(value),
+                ITypeParameterObjectCreationOperation value => GenericConstruction(value),
                 IDelegateCreationOperation value => Expression(value.Target),
                 IMethodReferenceOperation value => MethodGroup((ExpressionSyntax)value.Syntax, value.Method,
                     value.Syntax is MemberAccessExpressionSyntax member ? member.Expression : null),
@@ -138,6 +141,10 @@ internal sealed partial class JavaScriptEmitter
     private string SimpleAssignment(ISimpleAssignmentOperation operation)
     {
         var right = Expression(operation.Value);
+        if (operation.Target is IPropertyReferenceOperation baseProperty
+            && baseProperty.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
+            && (baseProperty.Property.IsVirtual || baseProperty.Property.IsOverride))
+            return BasePropertySet(baseProperty.Property, operation.Syntax, right);
         if (operation.Target is IDiscardOperation) return $"({right})";
         if (operation.Target is IArrayElementReferenceOperation array)
         {
@@ -241,6 +248,16 @@ internal sealed partial class JavaScriptEmitter
     // Capture a member receiver before a getter or RHS can change the original variable.
     private string Mutate(IOperation operation, Func<string, string> emit, bool isAsync = false)
     {
+        if (operation is IPropertyReferenceOperation propertyReference
+            && operation.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
+            && (propertyReference.Property.IsVirtual || propertyReference.Property.IsOverride))
+        {
+            var reference = _names.Get($"base-mutation:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "reference");
+            var mutation = emit(reference + ".value");
+            var argument = BasePropertyReference(propertyReference.Property, operation.Syntax);
+            return isAsync ? $"(await (async ({reference}) => {mutation})({argument}))"
+                : $"(({reference}) => {mutation})({argument})";
+        }
         var instance = operation switch
         {
             IFieldReferenceOperation field => field.Instance,
@@ -275,7 +292,9 @@ internal sealed partial class JavaScriptEmitter
             _ => throw Unsupported("WRK106", expression.Syntax)
         });
         string clone;
-        if (type.InstanceConstructors.Any(constructor => !constructor.IsImplicitlyDeclared && IsUserRecordCopyConstructor(constructor)))
+        if (UsesUserHierarchy(type))
+            clone = $"((source) => {{ if (source == null) throw new TypeError(\"Cannot copy a null record.\"); return source.{RecordCloneSlot}(); }})({Expression(operation.Operand)})";
+        else if (type.InstanceConstructors.Any(constructor => !constructor.IsImplicitlyDeclared && IsUserRecordCopyConstructor(constructor)))
         {
             var record = QueueUserType(type, value);
             clone = $"{record}.$copy({Expression(operation.Operand)})";
@@ -291,8 +310,9 @@ internal sealed partial class JavaScriptEmitter
     {
         ILocalReferenceOperation or IParameterReferenceOperation => true,
         IFieldReferenceOperation { Field.HasConstantValue: false } field => field.Field.DeclaringSyntaxReferences.Length != 0,
-        IPropertyReferenceOperation { Property: { IsIndexer: false, SetMethod: not null } } property =>
-            property.Property.DeclaringSyntaxReferences.Length != 0,
+        IPropertyReferenceOperation { Property.IsIndexer: false } property =>
+            property.Property.DeclaringSyntaxReferences.Length != 0
+            && PropertyAccessor(property.Property, getter: false) is not null,
         _ => false
     };
 
@@ -332,7 +352,7 @@ internal sealed partial class JavaScriptEmitter
     // elements start at the element type's default value.
     private string ArrayCreation(IArrayCreationOperation operation)
     {
-        if (operation.Type is not IArrayTypeSymbol { Rank: 1 } array)
+        if (ResolveType(operation.Type!) is not IArrayTypeSymbol { Rank: 1 } array)
             throw Unsupported("WRK101", operation.Syntax);
         var bytes = array.ElementType.SpecialType == SpecialType.System_Byte;
         if (operation.Initializer is { } initializer)

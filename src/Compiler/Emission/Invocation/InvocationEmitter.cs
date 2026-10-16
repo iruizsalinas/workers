@@ -9,20 +9,30 @@ internal sealed partial class JavaScriptEmitter
         var invocation = (InvocationExpressionSyntax)operation.Syntax;
         // Reduced extension symbols retain the platform adapters' receiver convention.
         var method = _model.GetSymbolInfo(invocation).Symbol as IMethodSymbol ?? operation.TargetMethod;
+        if (method is { ReducedFrom.DeclaringSyntaxReferences.Length: > 0 })
+            return EmitSourceExtensionInvocation(operation, invocation, method);
+        method = ResolveMethod(method);
+        if (method is { IsGenericMethod: true, IsStatic: false, DeclaringSyntaxReferences.Length: > 0 })
+        {
+            var receiverValue = operation.Instance is null ? "this" : Expression(operation.Instance);
+            var targetFunction = invocation.Expression is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
+                ? QueueUserMethod(method, invocation) : GenericMethodTarget(method);
+            return EmitNormalizedInvocation(invocation, method, receiverValue, (target, values) =>
+                $"{targetFunction}.call({target}{(values.Length == 0 ? "" : ", " + string.Join(", ", values))})");
+        }
         if (method.DeclaringSyntaxReferences.Length == 0
             && TryEmitOutInvocation(operation, method, out var outInvocation))
             return outInvocation;
         if (method.Name is "Parse" or "TryParse" && method.ContainingType.SpecialType is
             SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Decimal or SpecialType.System_Single)
             throw UnsupportedSymbol(method, invocation);
-        var arguments = invocation.ArgumentList.Arguments.Select(ArgumentValue).ToArray();
         var member = invocation.Expression as MemberAccessExpressionSyntax;
         var receiver = operation.Instance is null || operation.Instance is IInstanceReferenceOperation ? null : Operand(operation.Instance);
         if (method.MethodKind == MethodKind.DelegateInvoke)
             return invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
-                ? EmitNormalizedInvocation(invocation, method, Operand(operation.Instance!),
+                ? EmitNormalizedInvocation(invocation, method, receiver ?? Operand(operation.Instance!),
                     (target, values) => $"{target}({string.Join(", ", values)})")
-                : $"{Operand(operation.Instance!)}({string.Join(", ", arguments)})";
+                : $"{receiver ?? Operand(operation.Instance!)}({string.Join(", ", invocation.ArgumentList.Arguments.Select(ArgumentValue))})";
         var isBindingIntrinsic = BindingIntrinsicRegistry.TryGet(method, out _);
         if ((invocation.ArgumentList.Arguments.Any(argument => argument.NameColon is not null)
                 || receiver is not null && !method.IsStatic && method.DeclaringSyntaxReferences.Length != 0
@@ -33,7 +43,7 @@ internal sealed partial class JavaScriptEmitter
                 (normalizedReceiver, normalizedArguments) =>
                     InvocationCore(invocation, method, normalizedArguments, member, normalizedReceiver));
         }
-        return InvocationCore(invocation, method, arguments, member, receiver);
+        return InvocationCore(invocation, method, invocation.ArgumentList.Arguments.Select(ArgumentValue).ToArray(), member, receiver);
     }
 
     private static bool IsTrivialArgumentValue(IOperation operation) => operation switch
@@ -71,6 +81,10 @@ internal sealed partial class JavaScriptEmitter
             return MemberInvocation(invocation, member, method, containingType, arguments, receiverOverride);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
             return $"this.{GeneratedInstanceMethodName(method)}({string.Join(", ", arguments)})";
+        if (method is { IsStatic: false } && IsSourceInterface(method.ContainingType))
+            return method.DeclaredAccessibility == Accessibility.Private
+                ? $"{QueueUserMethod(method, invocation)}.call(this{(arguments.Length == 0 ? "" : ", " + string.Join(", ", arguments))})"
+                : $"this.{UserInstanceMethodName(method)}({string.Join(", ", arguments)})";
         if (method is { IsStatic: false } && IsUserInstanceType(method.ContainingType))
         {
             QueueUserType(method.ContainingType, invocation);
@@ -100,7 +114,7 @@ internal sealed partial class JavaScriptEmitter
         foreach (var parameter in method.Parameters.Take(lastOrdinal + 1))
         {
             var values = supplied.Where(argument =>
-                SymbolEqualityComparer.Default.Equals(argument.Parameter, parameter)).Select(argument => argument.Value).ToArray();
+                argument.Parameter.Ordinal == parameter.Ordinal).Select(argument => argument.Value).ToArray();
             if (values.Length != 0)
             {
                 ordered.AddRange(values);
@@ -147,6 +161,9 @@ internal sealed partial class JavaScriptEmitter
     private string ArgumentValue(ArgumentSyntax argument)
     {
         var bound = BoundArgument(argument);
+        if (bound.Parameter?.RefKind == RefKind.Out
+            && bound.Parameter.ContainingSymbol.DeclaringSyntaxReferences.Length != 0)
+            return UserOutReference(bound.Value);
         // Platform adapters deliberately receive expanded params as individual JS arguments.
         return bound.ArgumentKind is ArgumentKind.ParamArray or ArgumentKind.ParamCollection
             ? Expression(argument.Expression) : Expression(bound.Value);

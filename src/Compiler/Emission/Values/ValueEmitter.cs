@@ -53,20 +53,45 @@ internal sealed partial class JavaScriptEmitter
     // A method group converted to a delegate, such as items.Select(Format).
     private string MethodGroup(ExpressionSyntax syntax, IMethodSymbol method, ExpressionSyntax? receiver)
     {
-        method = method.ReducedFrom ?? method;
-        if (method.IsStatic && !method.IsExtensionMethod && method.MethodKind == MethodKind.Ordinary
+        method = _model.GetSymbolInfo(syntax).Symbol as IMethodSymbol ?? method;
+        var reduced = method.ReducedFrom is not null;
+        method = method.GetConstructedReducedFrom() ?? method;
+        if (!method.IsStatic && method.IsGenericMethod && method.DeclaringSyntaxReferences.Length != 0)
+        {
+            var helper = receiver is BaseExpressionSyntax ? QueueUserMethod(method, syntax) : GenericMethodTarget(method);
+            var key = $"generic-group:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
+            var target = _names.Get(key + ":target", "target");
+            return $"(({target}) => {{ if ({target} == null) throw new TypeError(\"Object reference not set to an instance of an object.\"); " +
+                $"return {helper}.bind({target}); }})({(receiver is null ? "this" : Expression(receiver))})";
+        }
+        if (reduced && method.DeclaringSyntaxReferences.Length != 0)
+        {
+            var helper = QueueUserMethod(method, syntax);
+            var key = $"extension-group:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
+            var target = _names.Get(key + ":target", "target");
+            var parameters = method.Parameters.Skip(1).Select((_, index) =>
+                _names.Get($"{key}:{index}", $"arg{index + 1}")).ToArray();
+            return $"(({target}) => ({string.Join(", ", parameters)}) => " +
+                $"{helper}({string.Join(", ", new[] { target }.Concat(parameters))}))" +
+                $"({(receiver is null ? "this" : Expression(receiver))})";
+        }
+        if (method.IsStatic && method.MethodKind == MethodKind.Ordinary
             && method.DeclaringSyntaxReferences is [{ } reference]
             && reference.GetSyntax() is MethodDeclarationSyntax)
             return QueueUserMethod(method, syntax);
         if (!method.IsStatic && method.MethodKind == MethodKind.Ordinary
-            && method.ContainingType is { } type && IsUserInstanceType(type) && RequiresUserClass(type))
+            && method.ContainingType is { } type
+            && (IsSourceInterface(type) || IsUserInstanceType(type) && RequiresUserClass(type)))
         {
-            QueueUserType(type, syntax);
+            if (!IsSourceInterface(type)) QueueUserType(type, syntax);
             var key = $"method-group:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
             var target = _names.Get($"{key}:target", "target");
             var parameters = string.Join(", ", method.Parameters.Select((_, index) => _names.Get($"{key}:{index}", $"arg{index + 1}")));
+            var call = receiver is BaseExpressionSyntax
+                ? $"{QueueUserType(type, syntax)}.prototype.{UserInstanceMethodName(method)}.call({target}{(parameters.Length == 0 ? "" : ", " + parameters)})"
+                : $"{target}.{UserInstanceMethodName(method)}({parameters})";
             return $"(({target}) => {{ if ({target} == null) throw new TypeError(\"Object reference not set to an instance of an object.\"); " +
-                   $"return ({parameters}) => {target}.{UserInstanceMethodName(method)}({parameters}); }})" +
+                   $"return ({parameters}) => {call}; }})" +
                    $"({(receiver is null ? "this" : Expression(receiver))})";
         }
         throw new NotSupportedException(

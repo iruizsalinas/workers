@@ -11,7 +11,9 @@ internal sealed partial class JavaScriptEmitter
 
     private void RegisterJsonValueType(ITypeSymbol type, SyntaxNode source, int mode)
     {
-        type = UnwrapNullable(type);
+        type = UnwrapNullable(ResolveType(type));
+        if (type is INamedTypeSymbol contract && IsSourceInterface(contract) || type.IsAbstract && type.TypeKind == TypeKind.Class && type.DeclaringSyntaxReferences.Length != 0)
+            throw new NotSupportedException($"WRK119: Typed JSON reads need a concrete type, not '{type}'. Deserialize a concrete user type before assigning to its base type or interface.");
         if (JsonElementType(type) is { } element)
         {
             RegisterJsonValueType(element, source, mode);
@@ -25,7 +27,6 @@ internal sealed partial class JavaScriptEmitter
                 throw new NotSupportedException($"WRK119: Typed JSON reads do not support .NET member type '{type}'. Use Workers runtime values.");
             return;
         }
-        user = user.OriginalDefinition;
         if (!_jsonReaders.Add((user, mode))) return;
         if (user.DeclaringSyntaxReferences.SingleOrDefault()?.GetSyntax() is not TypeDeclarationSyntax declaration
             || declaration is not RecordDeclarationSyntax { ParameterList: not null }
@@ -68,6 +69,7 @@ internal sealed partial class JavaScriptEmitter
         while (_pendingJsonReaders.Count != 0)
         {
             var (type, mode) = _pendingJsonReaders.Dequeue();
+            using var specialization = SpecializationScope(type);
             var declaration = (TypeDeclarationSyntax)type.DeclaringSyntaxReferences.Single().GetSyntax();
             _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
             var parameters = declaration is RecordDeclarationSyntax { ParameterList: { } list }
@@ -75,9 +77,12 @@ internal sealed partial class JavaScriptEmitter
             _output.Append(_userTypes[type]).Append('.').Append(JsonReaderName(mode)).AppendLine(" = function (source) {");
             _output.AppendLine("  if (source == null) return source;");
             var arguments = parameters.Select(parameter =>
-                JsonPropertyRead(type.GetMembers(parameter.Identifier.ValueText).OfType<IPropertySymbol>().Single(), parameter, mode));
-            _output.Append("  const result = new ").Append(_userTypes[type]).Append('(')
-                .Append(string.Join(", ", arguments)).AppendLine(");");
+                JsonPropertyRead(UserTypeProperties(type).First(property => property.Name == parameter.Identifier.ValueText), parameter, mode));
+            var constructor = type.InstanceConstructors.First(candidate => parameters.Length == 0
+                ? candidate.Parameters.Length == 0
+                : candidate.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is RecordDeclarationSyntax));
+            _output.Append("  const result = ")
+                .Append(UserConstruction(type, constructor, _userTypes[type], arguments.ToArray())).AppendLine(";");
             foreach (var property in JsonContractProperties(type).Where(property =>
                 property.SetMethod?.DeclaredAccessibility == Accessibility.Public
                 && !parameters.Any(parameter => parameter.Identifier.ValueText == property.Name)))
@@ -110,7 +115,7 @@ internal sealed partial class JavaScriptEmitter
     // 0 or 1. Query strings carry text, and a repeated name keeps every value.
     private string JsonValueExpression(ITypeSymbol type, string value, int mode)
     {
-        type = UnwrapNullable(type);
+        type = UnwrapNullable(ResolveType(type));
         // SQLite blobs arrive as an ArrayBuffer (Durable Objects) or an array of numbers (D1).
         if (mode == JsonRowMode && type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
             return $"(value => value == null ? value : new Uint8Array(value))({value})";
@@ -130,8 +135,8 @@ internal sealed partial class JavaScriptEmitter
             return $"(values => values == null ? values : {expression})({value})";
         }
         if (mode == JsonQueryMode) value = $"(Array.isArray({value}) ? {value}[0] : {value})";
-        if (type is INamedTypeSymbol user && _jsonReaders.Contains((user.OriginalDefinition, mode)))
-            return $"{_userTypes[user.OriginalDefinition]}.{JsonReaderName(mode)}({value})";
+        if (type is INamedTypeSymbol user && _jsonReaders.Contains((user, mode)))
+            return $"{_userTypes[user]}.{JsonReaderName(mode)}({value})";
         if (type is INamedTypeSymbol { Name: "Date", ContainingNamespace.Name: "Workers" })
             return $"(value => value == null ? value : new Date(value))({value})";
         if (mode == JsonQueryMode && type.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Double)
@@ -151,7 +156,15 @@ internal sealed partial class JavaScriptEmitter
     }
 
     private static List<IPropertySymbol> JsonContractProperties(INamedTypeSymbol type) =>
-        type.GetMembers().OfType<IPropertySymbol>().Where(IsJsonContractProperty).ToList();
+        UserTypeProperties(type).Where(IsJsonContractProperty).ToList();
+
+    private static IEnumerable<IPropertySymbol> UserTypeProperties(INamedTypeSymbol type)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = type; current is not null && IsUserInstanceType(current); current = current.BaseType)
+            foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
+                if (seen.Add(property.Name)) yield return property;
+    }
 
     private static bool IsJsonContractProperty(IPropertySymbol property) =>
         property.DeclaredAccessibility == Accessibility.Public && !property.IsStatic && property.GetMethod is not null

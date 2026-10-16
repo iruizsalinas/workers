@@ -11,13 +11,15 @@ internal sealed partial class JavaScriptEmitter
     {
         var cast = conversion.Syntax;
         var operand = conversion.Operand;
-        var target = conversion.Type ?? throw Unsupported("WRK101", cast);
+        var target = ResolveType(conversion.Type ?? throw Unsupported("WRK101", cast));
         var nativeUnion = NativeUnionTypes.Contains(conversion.OperatorMethod?.ContainingType.ToDisplayString() ?? "");
         if (conversion.OperatorMethod is not null && !IsByteViewConversion(conversion) && !nativeUnion)
             throw UnsupportedSymbol(conversion.OperatorMethod, cast);
         var value = Expression(operand);
         var source = operand.Type;
         if (source is null) return value;
+        source = ResolveType(source);
+        if (SymbolEqualityComparer.Default.Equals(source, target)) return value;
         if (IsByteViewConversion(conversion) || nativeUnion) return value;
         if (conversion.Conversion.IsIdentity || source.IsValueType && target.SpecialType == SpecialType.System_Object
             || conversion.Conversion.IsImplicit && conversion.Conversion.IsReference
@@ -26,6 +28,13 @@ internal sealed partial class JavaScriptEmitter
 
         if (conversion.ConstantValue is { HasValue: true } constant && constant.Value is not decimal)
             return LiteralConstant(constant.Value, cast);
+        if (target is INamedTypeSymbol userTarget && (IsSourceInterface(userTarget) || IsUserInstanceType(userTarget)))
+        {
+            var parameterName = _names.Get($"reference-cast:{cast.SyntaxTree.FilePath}:{cast.SpanStart}", "value");
+            var test = TypePatternTest(target, parameterName, null, cast);
+            var failure = conversion.IsTryCast ? "return null;" : "throw new TypeError(\"Specified cast is not valid.\");";
+            return $"(({parameterName}) => {{ if ({parameterName} == null || {test}) return {parameterName}; {failure} }})({value})";
+        }
         var targetValue = UnwrapNullable(target);
         if (conversion.IsImplicit && operand.ConstantValue is { HasValue: true } supplied
             && supplied.Value is byte or sbyte or short or ushort or int or uint or long or ulong or double
@@ -72,6 +81,8 @@ internal sealed partial class JavaScriptEmitter
 
     private string ConvertValue(ITypeSymbol source, ITypeSymbol target, string value, SyntaxNode node)
     {
+        source = ResolveType(source);
+        target = ResolveType(target);
         if (SymbolEqualityComparer.Default.Equals(source, target)) return value;
         var from = NumericKind(source);
         var to = NumericKind(target);

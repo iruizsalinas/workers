@@ -27,9 +27,9 @@ internal sealed partial class JavaScriptEmitter
     };
 
     private static bool IsStaticStateContainer(INamedTypeSymbol type) =>
-        type.TypeKind == TypeKind.Class && type.Arity == 0 && type.ContainingType is null
+        type.TypeKind == TypeKind.Class
         && type.DeclaringSyntaxReferences is [{ } reference]
-        && reference.GetSyntax() is ClassDeclarationSyntax
+        && reference.GetSyntax() is TypeDeclarationSyntax
         && !IsGeneratedInstanceType(type);
 
     private string StaticMemberAccess(ISymbol member, SyntaxNode source)
@@ -66,7 +66,7 @@ internal sealed partial class JavaScriptEmitter
 
     private string StaticHolder(INamedTypeSymbol type)
     {
-        type = type.OriginalDefinition;
+        type = (INamedTypeSymbol)ResolveType(type);
         if (_staticHolders.TryGetValue(type, out var existing))
             return existing;
         var name = _names.Get($"static-holder:{type.ToDisplayString()}", $"statics${type.Name}");
@@ -77,7 +77,8 @@ internal sealed partial class JavaScriptEmitter
 
     private string StaticGetter(IPropertySymbol property)
     {
-        property = property.OriginalDefinition;
+        var owner = (INamedTypeSymbol)ResolveType(property.ContainingType);
+        property = owner.GetMembers(property.Name).OfType<IPropertySymbol>().Single();
         if (_staticGetters.TryGetValue(property, out var existing))
             return existing;
         var name = _names.Get($"static-getter:{property.ToDisplayString()}", $"cs${property.ContainingType.Name}$get_{property.Name}");
@@ -102,7 +103,8 @@ internal sealed partial class JavaScriptEmitter
 
     private void EmitStaticHolder(INamedTypeSymbol type)
     {
-        var declaration = (ClassDeclarationSyntax)type.DeclaringSyntaxReferences[0].GetSyntax();
+        using var specialization = SpecializationScope(type);
+        var declaration = (TypeDeclarationSyntax)type.DeclaringSyntaxReferences[0].GetSyntax();
         _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
         var function = _staticHolders[type];
         var storage = _names.Get($"static-storage:{type.ToDisplayString()}", $"static${type.Name}");
@@ -160,6 +162,7 @@ internal sealed partial class JavaScriptEmitter
 
     private void EmitStaticGetter(IPropertySymbol property)
     {
+        using var specialization = SpecializationScope(property.ContainingType);
         var declaration = (PropertyDeclarationSyntax)property.DeclaringSyntaxReferences[0].GetSyntax();
         _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
         if (declaration.AccessorList?.Accessors.Any(accessor => !accessor.IsKind(SyntaxKind.GetAccessorDeclaration)) == true)
@@ -169,10 +172,13 @@ internal sealed partial class JavaScriptEmitter
         EmitExplicitStaticInitialization(property.ContainingType, 1);
         var getter = declaration.AccessorList?.Accessors.Single();
         var expression = declaration.ExpressionBody?.Expression ?? getter?.ExpressionBody?.Expression;
-        if (expression is not null)
-            _output.Append("  return ").Append(Expression(expression)).AppendLine(";");
-        else
-            EmitStatements(getter?.Body?.Statements ?? [], 1);
+        EmitWithExpressionScope(1, () =>
+        {
+            if (expression is not null)
+                _output.Append("  return ").Append(Expression(expression)).AppendLine(";");
+            else
+                EmitStatements(getter?.Body?.Statements ?? [], 1);
+        });
         _output.AppendLine("}").AppendLine();
     }
 

@@ -20,6 +20,17 @@ internal sealed partial class JavaScriptEmitter
         if (IsUserStaticState(symbol))
             return StaticMemberAccess(symbol!, member);
         var property = symbol as IPropertySymbol;
+        if (property is not null && member is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
+            && (property.IsVirtual || property.IsOverride || property.DeclaringSyntaxReferences.Any(reference =>
+                reference.GetSyntax() is PropertyDeclarationSyntax declaration && !IsAutoProperty(declaration))))
+            return BasePropertyGet(property, member);
+        if (IsSourceInterface(symbol.ContainingType))
+        {
+            if (property is { IsStatic: false, DeclaredAccessibility: Accessibility.Private })
+                return $"{StaticGetter(property)}.call({Receiver()})";
+            if (!symbol.IsStatic) return UserMemberAccess(Receiver(), symbol);
+            if (property is not null) throw UnsupportedSymbol(property, member);
+        }
         if (property is not null && NativeMember(instance, property) is { } native) return native;
         if (property?.ContainingType.ToDisplayString() == "Workers.CacheStorage" && property.Name == "Default")
             return "caches.default";

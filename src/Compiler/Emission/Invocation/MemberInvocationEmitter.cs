@@ -13,14 +13,15 @@ internal sealed partial class JavaScriptEmitter
     {
         var name = method?.Name ?? throw Unsupported("WRK105", invocation);
         var receiver = receiverOverride ?? (method?.IsStatic == true ? "" : member is null ? "this" : Expression(member.Expression));
-        if (IsSynthesizedRecordToString(method))
-            return RecordText(method!.ContainingType, receiver, invocation);
-        if (IsSynthesizedRecordMember(method))
-            return method is { Name: "Equals", Parameters: [{ } other] }
-                   && SymbolEqualityComparer.Default.Equals(other.Type.OriginalDefinition, method.ContainingType.OriginalDefinition)
-                ? $"(($workers$receiver, $workers$other) => {{ if ($workers$receiver == null) throw new TypeError(\"Object reference not set to an instance of an object.\"); " +
-                    $"return {RecordEquals(method.ContainingType, "$workers$receiver", "$workers$other", invocation)}; }})({receiver}, {arguments[0]})"
-                : throw UnsupportedSymbol(method, invocation);
+        if (TryEmitRecordInvocation(invocation, method, receiver, arguments, member?.Expression is BaseExpressionSyntax, out var record))
+            return record;
+        if (method is not null && member?.Expression is BaseExpressionSyntax && IsUserInstanceType(method.ContainingType))
+            return $"{QueueUserType(method.ContainingType, invocation)}.prototype.{UserInstanceMethodName(method)}.call(this{(arguments.Length == 0 ? "" : ", " + string.Join(", ", arguments))})";
+        if (method is not null && IsSourceInterface(method.ContainingType))
+            return method.IsStatic ? EmitUserInvocation(method, invocation, arguments)
+                : method.DeclaredAccessibility == Accessibility.Private
+                    ? $"{QueueUserMethod(method, invocation)}.call({receiver}{(arguments.Length == 0 ? "" : ", " + string.Join(", ", arguments))})"
+                : $"{receiver}.{UserInstanceMethodName(method)}({string.Join(", ", arguments)})";
         if (TryEmitFoundationInvocation(invocation, method, receiver, name, arguments, out var framework)) return framework;
         if (type == "Workers.Env" && EnvironmentBindings.Contains(name)) return $"{receiver}[{arguments[0]}]";
         // A string variable is read as configured; typed variables are JSON values mapped to C# types.

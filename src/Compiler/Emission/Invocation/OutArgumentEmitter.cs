@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.Operations;
 // statement, matching C# scoping, which places them in the enclosing block.
 internal sealed partial class JavaScriptEmitter
 {
-    private readonly HashSet<ISymbol> _declaredOutVariables = new(SymbolEqualityComparer.Default);
+    private HashSet<ISymbol> _declaredOutVariables = new(SymbolEqualityComparer.Default);
 
     private void EmitOutVariableDeclarations(StatementSyntax statement, string indent)
     {
@@ -78,8 +78,7 @@ internal sealed partial class JavaScriptEmitter
         if (output is IDeclarationExpressionOperation declaration)
         {
             output = declaration.Expression;
-            if (output is ILocalReferenceOperation local && !_declaredOutVariables.Contains(local.Local))
-                throw Unsupported("WRK108", declaration.Syntax);
+            if (output is ILocalReferenceOperation local) DeclareExpressionOutLocal(local);
         }
         string? outputReceiver = null;
         string? outputValue = null;
@@ -115,5 +114,13 @@ internal sealed partial class JavaScriptEmitter
         // Evaluate inputs outside TryCall, so exceptions from evaluating arguments propagate.
         result = $"(({string.Join(", ", parameters)}) => {body})({string.Join(", ", values)})";
         return true;
+    }
+
+    private void DeclareExpressionOutLocal(ILocalReferenceOperation local)
+    {
+        if (_declaredOutVariables.Contains(local.Local)) return;
+        if (!_expressionTemporaryScopes.TryPeek(out var temporaries)) throw Unsupported("WRK108", local.Syntax);
+        _declaredOutVariables.Add(local.Local);
+        temporaries.Add(UserIdentifier(local.Local, local.Local.Name));
     }
 }

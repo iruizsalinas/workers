@@ -9,7 +9,7 @@ internal sealed partial class JavaScriptEmitter
     {
         while (_pendingUserMethods.Count != 0 || _pendingUserTypes.Count != 0
                || _pendingStaticHolders.Count != 0 || _pendingStaticGetters.Count != 0
-               || _pendingRecordTextFunctions.Count != 0
+               || _pendingRecordTextFunctions.Count != 0 || _pendingRecordPrintFunctions.Count != 0
                || _pendingRecordEqualityFunctions.Count != 0 || _pendingEnumTextFunctions.Count != 0)
         {
             EmitPendingEnumTextFunctions();
@@ -28,6 +28,13 @@ internal sealed partial class JavaScriptEmitter
 
     private void EmitUserType(INamedTypeSymbol type)
     {
+        using var specialization = SpecializationScope(type);
+        string? parentName = null;
+        if (type.BaseType is { } parent && IsUserInstanceType(parent))
+        {
+            parentName = QueueUserType(parent, type.DeclaringSyntaxReferences[0].GetSyntax());
+            if (_emittedUserTypes.Add(parent)) EmitUserType(parent);
+        }
         if (type.DeclaringSyntaxReferences.Length != 1
             || type.DeclaringSyntaxReferences[0].GetSyntax() is not TypeDeclarationSyntax declaration)
             throw new NotSupportedException($"WRK119: User type '{type}' must have one class or record declaration.");
@@ -36,16 +43,25 @@ internal sealed partial class JavaScriptEmitter
         ValidateUserType(type, declaration);
 
         _output.Append("class ").Append(_userTypes[type])
-            .Append(IsUserException(type) ? " extends Error" : "").AppendLine(" {");
+            .Append(parentName is not null ? " extends " + parentName : IsUserException(type) ? " extends Error" : "").AppendLine(" {");
+        if (IsException(type))
+            _output.Append("  get ").Append(ExceptionTypeNameSlot).Append("() { return ")
+                .Append(JsonSerializer.Serialize(type.ToDisplayString())).AppendLine("; }");
         EmitUserConstructor(type, declaration);
         EmitUserRecordCopyConstructor(type, declaration);
         foreach (var property in declaration.Members.OfType<PropertyDeclarationSyntax>().Where(property =>
-                     !IsAutoProperty(property)))
-            EmitComputedProperty(property);
+                     !property.Modifiers.Any(SyntaxKind.StaticKeyword) && !property.Modifiers.Any(SyntaxKind.AbstractKeyword)))
+        {
+            if (!IsAutoProperty(property)) EmitComputedProperty(property);
+            else if (_model.GetDeclaredSymbol(property) is IPropertySymbol { IsVirtual: true } or IPropertySymbol { IsOverride: true })
+                EmitVirtualAutoProperty(property);
+        }
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>().Where(method =>
-                     _model.GetDeclaredSymbol(method)?.IsStatic == false))
+                     _model.GetDeclaredSymbol(method) is IMethodSymbol { IsStatic: false, IsGenericMethod: false, IsAbstract: false }))
             EmitUserInstanceMethod(method);
         EmitUserJsonProjection(type, declaration);
+        EmitUserInterfaceMembers(type, declaration);
+        EmitRecordHierarchyMembers(type, declaration);
         _output.AppendLine("}").AppendLine();
     }
 
@@ -70,128 +86,6 @@ internal sealed partial class JavaScriptEmitter
         _output.AppendLine("  }");
     }
 
-    private void EmitUserConstructor(INamedTypeSymbol type, TypeDeclarationSyntax declaration)
-    {
-        var constructor = declaration.Members.OfType<ConstructorDeclarationSyntax>()
-            .SingleOrDefault(candidate => !IsUserRecordCopyConstructor((IMethodSymbol)_model.GetDeclaredSymbol(candidate)!));
-        var record = declaration as RecordDeclarationSyntax;
-        var parameters = constructor?.ParameterList.Parameters ?? record?.ParameterList?.Parameters ?? default;
-        _output.Append("  constructor(")
-            .Append(parameters.Count == 0 ? "" : string.Join(", ", parameters.Select(ParameterDeclaration)))
-            .AppendLine(") {");
-        if (IsUserException(type))
-            EmitExceptionBaseCall(type, constructor);
-
-        if (record?.ParameterList is not null)
-            foreach (var parameter in record.ParameterList.Parameters)
-            {
-                var parameterSymbol = (IParameterSymbol)_model.GetDeclaredSymbol(parameter)!;
-                var property = type.GetMembers(parameterSymbol.Name).OfType<IPropertySymbol>().Single();
-                _output.Append("    ").Append(UserMemberAccess("this", property)).Append(" = ")
-                    .Append(ParameterName(parameter)).AppendLine(";");
-            }
-
-        foreach (var member in declaration.Members)
-        {
-            if (member is FieldDeclarationSyntax field)
-                foreach (var variable in field.Declaration.Variables)
-                {
-                    var symbol = (IFieldSymbol)_model.GetDeclaredSymbol(variable)!;
-                    if (symbol.IsStatic) continue;
-                    _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
-                        .Append(variable.Initializer is null
-                            ? DefaultFieldValue(symbol.Type, variable)
-                            : Expression(variable.Initializer.Value)).AppendLine(";");
-                }
-            else if (member is PropertyDeclarationSyntax property && IsAutoProperty(property))
-            {
-                var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
-                if (symbol.IsStatic) continue;
-                _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
-                    .Append(property.Initializer is null
-                        ? DefaultFieldValue(symbol.Type, property)
-                        : Expression(property.Initializer.Value)).AppendLine(";");
-            }
-        }
-
-        if (constructor?.ExpressionBody is not null)
-            _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
-        else
-            EmitStatements(constructor?.Body?.Statements ?? [], 2);
-        _output.AppendLine("  }");
-    }
-
-    private static bool IsUserRecordCopyConstructor(IMethodSymbol constructor) =>
-        constructor.ContainingType.IsRecord && constructor.Parameters is [{ } parameter]
-        && SymbolEqualityComparer.Default.Equals(parameter.Type, constructor.ContainingType);
-
-    private void EmitUserRecordCopyConstructor(INamedTypeSymbol type, TypeDeclarationSyntax declaration)
-    {
-        var constructor = declaration.Members.OfType<ConstructorDeclarationSyntax>()
-            .SingleOrDefault(candidate => IsUserRecordCopyConstructor((IMethodSymbol)_model.GetDeclaredSymbol(candidate)!));
-        if (constructor is null) return;
-        _output.AppendLine("  static $copy(source) {");
-        _output.AppendLine("    if (source == null) throw new TypeError(\"Cannot copy a null record.\");");
-        _output.Append("    const result = Object.create(").Append(_userTypes[type]).AppendLine(".prototype);");
-        _output.AppendLine("    result.$copyFrom(source);");
-        _output.AppendLine("    return result;");
-        _output.AppendLine("  }");
-        _output.Append("  $copyFrom(").Append(string.Join(", ", constructor.ParameterList.Parameters.Select(ParameterDeclaration)))
-            .AppendLine(") {");
-        // A custom C# copy constructor starts with zero-initialized fields. Member initializers
-        // belong to ordinary construction and do not run during record copying.
-        foreach (var field in declaration.Members.OfType<FieldDeclarationSyntax>())
-            foreach (var variable in field.Declaration.Variables)
-            {
-                var symbol = (IFieldSymbol)_model.GetDeclaredSymbol(variable)!;
-                if (!symbol.IsStatic)
-                    _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
-                        .Append(DefaultFieldValue(symbol.Type, variable)).AppendLine(";");
-            }
-        if (declaration is RecordDeclarationSyntax { ParameterList: { } parameters })
-            foreach (var parameter in parameters.Parameters)
-            {
-                var property = type.GetMembers(parameter.Identifier.ValueText).OfType<IPropertySymbol>().Single();
-                _output.Append("    ").Append(UserMemberAccess("this", property)).Append(" = ")
-                    .Append(DefaultFieldValue(property.Type, parameter)).AppendLine(";");
-            }
-        foreach (var property in declaration.Members.OfType<PropertyDeclarationSyntax>().Where(IsAutoProperty))
-        {
-            var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
-            _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
-                .Append(DefaultFieldValue(symbol.Type, property)).AppendLine(";");
-        }
-        if (constructor.ExpressionBody is not null)
-            _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
-        else
-            EmitStatements(constructor.Body?.Statements ?? [], 2);
-        _output.AppendLine("  }");
-    }
-
-    private void EmitExceptionBaseCall(INamedTypeSymbol type, ConstructorDeclarationSyntax? constructor)
-    {
-        var fallback = JsonSerializer.Serialize($"Exception of type '{type.ToDisplayString()}' was thrown.");
-        var initializer = constructor?.Initializer;
-        var message = fallback;
-        string? inner = null;
-        if (initializer is not null
-            && _model.GetSymbolInfo(initializer).Symbol is IMethodSymbol baseConstructor)
-            for (var index = 0; index < initializer.ArgumentList.Arguments.Count; index++)
-            {
-                var argument = initializer.ArgumentList.Arguments[index];
-                var parameter = BoundParameter(argument);
-                if (parameter.Name == "message")
-                    message = $"({Expression(argument.Expression)}) ?? {fallback}";
-                else if (parameter.Name == "innerException")
-                    inner = Expression(argument.Expression);
-                else
-                    throw UnsupportedSymbol(baseConstructor, initializer);
-            }
-        _output.Append("    super(").Append(message)
-            .Append(inner is null ? "" : $", {{ cause: {inner} }}").AppendLine(");");
-        _output.Append("    this.name = ").Append(JsonSerializer.Serialize(type.Name)).AppendLine(";");
-    }
-
     private void EmitComputedProperty(PropertyDeclarationSyntax property)
     {
         var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
@@ -200,17 +94,21 @@ internal sealed partial class JavaScriptEmitter
                 ? name
                 : $"[{JsonSerializer.Serialize(name)}]")
             .AppendLine("() {");
-        if (property.ExpressionBody is not null)
-            _output.Append("    return ").Append(Expression(property.ExpressionBody.Expression)).AppendLine(";");
-        else
+        EmitWithExpressionScope(2, () =>
         {
-            var getter = property.AccessorList!.Accessors.Single(accessor => accessor.IsKind(SyntaxKind.GetAccessorDeclaration));
-            if (getter.ExpressionBody is not null)
-                _output.Append("    return ").Append(Expression(getter.ExpressionBody.Expression)).AppendLine(";");
+            if (property.ExpressionBody is not null)
+                _output.Append("    return ").Append(Expression(property.ExpressionBody.Expression)).AppendLine(";");
             else
-                EmitStatements(getter.Body?.Statements ?? [], 2);
-        }
+            {
+                var getter = property.AccessorList!.Accessors.Single(accessor => accessor.IsKind(SyntaxKind.GetAccessorDeclaration));
+                if (getter.ExpressionBody is not null)
+                    _output.Append("    return ").Append(Expression(getter.ExpressionBody.Expression)).AppendLine(";");
+                else
+                    EmitStatements(getter.Body?.Statements ?? [], 2);
+            }
+        });
         _output.AppendLine("  }");
+        EmitInheritedPropertyAccessors(symbol, property);
     }
 
     private void EmitUserInstanceMethod(MethodDeclarationSyntax method)

@@ -8,10 +8,11 @@ internal sealed partial class JavaScriptEmitter
     private string ObjectCreation(IObjectCreationOperation operation)
     {
         var value = (BaseObjectCreationExpressionSyntax)operation.Syntax;
-        var constructor = operation.Constructor;
+        var constructor = operation.Constructor is { } boundConstructor ? ResolveMethod(boundConstructor) : null;
         var type = constructor?.ContainingType;
         var arguments = value.ArgumentList?.Arguments.ToArray() ?? [];
         var typeName = type?.ToDisplayString();
+        if (type?.SpecialType == SpecialType.System_Object && arguments.Length == 0) return "{}";
         if (typeName is "Workers.Date" or "Workers.RegExp" or "Workers.AbortController" or "Workers.FormData"
             or "Workers.TextEncoder" or "Workers.WebSocketPair" or "Workers.WebSocketRequestResponsePair"
             or "Workers.TransformStream" or "Workers.IdentityTransformStream" or "Workers.FixedLengthStream"

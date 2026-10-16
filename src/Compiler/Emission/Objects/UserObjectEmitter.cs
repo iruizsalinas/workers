@@ -11,7 +11,7 @@ internal sealed partial class JavaScriptEmitter
     {
         var typeName = QueueUserType(type, source);
         var creation = PositionalObjectCreation(source, constructor, arguments,
-            values => $"new {typeName}({string.Join(", ", values)})");
+            values => UserConstruction(type, constructor!, typeName, values));
         if (source.Initializer is null || source.Initializer.Expressions.Count == 0)
             return creation;
 
