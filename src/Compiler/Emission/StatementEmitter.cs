@@ -48,6 +48,11 @@ internal sealed partial class JavaScriptEmitter
                 _output.AppendLine();
                 break;
             case IForEachLoopOperation loop:
+                var info = _model.GetForEachStatementInfo((CommonForEachStatementSyntax)loop.Syntax);
+                if (info.GetEnumeratorMethod is { DeclaringSyntaxReferences.Length: > 0 })
+                    throw new NotSupportedException(
+                        "WRK108: Source-defined foreach enumeration protocols are outside the Workers profile; " +
+                        "use iterator methods returning IEnumerable<T> or IAsyncEnumerable<T> instead.");
                 var collection = loop.Collection;
                 while (collection is IConversionOperation { IsImplicit: true } conversion) collection = conversion.Operand;
                 var enumerable = Expression(collection);
@@ -59,7 +64,6 @@ internal sealed partial class JavaScriptEmitter
                 var local = UserIdentifier(loop.Locals[0], loop.Locals[0].Name);
                 var item = local;
                 string? converted = null;
-                var info = _model.GetForEachStatementInfo((CommonForEachStatementSyntax)loop.Syntax);
                 if (!info.ElementConversion.IsIdentity
                     && !(info.ElementConversion.IsImplicit && info.ElementConversion.IsReference)
                     && loop.Locals[0].Type.SpecialType != SpecialType.System_Object)

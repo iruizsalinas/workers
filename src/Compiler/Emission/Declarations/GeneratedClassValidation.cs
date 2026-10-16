@@ -34,6 +34,7 @@ internal sealed partial class JavaScriptEmitter
     private static void ValidateGeneratedClass(ClassDeclarationSyntax declaration, SemanticModel model, string typeName)
     {
         var type = model.GetDeclaredSymbol(declaration)!;
+        ValidateUserEnumerationProtocol(type);
         var expectedBase = type.BaseType?.ToDisplayString() is "Workers.DurableObject" or "Workers.WorkerEntrypoint"
             ? type.BaseType.ToDisplayString()
             : SupportedHtmlHandlerBase(type);

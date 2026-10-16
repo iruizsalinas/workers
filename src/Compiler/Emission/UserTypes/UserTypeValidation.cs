@@ -14,6 +14,7 @@ internal sealed partial class JavaScriptEmitter
                 $"WRK119: User type '{type}' must be a class or record with a supported source-defined base type. " +
                 "Exception types may derive from System.Exception.");
         ValidateJsonAttributes(type);
+        ValidateUserEnumerationProtocol(type);
         if (declaration is ClassDeclarationSyntax { ParameterList: not null })
             throw new NotSupportedException($"WRK119: Primary class constructors are outside the Workers profile; use an explicit constructor on '{type}'.");
         if (declaration is RecordDeclarationSyntax { ParameterList: { } recordParameters }
@@ -40,6 +41,17 @@ internal sealed partial class JavaScriptEmitter
         });
         if (unsupported is not null)
             throw new NotSupportedException($"WRK119: User type '{type}' contains an unsupported member: {unsupported}");
+    }
+
+    private static void ValidateUserEnumerationProtocol(INamedTypeSymbol type)
+    {
+        if (type.AllInterfaces.Any(contract => contract.OriginalDefinition.ToDisplayString() is
+                "System.Collections.IEnumerable" or "System.Collections.Generic.IEnumerable<T>"
+                or "System.Collections.Generic.IAsyncEnumerable<T>"))
+            throw new NotSupportedException(
+                $"WRK119: User type '{type}' implements an unsupported enumeration protocol. " +
+                "Source-defined IEnumerable and IAsyncEnumerable implementations are outside the Workers profile; " +
+                "use iterator methods returning IEnumerable<T> or IAsyncEnumerable<T> instead.");
     }
 
     private static bool IsUserException(INamedTypeSymbol type) =>
