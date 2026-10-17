@@ -3,6 +3,16 @@ import { describe, expect, it } from "vitest";
 import { env } from "../support.js";
 
 describe("Durable Object bindings", () => {
+  it("stores numeric dictionaries as native data rather than helper methods", async () => {
+    const stub = env.ECHO.getByName(`stored-collections-${crypto.randomUUID()}`);
+    await expect(stub.storedCollections()).resolves.toBe(true);
+  });
+
+  it("restores stored class graphs with native cycles intact", async () => {
+    const stub = env.ECHO.getByName(`stored-graph-${crypto.randomUUID()}`);
+    await expect(stub.storedGraph()).resolves.toBe(true);
+  });
+
   it("persists lists without iterator metadata and restores their enumeration checks", async () => {
     const stub = env.ECHO.getByName(`stored-list-${crypto.randomUUID()}`);
     await expect(stub.storedListEnumeration()).resolves.toBe(true);

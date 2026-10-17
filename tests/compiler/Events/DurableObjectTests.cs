@@ -53,7 +53,8 @@ public sealed class DurableObjectTests
             """);
 
         Assert.Contains("import { DurableObject as $workers$DurableObject } from \"cloudflare:workers\";", module);
-        Assert.Contains("export class Counter extends $workers$DurableObject {", module);
+        Assert.Contains("class $workers$Counter extends $workers$DurableObject {", module);
+        Assert.Contains("export { $workers$Counter as Counter };", module);
         Assert.DoesNotContain("constructor(", module);
         Assert.Contains("fetch(request)", module);
         Assert.Contains("add(left, right)", module);

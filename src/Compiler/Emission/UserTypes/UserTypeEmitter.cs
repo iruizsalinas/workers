@@ -15,8 +15,11 @@ internal sealed partial class JavaScriptEmitter
     {
         if (!type.IsRecord) return true;
         if (type.IsGenericType || UsesUserHierarchy(type) || type.AllInterfaces.Any(IsSourceInterface)) return true;
+        if (type.GetMembers().OfType<IPropertySymbol>().Where(property => !property.IsStatic)
+            .GroupBy(property => LowerFirst(property.Name), StringComparer.Ordinal).Any(group => group.Skip(1).Any()))
+            return true;
         if (type.GetMembers().OfType<IPropertySymbol>().Any(property =>
-                LowerFirst(property.Name) is "__proto__" or "constructor"
+                LowerFirst(property.Name) is "__proto__" or "constructor" or "toJSON"
                 || HasAttribute(property, "Workers.JsonIgnoreAttribute")
                 || HasAttribute(property, "Workers.JsonNameAttribute")))
             return true;

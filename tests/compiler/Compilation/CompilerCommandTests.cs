@@ -29,7 +29,7 @@ public sealed class CompilerCommandTests
             using var error = new StringWriter();
             var output = Path.Combine(root.FullName, "worker.js");
             var code = global::CompilerCommand.Run([
-                "--project", root.FullName, "--output", output, "--compiler-arguments", arguments
+                "--project", root.FullName, "--output", output, "--rsp", arguments
             ], error: error);
             Assert.Equal(expectedCode, code);
             if (expectedCode == 1)
@@ -83,7 +83,7 @@ public sealed class CompilerCommandTests
             using var error = new StringWriter();
             var output = Path.Combine(root.FullName, "worker.js");
             var code = global::CompilerCommand.Run([
-                "--project", root.FullName, "--output", output, "--compiler-arguments", arguments
+                "--project", root.FullName, "--output", output, "--rsp", arguments
             ], error: error);
             Assert.Equal(expectedCode, code);
             if (expectedCode == 0)
@@ -112,9 +112,7 @@ public sealed class CompilerCommandTests
         Assert.Contains("Usage:", output.ToString());
         Assert.Contains("--project <path>", output.ToString());
         Assert.Contains("--output <path>", output.ToString());
-        Assert.Contains("--sources <path>", output.ToString());
-        Assert.Contains("--reference <path>", output.ToString());
-        Assert.Contains("--define <symbols>", output.ToString());
+        Assert.Contains("--rsp <path>", output.ToString());
         Assert.Contains("--version", output.ToString());
         Assert.DoesNotContain("  -o", output.ToString());
     }
@@ -140,7 +138,7 @@ public sealed class CompilerCommandTests
     [InlineData("--unknown", "value", "Unknown option '--unknown'.")]
     [InlineData("--project", "Missing value for --project.")]
     [InlineData("--project", "first", "--project", "second", "Option '--project' was specified more than once.")]
-    public void InvalidOptionsProduceClearErrors(params string[] values)
+    [InlineData("--project", "project", "--output", "worker.js", "Missing --rsp.")]    public void InvalidOptionsProduceClearErrors(params string[] values)
     {
         var expected = values[^1];
         var arguments = values[..^1];
@@ -166,19 +164,19 @@ public sealed class CompilerCommandTests
     }
 
     [Fact]
-    public void SourceManifestControlsCompilationInputsAndSupportsLinkedFiles()
+    public void ResponseFileControlsCompilationInputsAndSupportsLinkedFiles()
     {
         var root = Path.Combine(Path.GetTempPath(), $"workers-compiler-{Guid.NewGuid():N}");
         var project = Path.Combine(root, "project");
         var linked = Path.Combine(root, "linked");
         var output = Path.Combine(project, "dist", "worker.js");
-        var sources = Path.Combine(project, "obj", "WorkerSources.txt");
+        var arguments = Path.Combine(project, "obj", "compiler.rsp");
 
         try
         {
             Directory.CreateDirectory(project);
             Directory.CreateDirectory(linked);
-            Directory.CreateDirectory(Path.GetDirectoryName(sources)!);
+            Directory.CreateDirectory(Path.GetDirectoryName(arguments)!);
 
             var worker = Path.Combine(linked, "Worker.cs");
             System.IO.File.WriteAllText(worker, """
@@ -192,13 +190,15 @@ public sealed class CompilerCommandTests
                 }
                 """);
             System.IO.File.WriteAllText(Path.Combine(project, "Excluded.cs"), "this is deliberately not valid C#");
-            System.IO.File.WriteAllLines(sources, [worker]);
+            var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+                .Append(typeof(global::Workers.Response).Assembly.Location);
+            System.IO.File.WriteAllLines(arguments, references.Select(path => $"/reference:\"{path}\"")
+                .Prepend($"\"{worker}\"").Prepend("/target:library"));
 
             var exitCode = global::WorkerCompiler.Run(
             [
                 "--project", project,
-                "--sources", sources,
-                "--reference", typeof(global::Workers.Response).Assembly.Location,
+                "--rsp", arguments,
                 "--output", output
             ]);
 

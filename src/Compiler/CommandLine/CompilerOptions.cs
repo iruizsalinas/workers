@@ -1,45 +1,20 @@
-internal sealed record CompilerOptions(
-    string Project,
-    string Output,
-    string? Reference,
-    IReadOnlyList<string> SourcePaths,
-    IReadOnlyList<string> Symbols,
-    string? CompilerArguments)
+internal sealed record CompilerOptions(string Project, string Output, string ResponseFile)
 {
     private static readonly HashSet<string> KnownOptions =
     [
         "--project",
         "--output",
-        "--sources",
-        "--reference",
-        "--define",
-        "--compiler-arguments"
+        "--rsp"
     ];
 
     public static CompilerOptions Parse(string[] args)
     {
         var values = ParseValues(args);
-        var project = RequiredPath(values, "--project");
-        var sourceList = OptionalPath(values, "--sources");
-        var sources = sourceList is null
-            ? Directory.EnumerateFiles(project, "*.cs", SearchOption.AllDirectories)
-                .Where(IsSource)
-            : File.ReadLines(sourceList)
-                .Where(path => !string.IsNullOrWhiteSpace(path))
-                .Select(path => Path.GetFullPath(path, project));
-
         return new(
-            project,
+            RequiredPath(values, "--project"),
             RequiredPath(values, "--output"),
-            OptionalPath(values, "--reference"),
-            sources.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
-            Value(values, "--define").Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-            OptionalPath(values, "--compiler-arguments"));
+            RequiredPath(values, "--rsp"));
     }
-
-    private static bool IsSource(string path) =>
-        !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") &&
-        !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}");
 
     private static IReadOnlyDictionary<string, string> ParseValues(string[] args)
     {
@@ -59,10 +34,4 @@ internal sealed record CompilerOptions(
 
     private static string RequiredPath(IReadOnlyDictionary<string, string> values, string name) =>
         Path.GetFullPath(values.TryGetValue(name, out var value) ? value : throw new ArgumentException($"Missing {name}."));
-
-    private static string? OptionalPath(IReadOnlyDictionary<string, string> values, string name) =>
-        values.TryGetValue(name, out var value) ? Path.GetFullPath(value) : null;
-
-    private static string Value(IReadOnlyDictionary<string, string> values, string name) =>
-        values.TryGetValue(name, out var value) ? value : "";
 }

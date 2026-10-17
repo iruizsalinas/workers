@@ -104,6 +104,7 @@ internal static partial class HelperSource
           for (const item of {{name("linqValues")}}(items)) {
             if (set) result.add(item); else result.add(item[0], item[1]);
           }
+          {{name("keyCollectionKinds")}}.set(result, set);
           return result;
         }
         function {{name("keySetOperation")}}(source, other, operation) {
@@ -118,8 +119,8 @@ internal static partial class HelperSource
           for (const item of subset ? source : other) if (!(subset ? other : source).has(item)) return false;
           return true;
         }
-        function {{name("keyToDictionary")}}(source, keySelector, valueSelector, create) {
-          if (source == null || keySelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("Source and key selector cannot be null.");
+        function {{name("keyToDictionary")}}(source, keySelector, valueSelector, create, hasValueSelector = false) {
+          if (source == null || keySelector == null || hasValueSelector && valueSelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           const result = create();
           for (const item of {{name("linqValues")}}(source)) {
             const key = keySelector(item);

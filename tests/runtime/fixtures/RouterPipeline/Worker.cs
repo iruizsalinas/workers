@@ -90,6 +90,8 @@ public static class Worker
             })
             .Get("/downstream-cors", (request, route) => new Response("ok") { Headers = { ["access-control-allow-origin"] = "*", ["access-control-allow-credentials"] = "true" }})
             .Get("/stream", (request, route) => new Response(ReadableStream.From(Chunks())))
+            .Get("/head-tee", (request, route) => new Response(new Response("hello").Body!.Tee()[0]) { Status = 201 })
+            .Get("/head-cancel-fails", (request, route) => new Response(ReadableStream.From(ChunksWithFailingCleanup())) { Status = 201 })
             .Options("/options", (request, route) => new Response("ordinary options"));
 
         if (path is "/custom" or "/custom-unexpected") router.OnError(FormatError);
@@ -125,6 +127,12 @@ public static class Worker
         yield return new TextEncoder().Encode("one");
         await Scheduler.WaitAsync(1);
         yield return new TextEncoder().Encode("two");
+    }
+
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> ChunksWithFailingCleanup()
+    {
+        try { yield return new byte[] { 1 }; }
+        finally { throw new Exception("cleanup failed"); }
     }
 }
 

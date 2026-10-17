@@ -22,6 +22,8 @@ internal sealed partial class JavaScriptEmitter
             var args = getter ? ordered : [.. ordered, "assigned"];
             if (operation.Syntax is ElementAccessExpressionSyntax { Expression: BaseExpressionSyntax })
                 return $"{QueueUserType(accessor.ContainingType, operation.Syntax)}.prototype.{UserInstanceMethodName(accessor)}.call(receiver{(args.Length == 0 ? "" : ", " + string.Join(", ", args))})";
+            if (IsSourceInterface(accessor.ContainingType))
+                return SourceInterfaceInvocation(accessor, NotNull("receiver"), args, operation.Syntax);
             return $"{NotNull("receiver")}.{UserInstanceMethodName(accessor)}({string.Join(", ", args)})";
         }
         var accessors = new List<string>();

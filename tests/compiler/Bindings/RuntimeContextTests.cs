@@ -32,7 +32,7 @@ public sealed class RuntimeContextTests
             """);
 
         Assert.Contains("let plain = $workers$notNull($workers$notNull(ctx).exports)[\"Greeter\"];", module);
-        Assert.Contains("let scoped = (($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver)[$workers$arg1]({ props: $workers$arg2 }))($workers$notNull(ctx).exports, \"Greeter\", { tenant: \"acme\" });", module);
+        Assert.Contains("let scoped = (($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver)[$workers$arg1]({ props: $workers$rpcValue($workers$arg2) }))($workers$notNull(ctx).exports, \"Greeter\", { tenant: \"acme\" });", module);
         Assert.Contains("let counter = $workers$notNull($workers$notNull($workers$notNull(ctx).exports)[\"Counter\"]).getByName(\"main\");", module);
         Assert.Contains("let flow = $workers$notNull($workers$notNull(ctx).exports)[\"Pipeline\"];", module);
     }

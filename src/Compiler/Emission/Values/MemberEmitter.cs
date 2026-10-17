@@ -15,9 +15,7 @@ internal sealed partial class JavaScriptEmitter
         string Receiver() => receiverOverride ?? (instance is null ? "this" : NeedsNullCheck(instance) ? NotNull(Operand(instance)) : Operand(instance));
         if (symbol.ContainingType.IsAnonymousType)
         {
-            var syntax = symbol.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-            var name = syntax is AnonymousObjectMemberDeclaratorSyntax { NameEquals: null, Expression: MemberAccessExpressionSyntax }
-                ? LowerFirst(symbol.Name) : symbol.Name;
+            var name = AnonymousPropertyName((IPropertySymbol)symbol);
             return IsJavaScriptPropertyIdentifier(name) ? $"{Receiver()}.{name}" : $"{Receiver()}[{JsonSerializer.Serialize(name)}]";
         }
         if (operation is IPropertyReferenceOperation { Property.IsIndexer: true } indexer) return ElementAccess(indexer);
@@ -58,6 +56,9 @@ internal sealed partial class JavaScriptEmitter
         {
             if (property is { IsStatic: false, DeclaredAccessibility: Accessibility.Private })
                 return $"{StaticGetter(property)}.call({Receiver()})";
+            if (property is { IsStatic: false }
+                && RuntimeInterfacePropertyReference(property, Receiver(), member) is { } runtimeProperty)
+                return runtimeProperty;
             if (!symbol.IsStatic) return UserMemberAccess(Receiver(), symbol);
             if (property is not null) throw UnsupportedSymbol(property, member);
         }
@@ -120,7 +121,7 @@ internal sealed partial class JavaScriptEmitter
         if (property is { Name: "Body", ContainingType: { } messageType }
             && messageType.OriginalDefinition.ToDisplayString() == "Workers.Message<T>")
             return JsonBoundaryConverter(messageType.TypeArguments[0], member, JsonWebMode) is { } convertBody
-                ? $"({convertBody})({Receiver()}.body)"
+                ? $"{RequireHelperName(JavaScriptHelper.QueueMessages, "queueBody")}({Receiver()}, {convertBody})"
                 : $"{Receiver()}.body";
         if (property is { Name: "Length" }
             && (instance?.Type?.SpecialType == SpecialType.System_String
@@ -163,15 +164,39 @@ internal sealed partial class JavaScriptEmitter
         if (property is { Name: "Count", ContainingType: { } collection }
             && (collection.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyCollection<T>"
                 || collection.AllInterfaces.Any(item => item.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyCollection<T>")))
-            return $"{Receiver()}.length";
+            return CollectionCount(collection, instance?.Type, Receiver());
         if (symbol?.ContainingType is { } userType && IsUserInstanceType(userType) && RequiresUserClass(userType))
         {
             QueueUserType(userType, member);
             if (symbol is IFieldSymbol or IPropertySymbol)
                 return UserMemberAccess(Receiver(), symbol);
         }
+        if (symbol is IFieldSymbol generatedField && IsGeneratedInstanceType(generatedField.ContainingType))
+            return $"{Receiver()}.{GeneratedFieldName(generatedField)}";
         ThrowIfUnsupportedFoundationMember(symbol, member);
         return $"{Receiver()}.{LowerFirst(symbol!.Name)}";
+    }
+
+    private static string CollectionCount(INamedTypeSymbol collection, ITypeSymbol? instanceType, string receiver) =>
+        collection.TypeKind == TypeKind.Interface && !IsArrayBackedList(instanceType)
+            ? $"(collection => Array.isArray(collection) || collection instanceof Uint8Array ? collection.length : collection instanceof Set || collection instanceof Map ? collection.size : typeof collection[Symbol.iterator] === \"function\" ? collection.length : Object.keys(collection).length)({receiver})"
+            : $"{receiver}.length";
+
+    private readonly Dictionary<(string Type, string Name), string> _anonymousPropertyNames = new();
+
+    private string AnonymousPropertyName(IPropertySymbol property)
+    {
+        // Roslyn can expose different declaration symbols for the same anonymous type.
+        // Use one storage name per shape, including inferred and explicit initializers.
+        var key = (property.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), property.Name);
+        if (_anonymousPropertyNames.TryGetValue(key, out var existing)) return existing;
+        var inferred = property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is
+            AnonymousObjectMemberDeclaratorSyntax { NameEquals: null, Expression: MemberAccessExpressionSyntax };
+        var collision = property.ContainingType.GetMembers().OfType<IPropertySymbol>()
+            .Any(other => other.Name != property.Name && LowerFirst(other.Name) == LowerFirst(property.Name));
+        var name = inferred && !collision ? LowerFirst(property.Name) : property.Name;
+        _anonymousPropertyNames.Add(key, name);
+        return name;
     }
 
 }

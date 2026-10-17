@@ -15,12 +15,14 @@ internal static partial class HelperSource
         JavaScriptHelper.SetState => SetState(name),
         JavaScriptHelper.Delegates => Delegates(name),
         JavaScriptHelper.StructuralKeys => StructuralKeys(name),
+        JavaScriptHelper.KeyCollectionData => $"const {name("keyCollectionKinds")} = new WeakMap();\n",
         JavaScriptHelper.DictionaryIndex => DictionaryIndex(name),
         JavaScriptHelper.IntegerDivide => IntegerDivide(name),
         JavaScriptHelper.IntegerRemainder => IntegerRemainder(name),
         JavaScriptHelper.SetAdd => SetAdd(name),
         JavaScriptHelper.QueueStack => QueueStack(name),
         JavaScriptHelper.RpcArguments => RpcArguments(name),
+        JavaScriptHelper.QueueMessages => QueueMessages(name),
         JavaScriptHelper.JsonExpect => JsonExpect(name),
         JavaScriptHelper.TryCall => TryCall(name),
         JavaScriptHelper.CollectionMembers => CollectionMembers(name),
@@ -66,6 +68,8 @@ internal static partial class HelperSource
         JavaScriptHelper.LinqFirst => LinqFirst(name),
         JavaScriptHelper.LinqLast => LinqLast(name),
         JavaScriptHelper.LinqSingle => LinqSingle(name),
+        JavaScriptHelper.LinqCast => LinqCast(name),
+        JavaScriptHelper.LinqLookup => LinqLookup(name),
         JavaScriptHelper.LinqToArray => LinqToArray(name),
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };

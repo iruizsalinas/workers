@@ -280,7 +280,8 @@ internal sealed partial class JavaScriptEmitter
     private string UserIdentifier(ISymbol symbol, SyntaxToken token) => UserIdentifier(symbol, token.ValueText);
     private string UserIdentifier(ISymbol symbol, string value)
     {
-        if (IsLegalJavascriptIdentifier(value) && !JavascriptReservedWords.Contains(value))
+        if (IsLegalJavascriptIdentifier(value) && !JavascriptReservedWords.Contains(value)
+            && !JavascriptRuntimeGlobals.Contains(value))
             return value;
         if (_userIdentifiers.TryGetValue(symbol, out var existing))
             return existing;
@@ -297,6 +298,25 @@ internal sealed partial class JavaScriptEmitter
         "else", "enum", "export", "extends", "false", "finally", "for", "function", "if", "implements", "import",
         "in", "instanceof", "interface", "let", "new", "null", "package", "private", "protected", "public", "return",
         "static", "super", "switch", "this", "throw", "true", "try", "typeof", "var", "void", "while", "with", "yield"
+    };
+    // Emitted expressions reference these native globals in the user's lexical scope.
+    // Allocate C# bindings with the same names so they cannot capture those references.
+    private static readonly HashSet<string> JavascriptRuntimeGlobals = new(StringComparer.Ordinal)
+    {
+        "globalThis", "undefined", "Infinity", "NaN", "eval", "arguments",
+        "Object", "Function", "Boolean", "Symbol", "Number", "BigInt", "String", "Math", "JSON",
+        "Array", "Map", "Set", "WeakMap", "WeakSet", "Promise", "Date", "RegExp",
+        "Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "AggregateError",
+        "ArrayBuffer", "SharedArrayBuffer", "DataView", "Uint8Array", "Uint8ClampedArray",
+        "Int8Array", "Uint16Array", "Int16Array", "Uint32Array", "Int32Array", "Float32Array", "Float64Array",
+        "BigInt64Array", "BigUint64Array", "URL", "URLSearchParams", "Request", "Response", "Headers",
+        "Blob", "File", "FormData", "TextEncoder", "TextDecoder", "AbortController", "AbortSignal",
+        "ReadableStream", "WritableStream", "TransformStream", "IdentityTransformStream", "FixedLengthStream",
+        "CompressionStream", "DecompressionStream", "HTMLRewriter", "WebSocket", "WebSocketPair",
+        "WebSocketRequestResponsePair", "CryptoKey", "SubtleCrypto", "DOMException",
+        "console", "fetch", "caches", "scheduler", "crypto", "performance", "encodeURIComponent", "decodeURIComponent",
+        "encodeURI", "decodeURI", "parseInt", "parseFloat", "isNaN", "isFinite", "atob", "btoa",
+        "setTimeout", "clearTimeout", "setInterval", "clearInterval", "queueMicrotask", "structuredClone"
     };
     private static string LowerFirst(string value) => value.Length == 0 ? value : char.ToLowerInvariant(value[0]) + value[1..];
     private static string LowerNativeMethodName(string value) => LowerFirst(

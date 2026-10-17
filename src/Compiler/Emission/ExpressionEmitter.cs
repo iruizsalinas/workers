@@ -121,9 +121,7 @@ internal sealed partial class JavaScriptEmitter
         {
             if (initializer is not ISimpleAssignmentOperation { Target: IPropertyReferenceOperation property } assignment)
                 throw Unsupported("WRK101", initializer.Syntax);
-            var name = property.Property.Name;
-            if (initializer.Syntax is AnonymousObjectMemberDeclaratorSyntax { NameEquals: null, Expression: MemberAccessExpressionSyntax })
-                name = LowerFirst(name);
+            var name = AnonymousPropertyName(property.Property);
             printed.Add((property.Property.Name, name, ResolveType(property.Property.Type)));
             return $"{JavaScriptObjectKey(name)}: {ValueExpression(assignment.Value)}";
         }).ToArray();
@@ -326,11 +324,9 @@ internal sealed partial class JavaScriptEmitter
             _ => null
         };
         if (instance is null || instance is IInstanceReferenceOperation) return emit(Expression(operation));
-        var symbol = operation is IFieldReferenceOperation fieldTarget ? (ISymbol)fieldTarget.Field
-            : ((IPropertyReferenceOperation)operation).Property;
         var source = operation.Syntax;
         var receiver = _names.Get($"mutation:{source.SyntaxTree.FilePath}:{source.SpanStart}", "receiver");
-        var body = emit(UserMemberAccess(NeedsNullCheck(instance) ? NotNull(receiver) : receiver, symbol));
+        var body = emit(Member(operation, NeedsNullCheck(instance) ? NotNull(receiver) : receiver));
         return isAsync
             ? $"(await (async ({receiver}) => {body})({Expression(instance)}))"
             : $"(({receiver}) => {body})({Expression(instance)})";

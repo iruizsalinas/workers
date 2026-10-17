@@ -101,6 +101,14 @@ internal sealed partial class JavaScriptEmitter
     private string ValueEquality(ITypeSymbol type, string left, string right, SyntaxNode source)
     {
         type = ResolveType(type);
+        if (type is INamedTypeSymbol { IsAnonymousType: true } anonymous)
+        {
+            var comparisons = anonymous.GetMembers().OfType<IPropertySymbol>().Select(property => {
+                var key = System.Text.Json.JsonSerializer.Serialize(AnonymousPropertyName(property));
+                return ValueEquality(property.Type, $"a[{key}]", $"b[{key}]", source);
+            }).ToArray();
+            return $"((a, b) => a == null || b == null ? a == b : {(comparisons.Length == 0 ? "true" : string.Join(" && ", comparisons))})({left}, {right})";
+        }
         if (type.TypeKind == TypeKind.Delegate) return $"{DelegateHelper("delegateEquals")}({left}, {right})";
         if (IsIndexType(type)) return $"((a, b) => a[0] === b[0] && a[1] === b[1])({left}, {right})";
         if (IsRangeType(type)) return $"((a, b) => a[0][0] === b[0][0] && a[0][1] === b[0][1] && a[1][0] === b[1][0] && a[1][1] === b[1][1])({left}, {right})";

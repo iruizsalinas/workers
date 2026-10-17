@@ -54,10 +54,10 @@ internal static partial class HelperSource
         """;
 
     private static string LinqGroupBy(Func<string, string> name) => $$"""
-        function {{name("linqGroupBy")}}(source, keySelector, elementSelector) {
-          if (source == null || keySelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
+        function {{name("linqGroupBy")}}(source, keySelector, elementSelector, hasElementSelector = false, createLookup = null) {
+          if (source == null || keySelector == null || hasElementSelector && elementSelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           return { *[Symbol.iterator]() {
-            const groups = new Map();
+            const groups = createLookup === null ? new Map() : createLookup();
             for (const value of {{name("linqValues")}}(source)) {
               const key = keySelector(value);
               let group = groups.get(key);
@@ -76,8 +76,8 @@ internal static partial class HelperSource
         """;
 
     private static string LinqToDictionary(Func<string, string> name) => $$"""
-        function {{name("linqToDictionary")}}(source, keySelector, elementSelector) {
-          if (source == null || keySelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
+        function {{name("linqToDictionary")}}(source, keySelector, elementSelector, hasElementSelector = false) {
+          if (source == null || keySelector == null || hasElementSelector && elementSelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           const result = Object.create(null);
           for (const value of {{name("linqValues")}}(source)) {
             const key = keySelector(value);
@@ -91,9 +91,9 @@ internal static partial class HelperSource
         """;
 
     private static string LinqToLookup(Func<string, string> name) => $$"""
-        function {{name("linqToLookup")}}(source, keySelector, elementSelector) {
-          if (source == null || keySelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
-          const groups = new Map();
+        function {{name("linqToLookup")}}(source, keySelector, elementSelector, hasElementSelector = false, createLookup = null) {
+          if (source == null || keySelector == null || hasElementSelector && elementSelector == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
+          const groups = createLookup === null ? new Map() : createLookup();
           for (const value of {{name("linqValues")}}(source)) {
             const key = keySelector(value);
             let group = groups.get(key);

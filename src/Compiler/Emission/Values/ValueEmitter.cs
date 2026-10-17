@@ -65,6 +65,7 @@ internal sealed partial class JavaScriptEmitter
         if (method.MethodKind == MethodKind.LocalFunction) identity = LocalDelegateIdentity(method, syntax, out localThis, out localValues);
         else if (method.IsGenericMethod && !method.IsStatic) identity = receiver is BaseExpressionSyntax ? QueueUserMethod(method, syntax) : GenericMethodTarget(method);
         else if (method.IsStatic) identity = QueueUserMethod(method, syntax);
+        else if (IsSourceInterface(method.ContainingType) && _runtimeInterfaceCalls.TryGetValue(method, out var dispatcher)) identity = dispatcher;
         else identity = receiver is BaseExpressionSyntax
             ? $"{QueueUserType(method.ContainingType, syntax)}.prototype.{UserInstanceMethodName(method)}"
             : $"{target}.{UserInstanceMethodName(method)}";
@@ -110,8 +111,10 @@ internal sealed partial class JavaScriptEmitter
         {
             if (!IsSourceInterface(type)) QueueUserType(type, syntax);
             var key = $"method-group:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
-            var parameters = string.Join(", ", method.Parameters.Select((_, index) => _names.Get($"{key}:{index}", $"arg{index + 1}")));
-            var call = receiver is BaseExpressionSyntax
+            var parameterValues = method.Parameters.Select((_, index) => _names.Get($"{key}:{index}", $"arg{index + 1}")).ToArray();
+            var parameters = string.Join(", ", parameterValues);
+            var call = IsSourceInterface(type) ? SourceInterfaceInvocation(method, receiverValue, parameterValues, syntax)
+                : receiver is BaseExpressionSyntax
                 ? $"{QueueUserType(type, syntax)}.prototype.{UserInstanceMethodName(method)}.call({receiverValue}{(parameters.Length == 0 ? "" : ", " + parameters)})"
                 : $"{receiverValue}.{UserInstanceMethodName(method)}({parameters})";
             return $"({parameters}) => {call}";

@@ -2,6 +2,24 @@ namespace Workers.Compiler.Tests;
 
 public sealed class UserTypeTests
 {
+    [Theory]
+    [InlineData("ToJSON")]
+    [InlineData("toJSON")]
+    public void PlainRecordsCannotBypassReservedSerializationPropertyValidation(string name)
+    {
+        var error = Assert.Throws<NotSupportedException>(() => Compile($$"""
+            using Workers;
+            public sealed record Key(int {{name}});
+            public static class Worker
+            {
+                [Fetch]
+                public static Response Fetch(Request request) => Response.Json(new Key(1));
+            }
+            """));
+
+        Assert.StartsWith("WRK119:", error.Message);
+    }
+
     [Fact]
     public void EmitsClassesConstructorsInstanceMethodsAndComputedProperties()
     {

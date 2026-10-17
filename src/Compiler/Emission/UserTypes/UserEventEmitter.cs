@@ -44,11 +44,15 @@ internal sealed partial class JavaScriptEmitter
         foreach (var (method, dispatcher) in _genericDispatchers)
         {
             _output.Append(dispatcher).Append('[').Append(identity).AppendLine("] = receiver => {");
+            foreach (var (type, target) in _genericDispatchTargets[method].Where(pair => _runtimeInterfaceTypes.Contains(pair.Key)))
+                _output.Append("  if (receiver instanceof ").Append(RuntimeInterfaceTypeName(type)).Append(") return ")
+                    .Append(_userMethods[target]).AppendLine(";");
             _output.AppendLine("  switch (Object.getPrototypeOf(receiver)) {");
-            foreach (var (type, target) in _genericDispatchTargets[method])
+            foreach (var (type, target) in _genericDispatchTargets[method].Where(pair => !_runtimeInterfaceTypes.Contains(pair.Key)))
                 _output.Append("    case ").Append(_userTypes[type]).Append(".prototype: return ").Append(_userMethods[target]).AppendLine(";");
             _output.AppendLine("  }").AppendLine("};");
         }
+        EmitRuntimeInterfaceDelegateAliases(identity);
     }
 
     private string EventAccess(IEventReferenceOperation operation)

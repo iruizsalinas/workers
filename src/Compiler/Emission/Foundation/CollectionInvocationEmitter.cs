@@ -40,6 +40,10 @@ internal sealed partial class JavaScriptEmitter
     private string CreateList(string values) => $"{_helpers.Require(JavaScriptHelper.ListState)}({values})";
     private string CreateSet(string values) => $"{_helpers.Require(JavaScriptHelper.SetState)}(new Set({values}))";
 
+    private static bool IsArrayBackedList(ITypeSymbol? type) => type is IArrayTypeSymbol
+        || type?.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.List<T>"
+            or "System.Collections.Generic.IList<T>" or "System.Collections.Generic.IReadOnlyList<T>";
+
     private static bool IsListType(ITypeSymbol? type) => type is INamedTypeSymbol named
         && named.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.List<T>"
             or "System.Collections.Generic.IList<T>" or "System.Collections.Generic.ICollection<T>";

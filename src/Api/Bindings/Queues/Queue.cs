@@ -13,7 +13,7 @@ public sealed class Queue
     public Task<QueueMetrics> MetricsAsync() => WorkerApi.NotExecutable<Task<QueueMetrics>>();
 }
 
-/// <summary>How a message body is encoded. The runtime default is <see cref="V8"/>, a structured clone.</summary>
+/// <summary>How a message body is encoded. The runtime default is <see cref="Json"/> for compatibility dates after 2024-03-18.</summary>
 public enum QueueContentType
 {
     Text,

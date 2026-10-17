@@ -2,9 +2,33 @@ using Workers;
 
 public sealed record TenantProps(string Tenant);
 public sealed record Job(string Path);
+public sealed class TenantModel
+{
+    [JsonName("tenant_id")] public string Tenant { get; init; } = "none";
+    public int Count { get; set; }
+    public string Format(string name) => $"{Tenant}:{name}";
+}
+
+public sealed class TenantGraph
+{
+    public TenantGraph? Next { get; set; }
+    public Dictionary<int, int> Values { get; init; } = new() { [1] = 2 };
+}
 
 public sealed class Greeter : WorkerEntrypoint
 {
+    public bool GraphProps()
+    {
+        var graph = Ctx.Props<TenantGraph>();
+        return graph.Next == graph && graph.Values[1] == 2 && Ctx.Props<TenantGraph>() == graph;
+    }
+    public int TypedPropsIdentity()
+    {
+        var props = Ctx.Props<TenantModel>();
+        props.Count++;
+        return Ctx.Props<TenantModel>().Count;
+    }
+    public string TypedHello(string name) => Ctx.Props<TenantModel>().Format(name);
     public string Hello(string name)
     {
         var tenant = Ctx.Props<TenantProps?>()?.Tenant ?? "none";
@@ -33,6 +57,18 @@ public static class Worker
         var path = new Url(request.Url).Pathname;
         switch (path)
         {
+            case "/graph-props":
+            {
+                var graph = new TenantGraph();
+                graph.Next = graph;
+                return Response.Json(await ctx.Exports.Service(nameof(Greeter), graph).InvokeAsync<bool>("graphProps"));
+            }
+            case "/typed-props-identity":
+                return Response.Json(await ctx.Exports.Service(nameof(Greeter), new { tenant_id = "acme", count = 0 })
+                    .InvokeAsync<int>("typedPropsIdentity"));
+            case "/typed-props":
+                return new Response(await ctx.Exports.Service(nameof(Greeter), new { tenant_id = "acme" })
+                    .InvokeAsync<string>("typedHello", "ada"));
             case "/exports":
             {
                 var plain = await ctx.Exports.Service(nameof(Greeter)).InvokeAsync<string>("hello", "ada");
@@ -68,6 +104,16 @@ public static class Worker
                     sendBacklog = sent.Metadata.Metrics.BacklogCount,
                     batchBacklog = batch.Metadata.Metrics.BacklogCount
                 });
+            }
+            case "/queue-collections":
+            {
+                var numbers = new Dictionary<int, int> { [1] = 2 };
+                var sent = await env.Queue("JOBS").SendAsync(numbers, new QueueSendOptions { ContentType = QueueContentType.V8 });
+                var batch = await env.Queue("JOBS").SendBatchAsync([
+                    new MessageSendRequest<Dictionary<int, int>> { Body = numbers, ContentType = QueueContentType.V8 }
+                ]);
+                return Response.Json(new { single = sent.Metadata.Metrics.BacklogCount,
+                    batch = batch.Metadata.Metrics.BacklogCount });
             }
             case "/context":
                 return Response.Json(new { access = ctx.Access is null, cache = ctx.Cache is null });

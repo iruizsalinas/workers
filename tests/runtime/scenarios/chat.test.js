@@ -31,6 +31,10 @@ describe("hibernating Durable Object chat scenario", () => {
     socket.send("who");
     await expect(users).resolves.toEqual({ type: "users", users: ["Ada"] });
 
+    const graph = nextMessage(socket);
+    socket.send("attachment-graph");
+    await expect(graph).resolves.toEqual({ type: "attachment-graph", restored: true, error: null });
+
     const pong = new Promise(resolve =>
       socket.addEventListener("message", event => resolve(event.data), { once: true }),
     );

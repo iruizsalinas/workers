@@ -28,6 +28,8 @@ internal sealed partial class JavaScriptEmitter
             return $"((value) => value == null ? 0 : {KeyHash(nullable.TypeArguments[0], "value", source)})({value})";
         if (type is INamedTypeSymbol { IsTupleType: true } tuple)
             return $"((value) => {_helpers.Name("keyHashCombine")}([{string.Join(", ", tuple.TupleElements.Select((field, i) => KeyHash(field.Type, $"value[{i}]", source)))}]))({value})";
+        if (type is INamedTypeSymbol { IsAnonymousType: true } anonymous)
+            return $"((value) => value == null ? 0 : {_helpers.Name("keyHashCombine")}([{string.Join(", ", anonymous.GetMembers().OfType<IPropertySymbol>().Select(property => KeyHash(property.Type, $"value[{System.Text.Json.JsonSerializer.Serialize(AnonymousPropertyName(property))}]", source)))}]))({value})";
         if (type is INamedTypeSymbol pair && pair.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
             return $"((value) => {_helpers.Name("keyHashCombine")}([{KeyHash(pair.TypeArguments[0], "value[0]", source)}, {KeyHash(pair.TypeArguments[1], "value[1]", source)}]))({value})";
         if (IsIndexType(type))

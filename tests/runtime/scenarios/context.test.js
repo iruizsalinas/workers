@@ -5,6 +5,32 @@ import { describe, expect, it } from "vitest";
 const invoke = (path) => SELF.fetch(`https://worker.test${path}`);
 
 describe("execution context", () => {
+  it("transports cyclic props containing compiler-managed collections", async () => {
+    const response = await invoke("/graph-props");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toBe(true);
+  });
+
+  it("preserves native props identity across repeated typed reads", async () => {
+    const response = await invoke("/typed-props-identity");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toBe(1);
+  });
+
+  it("sends compiler-managed dictionaries through native queue serialization", async () => {
+    const response = await invoke("/queue-collections");
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(typeof result.single).toBe("number");
+    expect(typeof result.batch).toBe("number");
+  });
+
+  it("materializes typed props before calling methods on the C# class", async () => {
+    const response = await invoke("/typed-props");
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("acme:ada");
+  });
+
   it("reaches entrypoints and Durable Objects through ctx.exports", async () => {
     const response = await invoke("/exports");
     expect(response.status).toBe(200);

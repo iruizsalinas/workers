@@ -62,7 +62,8 @@ public sealed class DurableObjectBindingTests
             """);
 
         Assert.StartsWith("import { DurableObject as $workers$DurableObject } from \"cloudflare:workers\";", module);
-        Assert.Contains("export class Stateful extends $workers$DurableObject", module);
+        Assert.Contains("class $workers$Stateful extends $workers$DurableObject", module);
+        Assert.Contains("export { $workers$Stateful as Stateful };", module);
         Assert.Contains("constructor(ctx, env) {", module);
         Assert.Contains("super(ctx, env);", module);
         Assert.Contains("this._increments = 1", module);

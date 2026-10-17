@@ -68,6 +68,14 @@ describe("router middleware in workerd", () => {
     expect(response.headers.has("x-trace")).toBe(true);
     expect(await response.text()).toBe("");
   });
+
+  it.each(["/head-tee", "/head-cancel-fails"])("returns HEAD without depending on body cleanup for %s", async path => {
+    const response = await call(path, { method: "HEAD" });
+    expect(response.status).toBe(201);
+    expect(response.body).toBeNull();
+    expectCors(response);
+    expect(response.headers.has("x-trace")).toBe(true);
+  });
 });
 
 describe("HTTP errors and error security in workerd", () => {

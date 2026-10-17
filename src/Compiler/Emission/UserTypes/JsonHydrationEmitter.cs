@@ -116,9 +116,10 @@ internal sealed partial class JavaScriptEmitter
     private string JsonValueExpression(ITypeSymbol type, string value, int mode)
     {
         type = UnwrapNullable(ResolveType(type));
-        // SQLite blobs arrive as an ArrayBuffer (Durable Objects) or an array of numbers (D1).
-        if (mode == JsonRowMode && type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
-            return $"(value => value == null ? value : new Uint8Array(value))({value})";
+        // Typed byte arrays use native byte buffers, whether read from JSON number arrays,
+        // SQLite blobs, or structured-clone values that already contain a Uint8Array.
+        if (type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte })
+            return $"(value => value == null || value instanceof Uint8Array ? value : new Uint8Array(value))({value})";
         if (JsonElementType(type) is { } element)
         {
             var isSet = type.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>";

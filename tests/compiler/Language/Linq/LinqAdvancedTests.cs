@@ -31,8 +31,8 @@ public sealed class LinqAdvancedTests
             public sealed record Item(string Name, int Value);
             """);
 
-        Assert.Contains("$workers$linqGroupBy(items, item => $workers$notNull(item).name, item => $workers$notNull(item).value)", module);
-        Assert.Contains("$workers$linqToLookup(items, item => $workers$notNull(item).name, item => $workers$notNull(item).value)", module);
+        Assert.Contains("$workers$linqGroupBy(items, item => $workers$notNull(item).name, item => $workers$notNull(item).value, true)", module);
+        Assert.Contains("$workers$linqToLookup(items, item => $workers$notNull(item).name, item => $workers$notNull(item).value, true)", module);
         Assert.Contains("$workers$linqToDictionary(", module);
         Assert.Contains("$workers$notNull(lookup).contains(\"a\")", module);
         Assert.Contains("((receiver, key) => $workers$notNull(receiver).get(key))(lookup, \"a\")", module);
@@ -81,7 +81,6 @@ public sealed class LinqAdvancedTests
     }
 
     [Theory]
-    [InlineData("items.GroupBy(item => item)")]
     [InlineData("items.ToDictionary(item => item.Value)")]
     [InlineData("items.Union(items, EqualityComparer<Item>.Default)")]
     [InlineData("items.MinBy(item => item.Name)")]

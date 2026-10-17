@@ -3,6 +3,85 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 internal sealed partial class JavaScriptEmitter
 {
+    private string LinqCast(SyntaxNode node, IMethodSymbol method, string source)
+    {
+        var type = ResolveType(method.TypeArguments.Single());
+        var underlying = UnwrapNullable(type).WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+        var value = "value";
+        var nativeStringEnum = underlying is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
+            && enumType.GetMembers().OfType<IFieldSymbol>().Any(field => field.HasConstantValue
+                && (NativeEnumValue(enumType.ToDisplayString(), field.Name) is not null
+                    || CryptoEnumValue(enumType.ToDisplayString(), field.Name) is not null));
+        var test = underlying.SpecialType switch
+        {
+            SpecialType.System_String => "typeof value === \"string\"",
+            SpecialType.System_Boolean => "typeof value === \"boolean\"",
+            SpecialType.System_SByte => "Number.isInteger(value) && value >= -128 && value <= 127",
+            SpecialType.System_Byte => "Number.isInteger(value) && value >= 0 && value <= 255",
+            SpecialType.System_Int16 => "Number.isInteger(value) && value >= -32768 && value <= 32767",
+            SpecialType.System_UInt16 => "Number.isInteger(value) && value >= 0 && value <= 65535",
+            SpecialType.System_Int32 => "Number.isInteger(value) && value >= -2147483648 && value <= 2147483647",
+            SpecialType.System_UInt32 => "Number.isInteger(value) && value >= 0 && value <= 4294967295",
+            SpecialType.System_Int64 or SpecialType.System_UInt64 => "Number.isSafeInteger(value)" + (underlying.SpecialType == SpecialType.System_UInt64 ? " && value >= 0" : ""),
+            SpecialType.System_Single or SpecialType.System_Double => "typeof value === \"number\"",
+            SpecialType.System_Char => "typeof value === \"string\" && value.length === 1",
+            _ when nativeStringEnum => "typeof value === \"string\"",
+            _ when underlying.TypeKind == TypeKind.Enum => "typeof value === \"number\" || value instanceof Number",
+            _ when underlying is INamedTypeSymbol { IsTupleType: true } tuple => $"Array.isArray(value) && value.length === {tuple.TupleElements.Length}",
+            _ when underlying is INamedTypeSymbol pair && IsKeyValuePair(pair) => "Array.isArray(value) && value.length === 2",
+            _ when underlying is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte } => "value instanceof Uint8Array",
+            _ when underlying is IArrayTypeSymbol => "Array.isArray(value)",
+            _ when IsSequenceType(underlying) => "Array.isArray(value) || value instanceof Uint8Array",
+            _ when underlying is INamedTypeSymbol collection && collection.OriginalDefinition.ToDisplayString() is
+                "System.Collections.Generic.Queue<T>" or "System.Collections.Generic.Stack<T>" => "Array.isArray(value)",
+            _ when IsDictionary(underlying) => "value != null && typeof value === \"object\" && !Array.isArray(value)",
+            _ when IsSet(underlying) => "value != null && typeof value.has === \"function\" && typeof value.add === \"function\"",
+            _ when underlying.OriginalDefinition.ToDisplayString() == "System.Linq.IGrouping<TKey, TElement>" =>
+                "Array.isArray(value) && Object.hasOwn(value, \"key\")",
+            _ when underlying.OriginalDefinition.ToDisplayString() == "System.Linq.IOrderedEnumerable<TElement>" =>
+                $"value != null && value[{RequireHelperName(JavaScriptHelper.LinqOrder, "linqOrderState")}] != null",
+            _ when underlying.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.ICollection<T>"
+                or "System.Collections.Generic.IReadOnlyCollection<T>" =>
+                QueryCollectionTypeTest((INamedTypeSymbol)underlying),
+            _ when underlying.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T
+                || underlying.ToDisplayString() == "System.Collections.IEnumerable" => "value != null && (typeof value[Symbol.iterator] === \"function\" || typeof value === \"object\")",
+            _ when QueryNativeConstructor(underlying) is { } constructor => $"typeof globalThis.{constructor} === \"function\" && value instanceof globalThis.{constructor}",
+            _ when underlying is INamedTypeSymbol structural && BindingIntrinsicRegistry.IsStructuralType(structural) => "value != null && typeof value === \"object\"",
+            _ => TypePatternTest(underlying, value, null, node)
+        };
+        var nullable = type.IsReferenceType || IsNullable(type);
+        if (nullable) test = $"value == null || ({test})";
+        var result = underlying.TypeKind == TypeKind.Enum && !nativeStringEnum
+            ? nullable ? "value == null ? value : Number(value)" : "Number(value)" : CopyValue(type, value);
+        var convert = $"value => {{ if ({test}) return {result}; throw {NewBuiltInException("System.InvalidCastException", "Specified cast is not valid.")}; }}";
+        return Linq(JavaScriptHelper.LinqCast, source, [convert]);
+    }
+
+    private static string QueryCollectionTypeTest(INamedTypeSymbol type)
+    {
+        var plainDictionary = type.TypeArguments[0] is INamedTypeSymbol pair && IsKeyValuePair(pair)
+            && pair.TypeArguments[0].SpecialType == SpecialType.System_String
+                ? " || Object.getPrototypeOf(value) === null || Object.getPrototypeOf(value) === Object.prototype"
+                : "";
+        return "value != null && typeof value === \"object\" && (Array.isArray(value) || value instanceof Uint8Array"
+            + " || value instanceof Set || value instanceof Map || typeof value[Symbol.iterator] === \"function\" && Number.isInteger(value.length)"
+            + plainDictionary + ")";
+    }
+
+    private static string? QueryNativeConstructor(ITypeSymbol type) => type.ToDisplayString() switch
+    {
+        "Workers.Url" => "URL",
+        "Workers.UrlSearchParams" => "URLSearchParams",
+        "Workers.HtmlRewriter" => "HTMLRewriter",
+        "Workers.Request" or "Workers.Response" or "Workers.Headers" or "Workers.Date" or "Workers.RegExp"
+            or "Workers.AbortController" or "Workers.AbortSignal" or "Workers.TextEncoder" or "Workers.TextDecoder"
+            or "Workers.Blob" or "Workers.File" or "Workers.FormData" or "Workers.ReadableStream"
+            or "Workers.WritableStream" or "Workers.TransformStream" or "Workers.IdentityTransformStream"
+            or "Workers.FixedLengthStream" or "Workers.CompressionStream" or "Workers.DecompressionStream"
+            or "Workers.WebSocket" or "Workers.CryptoKey" => type.Name,
+        _ => null
+    };
+
     private string LinqSelectMany(
         SyntaxNode sourceNode,
         IMethodSymbol method,
@@ -32,11 +111,9 @@ internal sealed partial class JavaScriptEmitter
             || selector.Parameters.Length != 1)
             throw UnsupportedSymbol(method, sourceNode);
         var keyKind = arguments.Length == 2
-            ? StringComparerOrderKind(sourceNode, selector.ReturnType)
-            : GetLinqOrderKeyKind(selector.ReturnType);
-        if (keyKind is null && selector.ReturnType.SpecialType == SpecialType.System_String && arguments.Length == 1)
-            throw new NotSupportedException(
-                $"WRK105: '{method.ToDisplayString()}' uses culture-sensitive string ordering; pass StringComparer.Ordinal or StringComparer.OrdinalIgnoreCase.");
+            ? StringComparerOrderKind(sourceNode, method, selector.ReturnType)
+            : selector.ReturnType.SpecialType == SpecialType.System_String
+                ? LinqOrderKeyKind.Ordinal : GetLinqOrderKeyKind(selector.ReturnType);
         if (keyKind is null) throw UnsupportedSymbol(method, sourceNode);
         return Linq(JavaScriptHelper.LinqOrder, source,
             [arguments[0], descending ? "true" : "false", ((int)keyKind).ToString(), append ? "true" : "false"]);
@@ -55,11 +132,12 @@ internal sealed partial class JavaScriptEmitter
 
     private enum LinqOrderKeyKind { Numeric, Character, Ordinal, OrdinalIgnoreCase }
 
-    private LinqOrderKeyKind? StringComparerOrderKind(SyntaxNode source, ITypeSymbol keyType)
+    private LinqOrderKeyKind? StringComparerOrderKind(SyntaxNode source, IMethodSymbol method, ITypeSymbol keyType)
     {
         if (keyType.SpecialType != SpecialType.System_String
-            || source is not InvocationExpressionSyntax { ArgumentList.Arguments: [_, { } comparer] }
-            || _model.GetSymbolInfo(comparer.Expression).Symbol is not IPropertySymbol
+            || source is not InvocationExpressionSyntax invocation
+            || InvocationArgument(invocation, method, "comparer") is not { } comparer
+            || _model.GetSymbolInfo(comparer).Symbol is not IPropertySymbol
             {
                 IsStatic: true, ContainingType: { } comparerType, Name: var name
             }
@@ -80,10 +158,11 @@ internal sealed partial class JavaScriptEmitter
         if (arguments.Length is not (1 or 2) || parameters.Length != arguments.Length
             || !HasDelegateArity(parameters[0].Type, 1)
             || arguments.Length == 2 && !HasDelegateArity(parameters[1].Type, 1)
-            || method.TypeArguments.Length < 2 || !SupportsLinqEquality(method.TypeArguments[1]))
+            || method.TypeArguments.Length < 2)
             throw UnsupportedSymbol(method, sourceNode);
+        var lookup = QueryKeyLookup(method.TypeArguments[1], sourceNode);
         return Linq(JavaScriptHelper.LinqGroupBy, source,
-            [arguments[0], arguments.Length == 2 ? arguments[1] : "null"]);
+            [arguments[0], arguments.Length == 2 ? arguments[1] : "null", arguments.Length == 2 ? "true" : "false", .. lookup is null ? [] : new[] { lookup }]);
     }
 
     private string LinqDictionary(
@@ -94,7 +173,7 @@ internal sealed partial class JavaScriptEmitter
             && arguments.Length is 1 or 2 && parameters.All(parameter => HasDelegateArity(parameter.Type, 1)))
         {
             var resultType = (INamedTypeSymbol)ResolveType(method.ReturnType);
-            return $"{RequireHelperName(JavaScriptHelper.StructuralKeys, "keyToDictionary")}({source}, {arguments[0]}, {(arguments.Length == 2 ? arguments[1] : "null")}, () => {KeyCollection(resultType, sourceNode)})";
+            return $"{RequireHelperName(JavaScriptHelper.StructuralKeys, "keyToDictionary")}({source}, {arguments[0]}, {(arguments.Length == 2 ? arguments[1] : "null")}, () => {KeyCollection(resultType, sourceNode)}, {(arguments.Length == 2 ? "true" : "false")})";
         }
         if (arguments.Length is not (1 or 2) || parameters.Length != arguments.Length
             || parameters.Any(parameter => !HasDelegateArity(parameter.Type, 1))
@@ -102,7 +181,7 @@ internal sealed partial class JavaScriptEmitter
             || method.TypeArguments[1].SpecialType != SpecialType.System_String)
             throw UnsupportedSymbol(method, sourceNode);
         return Linq(JavaScriptHelper.LinqToDictionary, source,
-            [arguments[0], arguments.Length == 2 ? arguments[1] : "null"]);
+            [arguments[0], arguments.Length == 2 ? arguments[1] : "null", arguments.Length == 2 ? "true" : "false"]);
     }
 
     private string LinqLookup(
@@ -111,10 +190,11 @@ internal sealed partial class JavaScriptEmitter
     {
         if (arguments.Length is not (1 or 2) || parameters.Length != arguments.Length
             || parameters.Any(parameter => !HasDelegateArity(parameter.Type, 1))
-            || method.TypeArguments.Length < 2 || !SupportsLinqEquality(method.TypeArguments[1]))
+            || method.TypeArguments.Length < 2)
             throw UnsupportedSymbol(method, sourceNode);
+        var lookup = QueryKeyLookup(method.TypeArguments[1], sourceNode);
         return Linq(JavaScriptHelper.LinqToLookup, source,
-            [arguments[0], arguments.Length == 2 ? arguments[1] : "null"]);
+            [arguments[0], arguments.Length == 2 ? arguments[1] : "null", arguments.Length == 2 ? "true" : "false", .. lookup is null ? [] : new[] { lookup }]);
     }
 
     private string LinqNumericAggregate(
@@ -221,10 +301,18 @@ internal sealed partial class JavaScriptEmitter
             || !HasDelegateArity(parameters[1].Type, 1)
             || !HasDelegateArity(parameters[2].Type, 1)
             || !HasDelegateArity(parameters[3].Type, 2)
-            || method.TypeArguments.Length < 3 || !SupportsLinqEquality(method.TypeArguments[2]))
+            || method.TypeArguments.Length < 3)
             throw UnsupportedSymbol(method, sourceNode);
+        var lookup = QueryKeyLookup(method.TypeArguments[2], sourceNode);
         return Linq(JavaScriptHelper.LinqJoin, source,
-            [arguments[0], arguments[1], arguments[2], arguments[3], method.Name == "GroupJoin" ? "true" : "false"]);
+            [arguments[0], arguments[1], arguments[2], arguments[3], method.Name == "GroupJoin" ? "true" : "false", .. lookup is null ? [] : new[] { lookup }]);
+    }
+
+    private string? QueryKeyLookup(ITypeSymbol type, SyntaxNode source)
+    {
+        type = ResolveType(type);
+        if (SupportsLinqEquality(type) || type.SpecialType == SpecialType.System_Object) return null;
+        return $"() => {_helpers.Require(JavaScriptHelper.LinqLookup)}({EqualityFunction(type, source)}, value => {KeyHash(type, "value", source)})";
     }
 
 }

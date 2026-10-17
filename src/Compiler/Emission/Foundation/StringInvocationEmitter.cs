@@ -43,7 +43,7 @@ internal sealed partial class JavaScriptEmitter
             ("Split", 1) when method?.Parameters[0].Type.SpecialType is SpecialType.System_Char or SpecialType.System_String =>
                 $"{receiver}.split({arguments[0]})",
             ("Split", 2) when method?.Parameters is [{ Type.SpecialType: SpecialType.System_Char or SpecialType.System_String }, { Type.TypeKind: TypeKind.Enum }]
-                && SplitOptions(source) is { } options =>
+                && SplitOptions(source, method) is { } options =>
                 StringSplit(receiver, arguments[0], options),
             _ => throw UnsupportedSymbol(method, source)
         };
@@ -88,8 +88,9 @@ internal sealed partial class JavaScriptEmitter
         return split;
     }
 
-    private int? SplitOptions(InvocationExpressionSyntax source) =>
-        _model.GetConstantValue(source.ArgumentList.Arguments[1].Expression) is { HasValue: true, Value: int value } && (value & ~3) == 0
+    private int? SplitOptions(InvocationExpressionSyntax source, IMethodSymbol method) =>
+        InvocationArgument(source, method, "options") is { } options
+        && _model.GetConstantValue(options) is { HasValue: true, Value: int value } && (value & ~3) == 0
             ? value : null;
 
     private string StringJoin(InvocationExpressionSyntax source, IMethodSymbol method, string[] arguments)
@@ -97,9 +98,9 @@ internal sealed partial class JavaScriptEmitter
         if (method.Parameters.Length != 2 || method.TypeArguments.Length != 0
             || method.Parameters[0].Type.SpecialType is not (SpecialType.System_String or SpecialType.System_Char))
             throw UnsupportedSymbol(method, source);
-        var values = StringSequenceArgument(method.Parameters[1].Type, method.Parameters[1].IsParams, arguments[1..]);
+        var values = StringSequenceArgument(source, method.Parameters[1], arguments[1..]);
         if (values is null) throw UnsupportedSymbol(method, source);
-        return $"Array.from({values}).join({arguments[0]})";
+        return $"((separator, values) => Array.from(values).join(separator))({arguments[0]}, {values})";
     }
 
     private string StringConcat(InvocationExpressionSyntax source, IMethodSymbol method, string[] arguments)
@@ -108,14 +109,15 @@ internal sealed partial class JavaScriptEmitter
             throw UnsupportedSymbol(method, source);
         if (method.Parameters.All(parameter => parameter.Type.SpecialType == SpecialType.System_String))
             return $"[{string.Join(", ", arguments)}].join(\"\")";
-        if (method.Parameters is [{ Type: { } type, IsParams: var isParams }]
-            && StringSequenceArgument(type, isParams, arguments) is { } values)
+        if (method.Parameters is [{ } parameter]
+            && StringSequenceArgument(source, parameter, arguments) is { } values)
             return $"Array.from({values}).join(\"\")";
         throw UnsupportedSymbol(method, source);
     }
 
-    private static string? StringSequenceArgument(ITypeSymbol type, bool isParams, IReadOnlyList<string> arguments)
+    private string? StringSequenceArgument(InvocationExpressionSyntax source, IParameterSymbol parameter, IReadOnlyList<string> arguments)
     {
+        var type = parameter.Type;
         var isStringArray = type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_String };
         var isStringSpan = type is INamedTypeSymbol
         {
@@ -128,13 +130,22 @@ internal sealed partial class JavaScriptEmitter
                 || named.AllInterfaces.Any(item =>
                     item.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.IEnumerable<T>"));
         if (!isStringArray && !isStringSpan && !isStringEnumerable) return null;
-        return isParams && arguments.Count != 1 ? $"[{string.Join(", ", arguments)}]" : arguments[0];
+        var expanded = parameter.IsParams && (arguments.Count != 1 || source.ArgumentList.Arguments.Any(argument =>
+            BoundParameter(argument).Ordinal == parameter.Ordinal
+            && BoundArgument(argument).ArgumentKind is Microsoft.CodeAnalysis.Operations.ArgumentKind.ParamArray
+                or Microsoft.CodeAnalysis.Operations.ArgumentKind.ParamCollection));
+        return expanded ? $"[{string.Join(", ", arguments)}]" : arguments[0];
     }
 
     private bool? StringComparisonMode(InvocationExpressionSyntax source, IMethodSymbol? method) =>
-        InvocationArgument(source, method, "comparisonType") is MemberAccessExpressionSyntax comparison
-        && comparison.Name.Identifier.ValueText is "Ordinal" or "OrdinalIgnoreCase"
-            ? comparison.Name.Identifier.ValueText == "OrdinalIgnoreCase"
+        InvocationArgument(source, method, "comparisonType") is { } comparison
+        && _model.GetConstantValue(comparison) is { HasValue: true, Value: int value }
+            ? value switch
+            {
+                (int)StringComparison.Ordinal => false,
+                (int)StringComparison.OrdinalIgnoreCase => true,
+                _ => null
+            }
             : null;
 
     private ExpressionSyntax? InvocationArgument(

@@ -29,7 +29,7 @@ internal sealed partial class JavaScriptEmitter
             return method.IsStatic ? EmitUserInvocation(method, invocation, arguments)
                 : method.DeclaredAccessibility == Accessibility.Private
                     ? $"{QueueUserMethod(method, invocation)}.call({receiver}{(arguments.Length == 0 ? "" : ", " + string.Join(", ", arguments))})"
-                : $"{receiver}.{UserInstanceMethodName(method)}({string.Join(", ", arguments)})";
+                : SourceInterfaceInvocation(method, receiver, arguments, invocation);
         if (TryEmitFoundationInvocation(invocation, method, receiver, name, arguments, out var framework)) return framework;
         if (type == "Workers.Env" && EnvironmentBindings.Contains(name)) return $"{receiver}[{arguments[0]}]";
         // A string variable is read as configured; typed variables are JSON values mapped to C# types.
@@ -52,7 +52,7 @@ internal sealed partial class JavaScriptEmitter
         if (type == "Workers.SubtleCrypto" && method?.IsStatic == true) receiver = "globalThis.SubtleCrypto";
         if (method is not null && BindingIntrinsicRegistry.TryGet(method, out var intrinsic)) return EmitBindingIntrinsic(receiver, invocation, method, intrinsic);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
-            return $"{receiver}.{GeneratedInstanceMethodName(method)}({string.Join(", ", arguments)})";
+            return GeneratedSourceInvocation(method, receiver, arguments, invocation);
         if (method is { IsStatic: false } && IsUserInstanceType(method.ContainingType))
         {
             QueueUserType(method.ContainingType, invocation);

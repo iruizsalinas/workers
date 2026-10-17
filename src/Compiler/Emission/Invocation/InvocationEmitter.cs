@@ -9,7 +9,8 @@ internal sealed partial class JavaScriptEmitter
         if (operation.Syntax is not InvocationExpressionSyntax)
         {
             if (IsEnumerableMethod(operation.TargetMethod))
-                return LinqInvocation(operation.Syntax, operation.TargetMethod, operation.Arguments.Select(argument => ValueExpression(argument.Value)).ToArray(), null, null);
+                return LinqInvocation(operation.Syntax, operation.TargetMethod,
+                    operation.Arguments.OrderBy(argument => argument.Parameter!.Ordinal).Select(argument => ValueExpression(argument.Value)).ToArray(), null, null);
             if (operation.TargetMethod.DeclaringSyntaxReferences.Length != 0) return InitializerCall(operation);
             throw UnsupportedSymbol(operation.TargetMethod, operation.Syntax);
         }
@@ -39,6 +40,11 @@ internal sealed partial class JavaScriptEmitter
             throw UnsupportedSymbol(method, invocation);
         var member = invocation.Expression as MemberAccessExpressionSyntax;
         var receiver = operation.Instance is null || operation.Instance is IInstanceReferenceOperation ? null : Operand(operation.Instance);
+        if (method.ReducedFrom is not null)
+            // Reduced extension calls still expose their receiver as static argument zero.
+            // Capture that bound value before named arguments, including in ?. calls.
+            receiver = operation.Instance is not null ? Expression(operation.Instance)
+                : Expression(operation.Arguments.First(argument => argument.Parameter?.Ordinal == 0).Value);
         if (method.MethodKind == MethodKind.DelegateInvoke)
             return EmitNormalizedInvocation(invocation, method, receiver ?? Operand(operation.Instance!),
                 (target, values) => $"{NotNull(target!)}({string.Join(", ", values)})");
@@ -100,11 +106,11 @@ internal sealed partial class JavaScriptEmitter
         if (member is not null || receiverOverride is not null)
             return MemberInvocation(invocation, member, method, containingType, arguments, receiverOverride);
         if (method is { IsStatic: false } && IsGeneratedInstanceType(method.ContainingType))
-            return $"this.{GeneratedInstanceMethodName(method)}({string.Join(", ", arguments)})";
+            return GeneratedSourceInvocation(method, "this", arguments, invocation);
         if (method is { IsStatic: false } && IsSourceInterface(method.ContainingType))
             return method.DeclaredAccessibility == Accessibility.Private
                 ? $"{QueueUserMethod(method, invocation)}.call(this{(arguments.Length == 0 ? "" : ", " + string.Join(", ", arguments))})"
-                : $"this.{UserInstanceMethodName(method)}({string.Join(", ", arguments)})";
+                : SourceInterfaceInvocation(method, "this", arguments, invocation);
         if (method is { IsStatic: false } && IsUserInstanceType(method.ContainingType))
         {
             QueueUserType(method.ContainingType, invocation);

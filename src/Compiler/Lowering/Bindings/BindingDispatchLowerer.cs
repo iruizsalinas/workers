@@ -22,27 +22,37 @@ internal sealed partial class JavaScriptEmitter
     private string MaterializeBindingResult(InvocationExpressionSyntax invocation, IMethodSymbol method, string result)
     {
         var owner = method.ContainingType.OriginalDefinition.ToDisplayString();
-        var typeArgument = method.TypeArguments.FirstOrDefault()
-            ?? (method.ContainingType.TypeArguments.Length == 1 ? method.ContainingType.TypeArguments[0] : null);
+        var typeArgument = owner == "Workers.Ai" && method.Name == "RunAsync" && method.TypeArguments.Length == 2
+            ? method.TypeArguments[1]
+            : method.TypeArguments.FirstOrDefault()
+                ?? (method.ContainingType.TypeArguments.Length == 1 ? method.ContainingType.TypeArguments[0] : null);
         if (typeArgument is null) return result;
         string? Converter(int mode) => JsonBoundaryConverter(typeArgument, invocation, mode);
+        string? CloneConverter() => RpcArgumentReader(typeArgument, invocation) is { } reader
+            ? $"value => {reader}(value, new WeakMap())" : null;
         string Then(string? converter) => converter is null ? result : $"{result}.then({converter})";
         string Call(string? converter) => converter is null ? result : $"({converter})({result})";
         string ThenMap(string? converter, string shape) => converter is null ? result : $"{result}.then(value => {string.Format(shape, converter)})";
         return (owner, method.Name) switch
         {
+            ("Workers.ExecutionContext" or "Workers.DurableObjectState", "Props") => Call(CloneConverter()),
+            ("Workers.Ai", "RunAsync") => Then(Converter(JsonWebMode)),
             ("Workers.Request" or "Workers.Response" or "Workers.R2ObjectBody", "JsonAsync") => Then(Converter(JsonWebMode)),
-            ("Workers.KVNamespace", "GetJsonAsync") or ("Workers.DurableObjectStorage" or "Workers.DurableObjectTransaction", "GetAsync")
+            ("Workers.KVNamespace", "GetJsonAsync")
                 when method.Parameters[0].Type.SpecialType == SpecialType.System_String => Then(Converter(JsonWebMode)),
-            ("Workers.KVNamespace", "GetJsonAsync") or ("Workers.DurableObjectStorage" or "Workers.DurableObjectTransaction", "GetAsync" or "ListAsync") =>
+            ("Workers.KVNamespace", "GetJsonAsync") =>
                 ThenMap(Converter(JsonWebMode), "Object.fromEntries(Object.entries(value).map(([key, item]) => [key, ({0})(item)]))"),
+            ("Workers.DurableObjectStorage" or "Workers.DurableObjectTransaction", "GetAsync")
+                when method.Parameters[0].Type.SpecialType == SpecialType.System_String => Then(CloneConverter()),
+            ("Workers.DurableObjectStorage" or "Workers.DurableObjectTransaction", "GetAsync" or "ListAsync") =>
+                ThenMap(CloneConverter(), "Object.fromEntries(Object.entries(value).map(([key, item]) => [key, ({0})(item)]))"),
             ("Workers.KVNamespace", "GetJsonWithMetadataAsync") =>
                 ThenMap(Converter(JsonWebMode), "(value.value = ({0})(value.value), value)"),
-            ("Workers.SyncKvStorage", "List") => Converter(JsonWebMode) is { } entries
+            ("Workers.SyncKvStorage", "List") => CloneConverter() is { } entries
                 ? $"(value => Object.fromEntries(Object.entries(value).map(([key, item]) => [key, ({entries})(item)])))({result})"
                 : result,
-            ("Workers.SyncKvStorage", "Get") or ("Workers.WebSocket", "DeserializeAttachment") => Call(Converter(JsonWebMode)),
-            ("Workers.Fetcher" or "Workers.RpcStub" or "Workers.RawBinding", "InvokeAsync") => Then(Converter(JsonWebMode)),
+            ("Workers.SyncKvStorage", "Get") or ("Workers.WebSocket", "DeserializeAttachment") => Call(CloneConverter()),
+            ("Workers.Fetcher" or "Workers.RpcStub" or "Workers.RawBinding", "InvokeAsync") => Then(CloneConverter()),
             ("Workers.UrlSearchParams", "As") => typeArgument is INamedTypeSymbol queryType && IsUserInstanceType(queryType)
                 && Converter(JsonQueryMode) is { } query
                     ? $"({query})({result})"
@@ -102,7 +112,18 @@ internal sealed partial class JavaScriptEmitter
         BindingIntrinsic intrinsic,
         IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
     {
+        if (intrinsic.Kind == BindingIntrinsicKind.ExportBinding
+            || (method.ContainingType.ToDisplayString(), method.Name) is
+            ("Workers.DurableObjectStorage" or "Workers.DurableObjectTransaction", "PutAsync")
+            or ("Workers.SyncKvStorage", "Put") or ("Workers.WebSocket", "SerializeAttachment"))
+            arguments = arguments.Select(argument =>
+                (argument.Parameter, Value: argument.Parameter.Name is "value" or "entries" or "attachment" or "props"
+                    && RpcResultNeedsConversion(argument.Parameter.Type)
+                        ? $"{RequireHelperName(JavaScriptHelper.RpcArguments, "rpcValue")}({argument.Value})"
+                        : argument.Value)).ToArray();
         var values = string.Join(", ", arguments.Select(item => item.Value));
+        if (method.ContainingType.ToDisplayString() == "Workers.Queue" && method.Name is "SendAsync" or "SendBatchAsync")
+            return $"{RequireHelperName(JavaScriptHelper.QueueMessages, method.Name == "SendAsync" ? "queueSend" : "queueSendBatch")}({receiver}, {values})";
         return intrinsic.Kind switch
         {
             BindingIntrinsicKind.Direct => $"{receiver}.{intrinsic.JavascriptName}({values})",
@@ -136,8 +157,8 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.QueryAs =>
                 $"((parameters) => Object.fromEntries(Array.from(new Set(parameters.keys()), name => [name, parameters.getAll(name)])))({receiver})",
             BindingIntrinsicKind.ReadableFromEnumerable => EmitReadableFrom(arguments[0].Value),
-            BindingIntrinsicKind.WebSocketMessageText => $"(typeof {receiver} === \"string\" ? {receiver} : new TextDecoder().decode({receiver}))",
-            BindingIntrinsicKind.WebSocketMessageBytes => $"(typeof {receiver} === \"string\" ? new TextEncoder().encode({receiver}) : new Uint8Array({receiver}))",
+            BindingIntrinsicKind.WebSocketMessageText => $"(message => typeof message === \"string\" ? message : new TextDecoder().decode(message))({receiver})",
+            BindingIntrinsicKind.WebSocketMessageBytes => $"(message => typeof message === \"string\" ? new TextEncoder().encode(message) : new Uint8Array(message))({receiver})",
             BindingIntrinsicKind.EventListener => intrinsic.JavascriptName == "message"
                 ? $"{receiver}.addEventListener(\"message\", event => ({arguments[0].Value})(event.data))"
                 : $"{receiver}.addEventListener(\"{intrinsic.JavascriptName}\", {arguments[0].Value})",

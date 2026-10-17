@@ -133,8 +133,70 @@ public static class Worker
     }
 }
 
+public sealed class StoredGraph
+{
+    public StoredGraph? Next { get; set; }
+    public string Describe() => Next == this ? "self" : "other";
+}
+
+public sealed class StoredSnapshot
+{
+    private readonly int value;
+    public StoredSnapshot(int value) { this.value = value; }
+    public string Describe() => "snapshot:" + value;
+}
+
 public sealed class EchoObject : DurableObject
 {
+    public async Task<bool> StoredCollectionsAsync()
+    {
+        var numbers = new Dictionary<int, int> { [1] = 2 };
+        await Ctx.Storage.PutAsync("numbers", numbers);
+        var restored = await Ctx.Storage.GetAsync<Dictionary<int, int>>("numbers");
+        await Ctx.Storage.PutAsync(new Dictionary<string, Dictionary<int, int>> { ["batch-numbers"] = numbers });
+        var batch = await Ctx.Storage.GetAsync<Dictionary<int, int>>("batch-numbers");
+        HashSet<(int, int)> points = [(7, 8)];
+        Ctx.Storage.Kv.Put("points", points);
+        var restoredPoints = Ctx.Storage.Kv.Get<HashSet<(int, int)>>("points");
+        var transaction = await Ctx.Storage.TransactionAsync(async storage =>
+        {
+            await storage.PutAsync("transaction-numbers", numbers);
+            var value = await storage.GetAsync<Dictionary<int, int>>("transaction-numbers");
+            return value![1] == 2;
+        });
+        var cycle = new Dictionary<int, object>();
+        cycle[1] = cycle;
+        await Ctx.Storage.PutAsync("cycle", cycle);
+        var restoredCycle = await Ctx.Storage.GetAsync<Dictionary<int, object>>("cycle");
+        return restored![1] == 2 && batch![1] == 2 && restoredPoints!.Contains((7, 8))
+            && transaction && restoredCycle![1] == restoredCycle;
+    }
+
+    public async Task<bool> StoredGraphAsync()
+    {
+        var graph = new StoredGraph();
+        graph.Next = graph;
+        await Ctx.Storage.PutAsync("graph", graph);
+        var restored = await Ctx.Storage.GetAsync<StoredGraph>("graph");
+        var several = await Ctx.Storage.GetAsync<StoredGraph>(new[] { "graph" });
+        var listed = await Ctx.Storage.ListAsync<StoredGraph>(new DurableObjectListOptions { Prefix = "graph" });
+        Ctx.Storage.Kv.Put("sync-graph", graph);
+        var sync = Ctx.Storage.Kv.Get<StoredGraph>("sync-graph");
+        var syncListed = Ctx.Storage.Kv.List<StoredGraph>(new SyncKvListOptions { Prefix = "sync-graph" });
+        var transaction = await Ctx.Storage.TransactionAsync(async storage =>
+        {
+            var value = await storage.GetAsync<StoredGraph>("graph");
+            var rows = await storage.ListAsync<StoredGraph>(new DurableObjectListOptions { Prefix = "graph" });
+            return value is not null && value.Next == value && rows["graph"].Describe() == "self";
+        });
+        await Ctx.Storage.PutAsync("snapshot", new StoredSnapshot(7));
+        var snapshot = await Ctx.Storage.GetAsync<StoredSnapshot>("snapshot");
+        return restored is not null && restored.Next == restored && restored.Describe() == "self"
+            && several["graph"].Next == several["graph"] && listed["graph"].Describe() == "self"
+            && sync is not null && sync.Next == sync && syncListed["sync-graph"].Describe() == "self"
+            && transaction && snapshot!.Describe() == "snapshot:7";
+    }
+
     private int _iteratorOffset;
 
     public async Task<bool> StoredListEnumerationAsync()

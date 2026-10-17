@@ -11,6 +11,13 @@ public static class Worker
         ExecutionContext context)
     {
         var path = new Url(request.Url).Pathname;
+        if (path == "/typed-json-bytes")
+            return new Response(new TextDecoder().Decode((await request.JsonAsync<byte[]>())!));
+        if (path == "/ai-typed")
+        {
+            var result = await environment.Ai("AI").RunAsync<AiInput, AiOutput>("model-a", new AiInput("hello"));
+            return new Response(result!.Format());
+        }
         if (path == "/service")
             return await environment.Service("SERVICE").FetchAsync("https://service.test/request");
 
@@ -103,4 +110,11 @@ public static class Worker
         var greeting = await environment.Service("SERVICE").InvokeAsync<string>("greet", "Ada");
         return new Response(greeting ?? "missing");
     }
+}
+
+public sealed record AiInput(string Prompt);
+public sealed class AiOutput
+{
+    [JsonName("answer_text")] public string Answer { get; init; } = "";
+    public string Format() => Answer.ToUpperInvariant();
 }

@@ -47,6 +47,7 @@ public static class Worker
     [Fetch]
     public static async Task<Response> Fetch(Request request, Env env)
     {
+        if (new Url(request.Url).Pathname == "/queries") return Queries.Run();
         if (new Url(request.Url).Pathname == "/semantics") return Semantics.Run();
         if (new Url(request.Url).Pathname == "/features") return LanguageFeatures.Run();
         if (new Url(request.Url).Pathname == "/composite") return CompositeFeatures.Run();

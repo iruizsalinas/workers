@@ -23,6 +23,7 @@ internal sealed partial class JavaScriptEmitter
 
         return name switch
         {
+            "Cast" when operationArguments.Length == 0 => LinqCast(invocation, method, source),
             "Where" when HasDelegate(parameters, operationArguments, 0, SpecialType.System_Boolean) =>
                 Linq(JavaScriptHelper.LinqWhere, source, operationArguments),
             "Select" when HasDelegate(parameters, operationArguments, 0) =>

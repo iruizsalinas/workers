@@ -5,6 +5,20 @@ import queueConsumer from "../../../examples/QueueConsumer/dist/worker.js";
 import scheduledTask from "../../../examples/ScheduledTask/dist/worker.js";
 
 describe("event workers", () => {
+  it.each([
+    [{ display_name: "Ada" }, "payload:Ada!"],
+    [{}, "payload:none!"],
+  ])("keeps typed queue body identity and JSON mapping for %j", async (body, expected) => {
+    const { default: worker } = await import("../fixtures/EventWrappers/dist/worker.js");
+    const batch = createMessageBatch("jobs", [{
+      id: "typed-payload", timestamp: new Date(), body, attempts: 1,
+    }]);
+    const context = createExecutionContext();
+    await worker.queue(batch, env, context);
+    expect((await getQueueResult(batch, context)).explicitAcks).toEqual(["typed-payload"]);
+    expect(await env.KV.get("typed-queue-payload")).toBe(expected);
+  });
+
   it("acknowledges queue messages through a native MessageBatch", async () => {
     const log = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const batch = createMessageBatch("jobs", [

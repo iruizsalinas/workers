@@ -1,7 +1,7 @@
 internal static partial class HelperSource
 {
     private static string LinqJoin(Func<string, string> name) => $$"""
-        function {{name("linqJoin")}}(outer, inner, outerKey, innerKey, selector, grouped) {
+        function {{name("linqJoin")}}(outer, inner, outerKey, innerKey, selector, grouped, createLookup = null) {
           if (outer == null || inner == null || outerKey == null || innerKey == null || selector == null)
             throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");
           return { *[Symbol.iterator]() {
@@ -9,7 +9,7 @@ internal static partial class HelperSource
             try {
               let item = iterator.next();
               if (item.done) return;
-              const lookup = new Map();
+              const lookup = createLookup === null ? new Map() : createLookup();
               for (const value of {{name("linqValues")}}(inner)) {
                 const key = innerKey(value);
                 if (key == null) continue;

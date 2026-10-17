@@ -84,8 +84,6 @@ public sealed class LinqOrderingTests
     }
 
     [Theory]
-    [InlineData("words.OrderBy(value => value)")]
-    [InlineData("(from word in words orderby word select word)")]
     [InlineData("items.OrderBy(value => value)")]
     [InlineData("numbers.OrderBy(value => value, Comparer<int>.Default)")]
     public void RejectsOrderingWithoutFaithfulDefaultComparerSemantics(string operation)

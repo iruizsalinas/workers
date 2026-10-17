@@ -45,8 +45,8 @@ internal sealed partial class JavaScriptEmitter
             "Workers.AbortController" => $"{receiver}.abort({values})",
             "Workers.RegExp" => method.Name switch
             {
-                "Replace" => $"{arguments[0]}.replace({receiver}, {arguments[1]})",
-                "Split" => $"{arguments[0]}.split({receiver})",
+                "Replace" => $"((expression, text, replacement) => text.replace(expression, replacement))({receiver}, {arguments[0]}, {arguments[1]})",
+                "Split" => $"((expression, text) => text.split(expression))({receiver}, {arguments[0]})",
                 _ => $"{receiver}.{LowerFirst(method.Name)}({values})"
             },
             "Workers.Log" => $"console.{LowerFirst(method.Name)}({values})",

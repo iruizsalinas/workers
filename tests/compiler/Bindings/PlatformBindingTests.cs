@@ -26,7 +26,7 @@ public sealed class PlatformBindingTests
             """);
 
         Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver).get($workers$arg1, $workers$arg2).then(value => value != null && \"body\" in value ? value : null))($workers$notNull(env)[\"FILES\"], \"key\", { range: { offset: 0, length: 10 } })", module);
-        Assert.Contains("(($workers$receiver$2, $workers$arg1$2, $workers$arg2$2) => $workers$notNull($workers$receiver$2).send($workers$arg1$2, $workers$arg2$2))($workers$notNull(env)[\"JOBS\"], { key: \"value\" }, { delaySeconds: 5 })", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2, $workers$arg2$2) => $workers$queueSend($workers$notNull($workers$receiver$2), $workers$arg1$2, $workers$arg2$2))($workers$notNull(env)[\"JOBS\"], { key: \"value\" }, { delaySeconds: 5 })", module);
         Assert.Contains("(($workers$receiver$3, $workers$arg1$3, $workers$arg2$3) => $workers$notNull($workers$receiver$3).match($workers$arg1$3, $workers$arg2$3).then(value => value ?? null))(caches.default, request, { ignoreMethod: true })", module);
         Assert.Contains("$workers$notNull($workers$notNull(env)[\"API\"]).fetch(\"https://example.com\")", module);
     }

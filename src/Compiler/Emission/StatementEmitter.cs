@@ -61,6 +61,12 @@ internal sealed partial class JavaScriptEmitter
                 if (collection.Type?.SpecialType == SpecialType.System_String)
                     enumerable = $"{_helpers.Require(JavaScriptHelper.LinqValues)}({enumerable})";
                 else if (IsDictionary(collection.Type) && !UsesKeyDictionary(collection.Type)) enumerable = $"Object.entries({enumerable})";
+                else if (!loop.IsAsynchronous && !IsArrayBackedList(collection.Type)
+                    && collection.Type is INamedTypeSymbol { TypeKind: TypeKind.Interface } contract
+                    && (contract.ToDisplayString() == "System.Collections.IEnumerable"
+                        || contract.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T
+                        || contract.AllInterfaces.Any(item => item.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)))
+                    enumerable = $"{_helpers.Require(JavaScriptHelper.LinqValues)}({enumerable})";
                 if (loop.Syntax is ForEachVariableStatementSyntax deconstructingLoop)
                 {
                     var element = _names.Get($"foreach-deconstruction:{loop.Syntax.SyntaxTree.FilePath}:{loop.Syntax.SpanStart}", "element");

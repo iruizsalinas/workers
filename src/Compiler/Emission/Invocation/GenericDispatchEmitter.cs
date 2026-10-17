@@ -22,7 +22,7 @@ internal sealed partial class JavaScriptEmitter
     private void PrepareGenericDispatch()
     {
         foreach (var method in _genericDispatchers.Keys.ToArray())
-            foreach (var type in _userTypes.Keys.ToArray())
+            foreach (var type in _userTypes.Keys.Concat(_runtimeInterfaceTypes).Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default).ToArray())
             {
                 if (type.IsAbstract || _genericDispatchTargets[method].ContainsKey(type)) continue;
                 var conversion = _compilation.ClassifyConversion(type, method.ContainingType);
@@ -67,8 +67,12 @@ internal sealed partial class JavaScriptEmitter
             var parameters = method.Parameters.Select((_, index) => $"$arg{index}").ToArray();
             _output.Append("function ").Append(name).Append('(').Append(string.Join(", ", parameters)).AppendLine(") {");
             _output.AppendLine($"  if (this == null) throw {NullReferenceException()};");
+            foreach (var (type, target) in _genericDispatchTargets[method].Where(pair => _runtimeInterfaceTypes.Contains(pair.Key)))
+                _output.Append("  if (this instanceof ").Append(RuntimeInterfaceTypeName(type)).Append(") return ")
+                    .Append(_userMethods[target]).Append(".call(this")
+                    .Append(parameters.Length == 0 ? "" : ", " + string.Join(", ", parameters)).AppendLine(");");
             _output.AppendLine("  switch (Object.getPrototypeOf(this)) {");
-            foreach (var (type, target) in _genericDispatchTargets[method])
+            foreach (var (type, target) in _genericDispatchTargets[method].Where(pair => !_runtimeInterfaceTypes.Contains(pair.Key)))
                 _output.Append("    case ").Append(_userTypes[type]).Append(".prototype: return ")
                     .Append(_userMethods[target]).Append(".call(this")
                     .Append(parameters.Length == 0 ? "" : ", " + string.Join(", ", parameters)).AppendLine(");");

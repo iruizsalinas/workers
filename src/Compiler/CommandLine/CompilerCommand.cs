@@ -31,32 +31,28 @@ internal static class CompilerCommand
             return 2;
         }
 
-        var compilerArguments = options.CompilerArguments is null ? null : CSharpCommandLineParser.Default.Parse(
-            CSharpCommandLineParser.SplitCommandLineIntoArguments(File.ReadAllText(options.CompilerArguments), removeHashComments: false),
+        var compilerArguments = CSharpCommandLineParser.Default.Parse(
+            CSharpCommandLineParser.SplitCommandLineIntoArguments(File.ReadAllText(options.ResponseFile), removeHashComments: false),
             options.Project, sdkDirectory: null);
-        if (compilerArguments?.Errors.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error) == true)
+        if (compilerArguments.Errors.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
         {
             foreach (var diagnostic in compilerArguments.Errors) error.WriteLine(diagnostic);
             return 1;
         }
-        var parseOptions = compilerArguments?.ParseOptions
-            ?? new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: options.Symbols);
-        var trees = options.SourcePaths
-            .Select(path => CSharpSyntaxTree.ParseText(File.ReadAllText(path), parseOptions, path))
+        var trees = compilerArguments.SourceFiles
+            .Select(file => CSharpSyntaxTree.ParseText(File.ReadAllText(file.Path), compilerArguments.ParseOptions, file.Path))
             .ToArray();
 
         string source;
         try
         {
-            source = compilerArguments is null
-                ? WorkerCompiler.Compile(trees, options.Reference is null ? [] : [options.Reference])
-                : WorkerCompiler.Compile(CSharpCompilation.Create("Workers.UserCode", trees,
-                    compilerArguments.MetadataReferences.Select(reference => MetadataReference.CreateFromFile(
-                        Path.GetFullPath(reference.Reference, options.Project), reference.Properties)),
-                    // CoreCompile already enforced warning policy, including analyzer configs.
-                    // Replay language semantics, but do not promote warnings without those configs.
-                    compilerArguments.CompilationOptions.WithGeneralDiagnosticOption(ReportDiagnostic.Default)
-                        .WithSpecificDiagnosticOptions([])));
+            source = WorkerCompiler.Compile(CSharpCompilation.Create("Workers.UserCode", trees,
+                compilerArguments.MetadataReferences.Select(reference => MetadataReference.CreateFromFile(
+                    Path.GetFullPath(reference.Reference, options.Project), reference.Properties)),
+                // CoreCompile already enforced warning policy, including analyzer configs.
+                // Replay language semantics, but do not promote warnings without those configs.
+                compilerArguments.CompilationOptions.WithGeneralDiagnosticOption(ReportDiagnostic.Default)
+                    .WithSpecificDiagnosticOptions([])));
         }
         catch (CompilationFailedException exception)
         {
@@ -90,17 +86,14 @@ internal static class CompilerCommand
         Compile C# source files to a Cloudflare Workers JavaScript module.
 
         Usage:
-          Workers.Compiler --project <path> --output <path> [options]
+          Workers.Compiler --project <path> --rsp <path> --output <path>
 
         Options:
-          --project <path>            Project directory and source path base. Required.
-          --output <path>             Output JavaScript module path. Required.
-          --sources <path>            File containing one C# source path per line.
-          --reference <path>          Workers API assembly reference.
-          --define <symbols>          Preprocessor symbols separated by commas or semicolons.
-          --compiler-arguments <path> MSBuild C# compiler arguments; preserves project references and options.
-          --help                      Show command-line help.
-          --version                   Show compiler version.
+          --project <path>  Project directory; relative paths in the response file resolve from here.
+          --rsp <path>      C# compiler response file from MSBuild: sources, references and options.
+          --output <path>   Output JavaScript module path.
+          --help            Show command-line help.
+          --version         Show compiler version.
 
         """;
 }

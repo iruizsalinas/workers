@@ -44,7 +44,8 @@ internal sealed partial class JavaScriptEmitter
     {
         var method = ResolveMethod(operation.TargetMethod);
         var receiver = operation.Instance is null ? null : Expression(operation.Instance);
-        var arguments = operation.Arguments.Select(argument => ValueExpression(argument.Value)).ToArray();
+        var arguments = operation.Arguments.OrderBy(argument => argument.Parameter!.Ordinal)
+            .Select(argument => ValueExpression(argument.Value)).ToArray();
         if (!method.IsStatic && NeedsNullCheck(operation.Instance))
         {
             var parameters = arguments.Select((_, i) => $"arg{i}").ToArray();

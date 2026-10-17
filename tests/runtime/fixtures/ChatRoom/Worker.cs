@@ -43,6 +43,23 @@ public sealed class ChatRoom : DurableObject
         var attachment = socket.DeserializeAttachment<ChatAttachment>()
             ?? new ChatAttachment("anonymous", new Date().ToIsoString());
         var text = message.AsText();
+        if (text == "attachment-graph")
+        {
+            var restored = false;
+            string? error = null;
+            try
+            {
+                var graph = new AttachmentGraph();
+                graph.Next = graph;
+                socket.SerializeAttachment(graph);
+                var value = socket.DeserializeAttachment<AttachmentGraph>();
+                restored = value is not null && value.Next == value && value.Describe() == "self";
+            }
+            catch (Exception exception) { error = exception.Message; }
+            finally { socket.SerializeAttachment(attachment); }
+            socket.Send(Json.Stringify(new { type = "attachment-graph", restored, error }));
+            return Task.CompletedTask;
+        }
         if (text == "who")
         {
             var users = new List<string>();
@@ -91,3 +108,10 @@ public sealed class ChatRoom : DurableObject
 }
 
 public sealed record ChatAttachment(string Name, string JoinedAt);
+
+public sealed class AttachmentGraph
+{
+    public AttachmentGraph? Next { get; set; }
+    public Dictionary<int, int> Values { get; init; } = new() { [1] = 2 };
+    public string Describe() => Next == this && Values[1] == 2 ? "self" : "other";
+}

@@ -1,5 +1,15 @@
 internal static partial class HelperSource
 {
+    private static string LinqCast(Func<string, string> name) => $$"""
+        function {{name("linqCast")}}(source, convert) {
+          if (source == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ source cannot be null.");
+          return { *[Symbol.iterator]() {
+            for (const value of {{name("linqValues")}}(source)) yield convert(value);
+          } };
+        }
+
+        """;
+
     private static string LinqWhere(Func<string, string> name) => $$"""
         function {{name("linqWhere")}}(source, predicate) {
           if (source == null || predicate == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("LINQ argument cannot be null.");

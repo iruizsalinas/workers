@@ -131,6 +131,9 @@ internal sealed partial class JavaScriptEmitter
         else if (instance is not IInstanceReferenceOperation) throw Unsupported("WRK104", operation.Syntax);
         if (symbol.ContainingType is { } owner && IsUserInstanceType(owner))
             return UserMemberAccess(value, symbol);
+        if (symbol.Name == "Count" && symbol.ContainingType.OriginalDefinition.ToDisplayString() is
+            "System.Collections.Generic.IReadOnlyCollection<T>" or "System.Collections.Generic.ICollection<T>")
+            return CollectionCount(symbol.ContainingType, instance.Type, value);
         if (symbol.Name is "Length" or "Count"
             && (symbol.ContainingType.SpecialType == SpecialType.System_String
                 || symbol.ContainingType.OriginalDefinition.ToDisplayString() is "System.Collections.Generic.List<T>"

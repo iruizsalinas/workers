@@ -1,14 +1,14 @@
 internal enum JavaScriptHelper
 {
     RequestCookies, SetCookie, TaskWhenAll, AsyncExpressionResult, StreamFrom, SequenceIndex, IndexRange, DictionaryIndex, IntegerDivide, IntegerRemainder,
-    SetAdd, QueueStack, RpcArguments, JsonExpect, TryCall, CollectionMembers, ListState, StringReplace,
-    StringOrdinal, Tuple, Delegates, StructuralKeys, TypeOf, Exceptions, SetState,
+    SetAdd, QueueStack, RpcArguments, QueueMessages, JsonExpect, TryCall, CollectionMembers, ListState, StringReplace,
+    StringOrdinal, Tuple, Delegates, StructuralKeys, KeyCollectionData, TypeOf, Exceptions, SetState,
     Router, HttpError, Cors, BoundedBody, Redirect,
     NumericParse, LinqValues, LinqWhere, LinqSelect, LinqSelectMany, LinqAppend, LinqPrepend, LinqSkip, LinqTake,
     LinqSkipWhile, LinqTakeWhile, LinqConcat, LinqAny, LinqAll, LinqCount, LinqContains, LinqDistinct,
     LinqDistinctBy, LinqSequenceEqual, LinqOrder, LinqGroupBy, LinqToDictionary, LinqToLookup,
     LinqNumericAggregate, LinqAggregate, LinqExtremum, LinqSet, LinqReverse, LinqDefaultIfEmpty, LinqChunk, LinqZip,
-    LinqJoin, LinqElementAt, LinqFirst, LinqLast, LinqSingle, LinqToArray
+    LinqJoin, LinqElementAt, LinqFirst, LinqLast, LinqSingle, LinqCast, LinqLookup, LinqToArray
 }
 
 internal sealed class HelperRegistry(GeneratedNameAllocator names)
@@ -18,6 +18,7 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
     public string Require(JavaScriptHelper helper)
     {
         _required.Add(helper);
+        if (helper is JavaScriptHelper.QueueMessages) Require(JavaScriptHelper.RpcArguments);
         if (helper.IsLinqOperator() || helper is JavaScriptHelper.NumericParse or JavaScriptHelper.CollectionMembers
             or JavaScriptHelper.DictionaryIndex or JavaScriptHelper.StructuralKeys or JavaScriptHelper.SequenceIndex
             or JavaScriptHelper.IndexRange or JavaScriptHelper.IntegerDivide or JavaScriptHelper.IntegerRemainder
@@ -28,6 +29,8 @@ internal sealed class HelperRegistry(GeneratedNameAllocator names)
         if (helper is JavaScriptHelper.CollectionMembers or JavaScriptHelper.QueueStack)
             _required.Add(JavaScriptHelper.LinqValues);
         if (helper is JavaScriptHelper.StructuralKeys) _required.Add(JavaScriptHelper.LinqValues);
+        if (helper is JavaScriptHelper.StructuralKeys or JavaScriptHelper.RpcArguments)
+            _required.Add(JavaScriptHelper.KeyCollectionData);
         if (helper.IsLinqOperator())
             _required.Add(JavaScriptHelper.LinqValues);
         if (helper is JavaScriptHelper.SequenceIndex or JavaScriptHelper.CollectionMembers)
@@ -58,12 +61,14 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.SetState => "setCreate",
         JavaScriptHelper.Delegates => "delegateCreate",
         JavaScriptHelper.StructuralKeys => "keyCollection",
+        JavaScriptHelper.KeyCollectionData => "keyCollectionKinds",
         JavaScriptHelper.DictionaryIndex => "dictionaryIndex",
         JavaScriptHelper.IntegerDivide => "integerDivide",
         JavaScriptHelper.IntegerRemainder => "integerRemainder",
         JavaScriptHelper.SetAdd => "setAdd",
         JavaScriptHelper.QueueStack => "queueStackCreate",
         JavaScriptHelper.RpcArguments => "rpcArguments",
+        JavaScriptHelper.QueueMessages => "queueSend",
         JavaScriptHelper.JsonExpect => "jsonExpect",
         JavaScriptHelper.TryCall => "tryCall",
         JavaScriptHelper.CollectionMembers => "collectionKey",
@@ -109,6 +114,8 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.LinqFirst => "linqFirst",
         JavaScriptHelper.LinqLast => "linqLast",
         JavaScriptHelper.LinqSingle => "linqSingle",
+        JavaScriptHelper.LinqCast => "linqCast",
+        JavaScriptHelper.LinqLookup => "linqLookup",
         JavaScriptHelper.LinqToArray => "linqToArray",
         _ => throw new ArgumentOutOfRangeException(nameof(helper))
     };

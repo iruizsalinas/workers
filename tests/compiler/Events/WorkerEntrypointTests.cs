@@ -2,6 +2,31 @@ namespace Workers.Compiler.Tests;
 
 public sealed class WorkerEntrypointTests
 {
+    [Theory]
+    [InlineData("default")]
+    [InlineData("class")]
+    [InlineData("delete")]
+    public void DefaultExportsUseLegalLocalClassNames(string name)
+    {
+        var module = Compile($$"""
+            using Workers;
+            [DefaultExport]
+            public sealed class @{{name}} : WorkerEntrypoint
+            {
+                public Task<Payload> LoadAsync() => Task.FromResult(new Payload());
+                public override async Task<Response> FetchAsync(Request request) {
+                    var value = await Env.Get<@{{name}}>("SELF").LoadAsync();
+                    return Response.Json(value);
+                }
+            }
+            public sealed class Payload { public string Name { get; } = "Ada"; }
+            """);
+
+        Assert.DoesNotContain($"export default class {name} extends", module);
+        Assert.Contains($"export default class $workers${name} extends", module);
+        Assert.Contains($"instanceof $workers${name}", module);
+    }
+
     [Fact]
     public void AllowsConstantsWithoutCreatingEntrypointState()
     {
@@ -51,7 +76,8 @@ public sealed class WorkerEntrypointTests
             """);
 
         Assert.Contains("WorkerEntrypoint", module);
-        Assert.Contains("export class Users extends", module);
+        Assert.Contains("class $workers$Users extends", module);
+        Assert.Contains("export { $workers$Users as Users };", module);
         Assert.Contains("async find(prefix, limit = 10)", module);
         Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).waitUntil($workers$arg1))(this.ctx, Promise.resolve())", module);
         Assert.Contains("$workers$notNull($workers$notNull(this.env)[\"DATA\"])", module);

@@ -3,6 +3,22 @@ import { describe, expect, it, vi } from "vitest";
 import "../support.js";
 
 describe("mocked platform bindings", () => {
+  it("uses native byte buffers for typed JSON request bodies", async () => {
+    const { default: worker } = await import("../fixtures/MockBindings/dist/worker.js");
+    const response = await worker.fetch(new Request("https://worker.test/typed-json-bytes", {
+      method: "POST", body: "[65,66]",
+    }), {}, createExecutionContext());
+    expect(await response.text()).toBe("AB");
+  });
+
+  it("hydrates typed AI output using the output type rather than the input type", async () => {
+    const { default: worker } = await import("../fixtures/MockBindings/dist/worker.js");
+    const run = vi.fn(async () => ({ answer_text: "hello" }));
+    const response = await worker.fetch(new Request("https://worker.test/ai-typed"), { AI: { run } }, createExecutionContext());
+    expect(await response.text()).toBe("HELLO");
+    expect(run).toHaveBeenCalledWith("model-a", { prompt: "hello" });
+  });
+
   it("lowers remote-only bindings to explicit mock call shapes", async () => {
     const mocks = {
       dispatchGet: vi.fn(() => ({ fetch: vi.fn(async () => new Response("tenant")) })),
