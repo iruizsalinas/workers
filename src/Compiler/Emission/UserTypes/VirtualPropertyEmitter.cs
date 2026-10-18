@@ -5,6 +5,14 @@ using System.Text.Json;
 
 internal sealed partial class JavaScriptEmitter
 {
+    private void EmitSetterValueCopy(IMethodSymbol setter, int depth)
+    {
+        var parameter = setter.Parameters.Last();
+        var name = UserIdentifier(parameter, parameter.Name);
+        var copy = CopyValue(parameter.Type, name);
+        if (copy != name) _output.Append(' ', depth * 2).Append(name).Append(" = ").Append(copy).AppendLine(";");
+    }
+
     private static bool HasPropertyDescriptor(IPropertySymbol property) =>
         property.IsVirtual || property.IsOverride || property.DeclaringSyntaxReferences.Any(reference =>
             reference.GetSyntax() is PropertyDeclarationSyntax declaration && !IsAutoProperty(declaration));
@@ -17,12 +25,12 @@ internal sealed partial class JavaScriptEmitter
     private void EmitVirtualAutoProperty(PropertyDeclarationSyntax declaration)
     {
         var property = (IPropertySymbol)_model.GetDeclaredSymbol(declaration)!;
-        var name = UserMemberName(property);
+        var declaredName = UserMemberDeclarationName(property);
         var storage = UserPropertyStorage("this", property);
         if (property.GetMethod is not null)
-            _output.Append("  get ").Append(name).Append("() { return ").Append(storage).AppendLine("; }");
+            _output.Append("  get ").Append(declaredName).Append("() { return ").Append(storage).AppendLine("; }");
         if (property.SetMethod is not null)
-            _output.Append("  set ").Append(name).Append("(value) { ").Append(storage).AppendLine(" = value; }");
+            _output.Append("  set ").Append(declaredName).Append("(value) { ").Append(storage).AppendLine(" = value; }");
         EmitInheritedPropertyAccessors(property, declaration);
     }
 
@@ -30,11 +38,12 @@ internal sealed partial class JavaScriptEmitter
     // replace only the declared accessor, so preserve the other accessor explicitly.
     private void EmitInheritedPropertyAccessors(IPropertySymbol property, SyntaxNode source)
     {
+        var declaredName = UserMemberDeclarationName(property);
         if (property.GetMethod is null && PropertyAccessor(property.OverriddenProperty, getter: true) is { } getter)
-            _output.Append("  get ").Append(UserMemberName(property)).Append("() { return ")
+            _output.Append("  get ").Append(declaredName).Append("() { return ")
                 .Append(BasePropertyGet((IPropertySymbol)getter.AssociatedSymbol!, source)).AppendLine("; }");
         if (property.SetMethod is null && PropertyAccessor(property.OverriddenProperty, getter: false) is { } setter)
-            _output.Append("  set ").Append(UserMemberName(property)).Append("(value) { ")
+            _output.Append("  set ").Append(declaredName).Append("(value) { ")
                 .Append(BasePropertyDescriptor((IPropertySymbol)setter.AssociatedSymbol!, source)).AppendLine(".set.call(this, value); }");
     }
 

@@ -73,6 +73,7 @@ internal sealed partial class JavaScriptEmitter
             EmitWithExpressionScope(1, () =>
             {
                 EmitExplicitStaticInitialization(method.ContainingType, 1);
+                if (method.MethodKind == MethodKind.PropertySet) EmitSetterValueCopy(method, 1);
                 if (expression is not null) _output.Append("  ").Append(method.ReturnsVoid ? "" : "return ").Append(ValueExpression(expression)).AppendLine(";");
                 else EmitStatements(body?.Statements ?? [], 1);
             });

@@ -36,7 +36,8 @@ internal sealed partial class JavaScriptEmitter
     {
         var indent = new string(' ', depth * 2);
         _diagnosticNode = operation.Syntax;
-        if (operation.Syntax is StatementSyntax statement)
+        if (operation.Syntax is StatementSyntax statement
+            && operation is not (IForLoopOperation or IWhileLoopOperation))
             EmitScopeVariableDeclarations(statement, indent);
         switch (operation)
         {
@@ -150,34 +151,20 @@ internal sealed partial class JavaScriptEmitter
             case IBranchOperation { BranchKind: BranchKind.Break }:
                 _output.Append(indent).AppendLine("break;");
                 break;
-            case IBranchOperation { BranchKind: BranchKind.Continue }:
-                _output.Append(indent).AppendLine("continue;");
+            case IBranchOperation { BranchKind: BranchKind.Continue } branch:
+                _output.Append(indent).Append(_loopContinueTargets.TryGetValue(branch.Target, out var continueTarget)
+                    ? $"break {continueTarget};" : "continue;").AppendLine();
                 break;
             case IThrowOperation value:
                 var exception = value.Exception is not null ? ThrowValue(value.Exception)
                     : _caughtExceptions.TryPeek(out var caught) ? caught : throw Unsupported("WRK108", value.Syntax);
                 _output.Append(indent).Append("throw ").Append(exception).AppendLine(";");
                 break;
-            case IWhileLoopOperation { ConditionIsTop: false } loop:
-                _output.Append(indent).AppendLine("do {");
-                EmitEmbedded(loop.Body, depth + 1);
-                _output.Append(indent).Append("} while (").Append(Expression(loop.Condition!)).AppendLine(");");
-                break;
             case IWhileLoopOperation loop:
-                _output.Append(indent).Append("while (").Append(Expression(loop.Condition!)).AppendLine(") {");
-                EmitEmbedded(loop.Body, depth + 1);
-                _output.Append(indent).AppendLine("}");
+                EmitWhile(loop, depth);
                 break;
             case IForLoopOperation loop:
-                // C# shares initializer locals across iterations; JS header let does not.
-                _output.Append(indent).AppendLine("{");
-                foreach (var initializer in loop.Before) EmitStatement(initializer, depth + 1);
-                _output.Append(indent).Append("  for (; ")
-                    .Append(loop.Condition is null ? "" : Expression(loop.Condition)).Append("; ")
-                    .Append(string.Join(", ", loop.AtLoopBottom.Select(ForInitializer))).AppendLine(") {");
-                EmitEmbedded(loop.Body, depth + 2);
-                _output.Append(indent).AppendLine("  }");
-                _output.Append(indent).AppendLine("}");
+                EmitFor(loop, depth);
                 break;
             case IUsingOperation { Resources: IVariableDeclarationGroupOperation } value:
                 var source = (UsingStatementSyntax)value.Syntax;
@@ -253,6 +240,7 @@ internal sealed partial class JavaScriptEmitter
                 if (statements[index] is IUsingDeclarationOperation resource)
                 {
                     _diagnosticNode = resource.Syntax;
+                    EmitScopeVariableDeclarations(resource.Syntax, new string(' ', depth * 2));
                     var local = (LocalDeclarationStatementSyntax)resource.Syntax;
                     var rest = statements.Skip(index + 1).ToArray();
                     EmitUsing(local.Declaration, resource.IsAsynchronous, body => EmitStatements(rest, body), depth);

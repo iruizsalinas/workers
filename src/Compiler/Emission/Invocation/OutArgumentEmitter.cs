@@ -39,7 +39,7 @@ internal sealed partial class JavaScriptEmitter
             throw UnsupportedSymbol(method, invocation);
 
         var sourceInputs = operation.Arguments.Where(argument => argument.Parameter?.RefKind != RefKind.Out
-            && argument.ArgumentKind != ArgumentKind.DefaultValue).Select(argument => Expression(argument.Value)).ToArray();
+            && argument.ArgumentKind != ArgumentKind.DefaultValue).Select(argument => ValueExpression(argument.Value)).ToArray();
         var key = $"out:{invocation.SyntaxTree.FilePath}:{invocation.SpanStart}";
         var inputs = sourceInputs.Select((_, index) => _names.Get($"{key}:argument:{index}", $"arg{index + 1}")).ToArray();
         var receiver = operation.Instance is null ? null : _names.Get(key + ":receiver", "receiver");

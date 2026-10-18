@@ -178,7 +178,7 @@ internal sealed partial class JavaScriptEmitter
         if (operation.Target is IPropertyReferenceOperation { Property.IsIndexer: true } property)
         {
             if (UsesKeyDictionary(property.Instance?.Type))
-                return $"((map, key, value) => {{ {NotNull("map")}.set(key, value); return value; }})({Expression(property.Instance!)}, {Expression(property.Arguments.Single().Value)}, {right})";
+                return $"((map, key, value) => {{ {NotNull("map")}.set(key, value); return value; }})({Expression(property.Instance!)}, {ValueExpression(property.Arguments.Single().Value)}, {right})";
             if (property.Property.ContainingType.ToDisplayString() == "Workers.Headers")
             {
                 var receiver = Expression(property.Instance!);
@@ -298,15 +298,13 @@ internal sealed partial class JavaScriptEmitter
         {
             var reference = _names.Get($"indexer-mutation:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "reference");
             var mutation = emit(reference + ".value");
-            return isAsync ? $"(await (async ({reference}) => {mutation})({AssignmentReference(operation)}))"
-                : $"(({reference}) => {mutation})({AssignmentReference(operation)})";
+            return Capture(reference, AssignmentReference(operation), mutation);
         }
         if (operation is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true })
         {
             var reference = _names.Get($"tuple-mutation:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "reference");
             var mutation = emit(reference + ".value");
-            return isAsync ? $"(await (async ({reference}) => {mutation})({AssignmentReference(operation)}))"
-                : $"(({reference}) => {mutation})({AssignmentReference(operation)})";
+            return Capture(reference, AssignmentReference(operation), mutation);
         }
         if (operation is IPropertyReferenceOperation propertyReference
             && operation.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
@@ -315,8 +313,7 @@ internal sealed partial class JavaScriptEmitter
             var reference = _names.Get($"base-mutation:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "reference");
             var mutation = emit(reference + ".value");
             var argument = BasePropertyReference(propertyReference.Property, operation.Syntax);
-            return isAsync ? $"(await (async ({reference}) => {mutation})({argument}))"
-                : $"(({reference}) => {mutation})({argument})";
+            return Capture(reference, argument, mutation);
         }
         var instance = operation switch
         {
@@ -328,9 +325,15 @@ internal sealed partial class JavaScriptEmitter
         var source = operation.Syntax;
         var receiver = _names.Get($"mutation:{source.SyntaxTree.FilePath}:{source.SpanStart}", "receiver");
         var body = emit(Member(operation, NeedsNullCheck(instance) ? NotNull(receiver) : receiver));
-        return isAsync
-            ? $"(await (async ({receiver}) => {body})({Expression(instance)}))"
-            : $"(({receiver}) => {body})({Expression(instance)})";
+        return Capture(receiver, Expression(instance), body);
+
+        string Capture(string parameter, string argument, string mutation)
+        {
+            if (!isAsync) return $"(({parameter}) => {mutation})({argument})";
+            if (!_expressionTemporaryScopes.TryPeek(out var temporaries)) throw Unsupported("WRK108", operation.Syntax);
+            temporaries.Add(parameter);
+            return $"(({parameter} = {argument}), {mutation})";
+        }
     }
 
     private static bool ContainsAwait(IOperation operation) => operation is IAwaitOperation
@@ -364,8 +367,8 @@ internal sealed partial class JavaScriptEmitter
             clone = $"((source) => {copy})({NotNull(Expression(operation.Operand))})";
         }
         var isAsync = ContainsAwait(operation.Initializer);
-        var initialized = $"({(isAsync ? "async " : "")}({temporary}) => {{ {string.Join(" ", assignments)} return {temporary}; }})({clone})";
-        return isAsync ? $"(await {initialized})" : initialized;
+        return isAsync ? AsyncInitializerBody(value, [temporary], [clone], string.Join(" ", assignments), temporary)
+            : $"(({temporary}) => {{ {string.Join(" ", assignments)} return {temporary}; }})({clone})";
     }
 
     private static bool IsSimpleMutationTarget(IOperation target) => target switch
@@ -454,10 +457,15 @@ internal sealed partial class JavaScriptEmitter
     private string Spread(ISpreadOperation operation, ITypeSymbol? elementType)
     {
         var values = Expression(operation.Operand);
-        if (operation.Operand.Type?.SpecialType == SpecialType.System_String)
+        if (operation.Operand.Type is not IArrayTypeSymbol && !IsArrayBackedList(operation.Operand.Type))
             values = HelperInvocation(JavaScriptHelper.LinqValues, [values]);
-        if (operation.ElementConversion.IsIdentity || operation.ElementConversion.IsReference
-            || elementType?.SpecialType == SpecialType.System_Object) return elementType is null ? values : CopySequenceValues(elementType, values);
+        if (elementType?.SpecialType == SpecialType.System_Object && operation.ElementType is { } sourceElement)
+        {
+            var boxed = ObjectConversion(sourceElement, "value", operation.Syntax);
+            return boxed == "value" ? values : $"Array.from({values}, value => {boxed})";
+        }
+        if (operation.ElementConversion.IsIdentity || operation.ElementConversion.IsReference)
+            return elementType is null ? values : CopySequenceValues(elementType, values);
         if (elementType is null || operation.ElementType is null || operation.ElementConversion.IsUserDefined)
             throw Unsupported("WRK108", operation.Syntax);
         var converted = ConvertValue(operation.ElementType, elementType, "value", operation.Syntax);

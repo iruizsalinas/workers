@@ -50,16 +50,19 @@ internal sealed partial class JavaScriptEmitter
             _output.Append("  constructor(")
                 .Append(string.Join(", ", constructor?.ParameterList.Parameters.Select(ParameterDeclaration) ?? []))
                 .AppendLine(") {");
-            foreach (var field in fields)
-                foreach (var variable in field.Declaration.Variables)
-                    _output.Append("    this.").Append(GeneratedFieldName((IFieldSymbol)_model.GetDeclaredSymbol(variable)!)).Append(" = ")
-                        .Append(variable.Initializer is null
-                            ? DefaultFieldValue(_model.GetTypeInfo(field.Declaration.Type).Type!, variable)
-                            : Expression(variable.Initializer.Value)).AppendLine(";");
-            if (constructor?.ExpressionBody is not null)
-                _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
-            else
-                EmitStatements(constructor?.Body?.Statements ?? [], 2);
+            EmitWithExpressionScope(2, () =>
+            {
+                foreach (var field in fields)
+                    foreach (var variable in field.Declaration.Variables)
+                        _output.Append("    this.").Append(GeneratedFieldName((IFieldSymbol)_model.GetDeclaredSymbol(variable)!)).Append(" = ")
+                            .Append(variable.Initializer is null
+                                ? DefaultFieldValue(_model.GetTypeInfo(field.Declaration.Type).Type!, variable)
+                                : ValueExpression(variable.Initializer.Value)).AppendLine(";");
+                if (constructor?.ExpressionBody is not null)
+                    _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
+                else
+                    EmitStatements(constructor?.Body?.Statements ?? [], 2);
+            });
             _output.AppendLine("  }");
         }
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())
@@ -77,7 +80,7 @@ internal sealed partial class JavaScriptEmitter
                 if (isEnumerable)
                     EmitEnumerableIteratorBody(method, 2);
                 else if (method.ExpressionBody is not null)
-                    _output.Append("    return ").Append(Expression(method.ExpressionBody.Expression)).AppendLine(";");
+                    _output.Append("    return ").Append(ValueExpression(method.ExpressionBody.Expression)).AppendLine(";");
                 else
                     EmitStatements(method.Body?.Statements ?? [], 2);
             });

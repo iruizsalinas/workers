@@ -25,8 +25,8 @@ internal sealed partial class JavaScriptEmitter
                             : throw Unsupported("WRK106", member.Syntax);
                         var body = BoundInitializers(member.Initializer, indexedAccess);
                         var asynchronous = ContainsAwait(member.Initializer);
-                        var initialization = $"({(asynchronous ? "async " : "")}({string.Join(", ", captures)}) => {{ {body} }})({string.Join(", ", arguments)})";
-                        return asynchronous ? $"await {initialization};" : initialization + ";";
+                        return asynchronous ? AsyncInitializerBody(member.Syntax, captures, arguments, body, "null") + ";"
+                            : $"(({string.Join(", ", captures)}) => {{ {body} }})({string.Join(", ", arguments)});";
                     }
                     var access = Expression(member.InitializedMember);
                     // C# reevaluates the initialized member for each nested element.

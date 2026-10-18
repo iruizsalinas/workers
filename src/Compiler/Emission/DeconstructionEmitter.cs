@@ -89,8 +89,8 @@ internal sealed partial class JavaScriptEmitter
         if (method.ContainingType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
             return value;
         if (method.IsImplicitlyDeclared && method.ContainingType.IsRecord)
-            return "((receiver) => [" + string.Join(", ", outputs.Select(parameter => UserMemberAccess("receiver",
-                UserTypeProperties(method.ContainingType).First(property => property.Name == parameter.Name)))) + $"])({NotNull(value)})";
+            return "((receiver) => [" + string.Join(", ", outputs.Select(parameter => CopyValue(parameter.Type, UserMemberAccess("receiver",
+                RecordPositionalMember(method.ContainingType, parameter.Name))))) + $"])({NotNull(value)})";
         var args = outputs.Select((_, index) => $"({{ set value(value) {{ outputs[{index}] = value; }} }})").ToArray();
         var call = method.IsStatic
             ? $"{QueueUserMethod(method, source)}({string.Join(", ", new[] { "receiver" }.Concat(args))})"
@@ -102,7 +102,7 @@ internal sealed partial class JavaScriptEmitter
     {
         if (target is IPropertyReferenceOperation userIndexer && IsUserIndexer(userIndexer.Property)) return UserIndexerReference(userIndexer);
         if (target is IPropertyReferenceOperation mapIndexer && UsesKeyDictionary(mapIndexer.Instance?.Type))
-            return $"((map, key) => ({{ get value() {{ return {NotNull("map")}.get(key); }}, set value(value) {{ {NotNull("map")}.set(key, value); }} }}))({Expression(mapIndexer.Instance!)}, {Expression(mapIndexer.Arguments.Single().Value)})";
+            return $"((map, key) => ({{ get value() {{ return {NotNull("map")}.get(key); }}, set value(value) {{ {NotNull("map")}.set(key, value); }} }}))({Expression(mapIndexer.Instance!)}, {ValueExpression(mapIndexer.Arguments.Single().Value)})";
         var assigned = _names.Get($"assignment-reference:{target.Syntax.SyntaxTree.FilePath}:{target.Syntax.SpanStart}:value", "assigned");
         if (target is IParameterReferenceOperation primary && IsClassPrimaryParameter(primary.Parameter))
             return $"((receiver) => ({{ get value() {{ return {PrimaryParameterStorage(primary.Parameter, "receiver")}; }}, set value(value) {{ {PrimaryParameterStorage(primary.Parameter, "receiver")} = value; }} }}))(this)";

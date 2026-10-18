@@ -40,13 +40,15 @@ internal sealed partial class JavaScriptEmitter
         if (declaration is RecordDeclarationSyntax { ParameterList: { } parameters })
             foreach (var parameter in parameters.Parameters)
             {
-                var property = type.GetMembers(parameter.Identifier.ValueText).OfType<IPropertySymbol>().Single();
+                var property = type.GetMembers(parameter.Identifier.ValueText).OfType<IPropertySymbol>().SingleOrDefault();
+                if (property is null || property.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is PropertyDeclarationSyntax)) continue;
                 _output.Append("    ").Append(UserMemberAccess("this", property)).Append(" = ")
                     .Append(DefaultFieldValue(property.Type, parameter)).AppendLine(";");
             }
         foreach (var property in declaration.Members.OfType<PropertyDeclarationSyntax>().Where(IsAutoProperty))
         {
             var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
+            if (symbol.IsStatic) continue;
             _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
                 .Append(DefaultFieldValue(symbol.Type, property)).AppendLine(";");
         }

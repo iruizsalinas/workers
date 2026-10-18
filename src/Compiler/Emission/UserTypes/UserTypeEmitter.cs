@@ -93,6 +93,13 @@ internal sealed partial class JavaScriptEmitter
             : $"{receiver}[{JsonSerializer.Serialize(name)}]";
     }
 
+    // The member name as written in a class body, such as after get or set.
+    private string UserMemberDeclarationName(ISymbol member)
+    {
+        var name = UserMemberName(member);
+        return IsJavaScriptPropertyIdentifier(name) ? name : $"[{JsonSerializer.Serialize(name)}]";
+    }
+
     private static bool IsJavaScriptPropertyIdentifier(string value) => value != "__proto__" && value.Length != 0
         && (char.IsAsciiLetter(value[0]) || value[0] is '_' or '$')
         && value.Skip(1).All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '$');

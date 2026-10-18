@@ -15,8 +15,7 @@ internal sealed partial class JavaScriptEmitter
     {
         IDiscardPatternOperation => "true",
         IConstantPatternOperation constant => ConstantPatternTest(constant, value),
-        IRelationalPatternOperation relational =>
-            $"({value} != null && {value} {BinaryOperator(relational.OperatorKind)} {Expression(relational.Value)})",
+        IRelationalPatternOperation relational => RelationalPatternTest(relational, value),
         IBinaryPatternOperation binary => $"({PatternTest(binary.LeftPattern, value)} " +
             $"{(binary.OperatorKind == BinaryOperatorKind.And ? "&&" : "||")} {PatternTest(binary.RightPattern, value)})",
         INegatedPatternOperation { Pattern: IConstantPatternOperation { Value.ConstantValue: { HasValue: true, Value: null } } } => $"{value} != null",
@@ -29,9 +28,27 @@ internal sealed partial class JavaScriptEmitter
         _ => throw Unsupported("WRK104", operation.Syntax)
     };
 
+    private string RelationalPatternTest(IRelationalPatternOperation operation, string value)
+    {
+        var constant = operation.Value.Type?.SpecialType;
+        var numeric = constant is >= SpecialType.System_SByte and <= SpecialType.System_Decimal;
+        // An object input also implies a type test. Integral and floating values share one
+        // JavaScript number type, so only a fractional value can be told apart from an integral one.
+        var guard = ResolveType(operation.InputType).SpecialType != SpecialType.System_Object || !numeric ? $"{value} != null"
+            : constant is >= SpecialType.System_SByte and <= SpecialType.System_UInt64 ? $"Number.isInteger({value})"
+            : $"typeof {value} === \"number\"";
+        return $"({guard} && {value} {BinaryOperator(operation.OperatorKind)} {Expression(operation.Value)})";
+    }
+
     private string ConstantPatternTest(IConstantPatternOperation constant, string value)
     {
         if (constant.Value.ConstantValue is { HasValue: true, Value: null }) return $"{value} == null";
+        if (constant.InputType is { } input && ResolveType(input).SpecialType == SpecialType.System_Object && IsTextEnum(constant.Value.Type))
+        {
+            var type = ResolveType(constant.Value.Type!);
+            var identity = System.Text.Json.JsonSerializer.Serialize(RuntimeTypeName(type));
+            return $"({value} != null && {value}[{BoxedEnumTypeSlot}] === {identity} && Number({value}) === {Expression(constant.Value)})";
+        }
         if (constant.Value.ConstantValue is { HasValue: true, Value: double or float } number
             && double.IsNaN(Convert.ToDouble(number.Value)))
             return $"Number.isNaN({value})";
@@ -44,13 +61,14 @@ internal sealed partial class JavaScriptEmitter
         if (!_declaredPatternVariables.Contains(symbol))
             throw new NotSupportedException(
                 "WRK104: A pattern variable is only supported inside a statement or switch expression; use a block body.");
-        return $"({condition} && (({UserIdentifier(symbol, symbol.Name)} = {value}), true))";
+        var assigned = symbol is ILocalSymbol local ? CopyValue(local.Type, value) : value;
+        return $"({condition} && (({UserIdentifier(symbol, symbol.Name)} = {assigned}), true))";
     }
 
     private string TypePatternTest(ITypeSymbol type, string value, ITypeSymbol? input, SyntaxNode source)
     {
         type = ResolveType(type);
-        var unwrappedInput = input is null ? null : UnwrapNullable(input);
+        var unwrappedInput = input is null ? null : UnwrapNullable(ResolveType(input));
         if (unwrappedInput is not null && SymbolEqualityComparer.Default.Equals(unwrappedInput, type))
             return $"{value} != null";
         if (type.SpecialType == SpecialType.System_String) return $"typeof {value} === \"string\"";
@@ -171,7 +189,11 @@ internal sealed partial class JavaScriptEmitter
             {
                 var after = operation.Patterns.Length - index - 1;
                 if (slice.Pattern is not null)
-                    conditions.Add(SubpatternTest(slice.Pattern, $"{value}.slice({index}, {value}.length - {after})"));
+                {
+                    var sliced = $"{value}.slice({index}, {value}.length - {after})";
+                    if (input is IArrayTypeSymbol array) sliced = CopySequenceValues(array.ElementType, sliced);
+                    conditions.Add(SubpatternTest(slice.Pattern, sliced));
+                }
                 continue;
             }
             var position = sliceIndex >= 0 && index > sliceIndex
@@ -250,13 +272,13 @@ internal sealed partial class JavaScriptEmitter
         }
         body.Add("throw new Error(\"The switch expression does not handle all possible values.\");");
         if (!isAsync)
-            return $"(({parameter}) => {{ {string.Join(" ", body)} }})({Expression(operation.Value)})";
+            return $"(({parameter}) => {{ {string.Join(" ", body)} }})({ValueExpression(operation.Value)})";
         // The wrapper stores its result rather than returning it, so a Task-valued arm keeps
         // its identity. Inspect completion before awaiting to preserve synchronous branches.
         var resultHelper = _helpers.Require(JavaScriptHelper.AsyncExpressionResult);
         var function = $"(async ({parameter}, {state}) => {{ try {{ {string.Join(" ", body)} }} " +
             $"catch ($workers$error) {{ {state}.error = $workers$error; {state}.failed = true; {state}.done = true; }} }})" +
-            $"({Expression(operation.Value)}, {state})";
+            $"({ValueExpression(operation.Value)}, {state})";
         return $"(({state} = {{}}), {state}.pending = {function}, {state}.done ? {resultHelper}({state}) : " +
             $"(await {state}.pending, {resultHelper}({state})))";
     }

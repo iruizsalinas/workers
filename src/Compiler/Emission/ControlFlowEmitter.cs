@@ -3,6 +3,76 @@ using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
+    private readonly Dictionary<ILabelSymbol, string> _loopContinueTargets = new(SymbolEqualityComparer.Default);
+
+    private void EmitWhile(IWhileLoopOperation operation, int depth)
+    {
+        var indent = new string(' ', depth * 2);
+        var variables = new List<string>();
+        DeclareScopeVariables(operation.Condition!.Syntax, variables.Add);
+        if (variables.Count == 0)
+        {
+            if (operation.ConditionIsTop)
+                _output.Append(indent).Append("while (").Append(Expression(operation.Condition)).AppendLine(") {");
+            else _output.Append(indent).AppendLine("do {");
+            EmitEmbedded(operation.Body, depth + 1);
+            if (operation.ConditionIsTop) _output.Append(indent).AppendLine("}");
+            else _output.Append(indent).Append("} while (").Append(Expression(operation.Condition)).AppendLine(");");
+            return;
+        }
+        _output.Append(indent).AppendLine("while (true) {");
+        if (!operation.ConditionIsTop) EmitContinueBlock(operation, depth + 1);
+        _output.Append(indent).Append("  let ").Append(string.Join(", ", variables)).AppendLine(";");
+        _output.Append(indent).Append("  if (!(").Append(Expression(operation.Condition)).AppendLine(")) break;");
+        if (operation.ConditionIsTop) EmitEmbedded(operation.Body, depth + 1);
+        _output.Append(indent).AppendLine("}");
+    }
+
+    private void EmitFor(IForLoopOperation operation, int depth)
+    {
+        var indent = new string(' ', depth * 2);
+        // Initializer locals are shared; condition and incrementor locals are fresh each iteration.
+        _output.Append(indent).AppendLine("{");
+        foreach (var initializer in operation.Before)
+        {
+            EmitScopeVariableDeclarations(initializer.Syntax, indent + "  ");
+            EmitStatement(initializer, depth + 1);
+        }
+        var variables = new List<string>();
+        if (operation.Condition is not null) DeclareScopeVariables(operation.Condition.Syntax, variables.Add);
+        foreach (var increment in operation.AtLoopBottom) DeclareScopeVariables(increment.Syntax, variables.Add);
+        if (variables.Count == 0)
+        {
+            _output.Append(indent).Append("  for (; ")
+                .Append(operation.Condition is null ? "" : Expression(operation.Condition)).Append("; ")
+                .Append(string.Join(", ", operation.AtLoopBottom.Select(ForInitializer))).AppendLine(") {");
+            EmitEmbedded(operation.Body, depth + 2);
+        }
+        else
+        {
+            _output.Append(indent).AppendLine("  for (;;) {");
+            _output.Append(indent).Append("    let ").Append(string.Join(", ", variables)).AppendLine(";");
+            if (operation.Condition is not null)
+                _output.Append(indent).Append("    if (!(").Append(Expression(operation.Condition)).AppendLine(")) break;");
+            EmitContinueBlock(operation, depth + 2);
+            foreach (var increment in operation.AtLoopBottom)
+                _output.Append(indent).Append("    ").Append(ForInitializer(increment)).AppendLine(";");
+        }
+        _output.Append(indent).AppendLine("  }");
+        _output.Append(indent).AppendLine("}");
+    }
+
+    private void EmitContinueBlock(ILoopOperation operation, int depth)
+    {
+        var indent = new string(' ', depth * 2);
+        var label = _names.Get($"loop-continue:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "loopBody");
+        _output.Append(indent).Append(label).AppendLine(": {");
+        _loopContinueTargets.Add(operation.ContinueLabel, label);
+        try { EmitEmbedded(operation.Body, depth + 1); }
+        finally { _loopContinueTargets.Remove(operation.ContinueLabel); }
+        _output.Append(indent).AppendLine("}");
+    }
+
     private void EmitTry(ITryOperation operation, int depth)
     {
         var indent = new string(' ', depth * 2);
@@ -106,7 +176,7 @@ internal sealed partial class JavaScriptEmitter
         var source = operation.Syntax;
         var subject = _names.Get($"switch:{source.SyntaxTree.FilePath}:{source.SpanStart}", "subject");
         if (patterns)
-            _output.Append(indent).Append("const ").Append(subject).Append(" = ").Append(Expression(operation.Value)).AppendLine(";");
+            _output.Append(indent).Append("const ").Append(subject).Append(" = ").Append(ValueExpression(operation.Value)).AppendLine(";");
         _output.Append(indent).Append("switch (").Append(patterns ? "true" : Expression(operation.Value)).AppendLine(") {");
         foreach (var section in operation.Cases)
         {

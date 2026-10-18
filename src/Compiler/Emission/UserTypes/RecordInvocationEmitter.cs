@@ -3,6 +3,14 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 internal sealed partial class JavaScriptEmitter
 {
+    private static ISymbol RecordPositionalMember(INamedTypeSymbol type, string name)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+            if (current.GetMembers(name).FirstOrDefault(member => !member.IsStatic && member is IPropertySymbol or IFieldSymbol) is { } member)
+                return member;
+        throw new InvalidOperationException($"Record positional member '{type}.{name}' was not found.");
+    }
+
     private bool TryEmitRecordInvocation(InvocationExpressionSyntax invocation, IMethodSymbol? method,
         string receiver, string[] arguments, bool baseCall, out string result)
     {
@@ -13,8 +21,8 @@ internal sealed partial class JavaScriptEmitter
         {
             var outputs = method.Parameters.Select((parameter, index) =>
             {
-                var property = UserTypeProperties(type).First(property => property.Name == parameter.Name);
-                return $"$out{index}.value = {CopyValue(parameter.Type, UserMemberAccess("$receiver", property))};";
+                var member = RecordPositionalMember(type, parameter.Name);
+                return $"$out{index}.value = {CopyValue(parameter.Type, UserMemberAccess("$receiver", member))};";
             });
             var parameters = method.Parameters.Select((_, index) => $"$out{index}");
             result = $"(($receiver, {string.Join(", ", parameters)}) => {{ {string.Join(" ", outputs)} }})({receiver}, {string.Join(", ", arguments)})";

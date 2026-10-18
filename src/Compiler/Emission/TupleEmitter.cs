@@ -8,7 +8,14 @@ internal sealed partial class JavaScriptEmitter
     {
         var fields = field.ContainingType.TupleElements;
         var index = fields.IndexOf(field);
-        if (index < 0 && field.CorrespondingTupleField is { } corresponding) index = fields.IndexOf(corresponding);
+        if (index < 0)
+            for (var candidate = 0; candidate < fields.Length; candidate++)
+                if (SymbolEqualityComparer.Default.Equals(fields[candidate].CorrespondingTupleField ?? fields[candidate],
+                        field.CorrespondingTupleField ?? field))
+                {
+                    index = candidate;
+                    break;
+                }
         if (index < 0) throw UnsupportedSymbol(field, source);
         return $"{receiver}[{index}]";
     }

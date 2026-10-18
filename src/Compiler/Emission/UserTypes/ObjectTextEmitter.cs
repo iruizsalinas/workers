@@ -6,6 +6,16 @@ internal sealed partial class JavaScriptEmitter
 {
     private bool _usesObjectText;
     private bool _needsDynamicObjectText;
+    private bool _usesBoxedEnumTypes;
+    private string BoxedEnumTypeSlot
+    {
+        get
+        {
+            _usesObjectText = true;
+            _usesBoxedEnumTypes = true;
+            return _names.Get("boxed-enum-type-symbol", "boxedEnumType");
+        }
+    }
     private string ObjectTextSlot => _names.Get("object-text-symbol", "objectTextSlot");
     private string ObjectTextFunction => _names.Get("object-text-helper", "objectText");
     private static bool IsWebValueBoundary(IOperation operation)
@@ -86,7 +96,8 @@ internal sealed partial class JavaScriptEmitter
     private string BoxEnumText(ITypeSymbol type, string value)
     {
         _usesObjectText = true;
-        return $"((value) => Object.defineProperty(Object(value), {ObjectTextSlot}, {{ value: function() {{ return {EnumText(type, "value")}; }} }}))({value})";
+        var identity = JsonSerializer.Serialize(RuntimeTypeName(ResolveType(type)));
+        return $"((value) => Object.defineProperty(Object.defineProperty(Object(value), {BoxedEnumTypeSlot}, {{ value: {identity} }}), {ObjectTextSlot}, {{ value: function() {{ return {EnumText(type, "value")}; }} }}))({value})";
     }
 
     private string AttachObjectText(ITypeSymbol type, string value, SyntaxNode source)
@@ -111,6 +122,7 @@ internal sealed partial class JavaScriptEmitter
 
     private string EmitObjectTextSupport() => !_usesObjectText ? "" : $$"""
         const {{ObjectTextSlot}} = Symbol();
+        {{(_usesBoxedEnumTypes ? $"const {BoxedEnumTypeSlot} = Symbol();" : "")}}
         function {{ObjectTextFunction}}(value) {
           if (value == null) return "";
           if (typeof value === "boolean") return value ? "True" : "False";

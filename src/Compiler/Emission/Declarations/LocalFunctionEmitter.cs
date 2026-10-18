@@ -99,7 +99,11 @@ internal sealed partial class JavaScriptEmitter
                         var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(ParameterName));
                         _output.Append(indent).Append("  return { [Symbol.").Append(method.IsAsync ? "asyncIterator" : "iterator")
                             .Append("]: (").Append(method.IsAsync ? "async " : "").Append("function* (").Append(parameters).AppendLine(") {");
-                        EmitStatements(declaration.Body!.Statements, depth + 2);
+                        EmitWithExpressionScope(depth + 2, () =>
+                        {
+                            EmitIteratorParameterCopies(declaration.ParameterList.Parameters, depth + 2);
+                            EmitStatements(declaration.Body!.Statements, depth + 2);
+                        });
                         _output.Append(indent).Append("  }).bind(this").Append(parameters.Length == 0 ? "" : ", " + parameters).AppendLine(") };");
                     }
                     else if (declaration.ExpressionBody is { } expression)

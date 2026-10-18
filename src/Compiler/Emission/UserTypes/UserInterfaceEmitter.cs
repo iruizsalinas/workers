@@ -121,10 +121,12 @@ internal sealed partial class JavaScriptEmitter
                         if (property.GetMethod is not null)
                             _output.Append("  get ").Append(name).Append("() { return ")
                                 .Append(IsSourceInterface(target.ContainingType)
-                                    ? StaticGetter(target) + ".call(this)" : UserMemberAccess("this", target)).AppendLine("; }");
+                                    ? QueueSourceAccessor(PropertyAccessor(target, getter: true)!, declaration) + ".call(this)" : UserMemberAccess("this", target)).AppendLine("; }");
                         if (property.SetMethod is not null)
                             _output.Append("  set ").Append(name).Append("($value) { ")
-                                .Append(UserMemberAccess("this", target)).AppendLine(" = $value; }");
+                                .Append(IsSourceInterface(target.ContainingType)
+                                    ? QueueSourceAccessor(PropertyAccessor(target, getter: false)!, declaration) + ".call(this, $value)"
+                                    : UserMemberAccess("this", target) + " = $value").AppendLine("; }");
                         break;
                     case IMethodSymbol { MethodKind: MethodKind.PropertyGet or MethodKind.PropertySet or MethodKind.EventAdd or MethodKind.EventRemove }:
                     case IMethodSymbol { IsGenericMethod: true }:

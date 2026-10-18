@@ -48,7 +48,7 @@ internal sealed partial class JavaScriptEmitter
             .Where(parameter => parameter.HasExplicitDefaultValue
                                 && supplied.All(argument => argument.Parameter.Ordinal != parameter.Ordinal))
             .Select(parameter =>
-                $"{JavaScriptObjectKey(LowerFirst(parameter.Name))}: {LiteralConstant(parameter.ExplicitDefaultValue, source)}"));
+                $"{JavaScriptObjectKey(LowerFirst(parameter.Name))}: {ParameterDefaultValue(parameter, source)}"));
         if (source.Initializer is not null)
             properties.AddRange(source.Initializer.Expressions.Select(expression => expression switch
             {

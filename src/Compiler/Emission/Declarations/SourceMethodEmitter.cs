@@ -126,8 +126,24 @@ internal sealed partial class JavaScriptEmitter
         var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(ParameterName));
         _output.Append(indent).Append("return { [Symbol.").Append(isAsync ? "asyncIterator" : "iterator")
             .Append("]: (").Append(isAsync ? "async " : "").Append("function* (").Append(parameters).AppendLine(") {");
-        EmitWithExpressionScope(depth + 1, () => EmitStatements(declaration.Body?.Statements ?? [], depth + 1));
+        EmitWithExpressionScope(depth + 1, () =>
+        {
+            EmitIteratorParameterCopies(declaration.ParameterList.Parameters, depth + 1);
+            EmitStatements(declaration.Body?.Statements ?? [], depth + 1);
+        });
         _output.Append(indent).Append("}).bind(this").Append(parameters.Length == 0 ? "" : ", " + parameters).AppendLine(") };");
+    }
+
+    private void EmitIteratorParameterCopies(IEnumerable<ParameterSyntax> parameters, int depth)
+    {
+        foreach (var parameter in parameters)
+        {
+            var symbol = (IParameterSymbol)_model.GetDeclaredSymbol(parameter)!;
+            var name = ParameterName(parameter);
+            var copy = CopyValue(symbol.Type, name);
+            if (copy != name)
+                _output.Append(' ', depth * 2).Append(name).Append(" = ").Append(copy).AppendLine(";");
+        }
     }
 
 }

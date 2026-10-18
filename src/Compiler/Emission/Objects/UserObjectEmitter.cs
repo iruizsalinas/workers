@@ -21,8 +21,22 @@ internal sealed partial class JavaScriptEmitter
             "value");
         var assignments = BoundInitializers((IObjectOrCollectionInitializerOperation)_model.GetOperation(source.Initializer)!, temporary);
         var isAsync = _model.GetOperation(source.Initializer) is { } initializer && ContainsAwait(initializer);
-        var initialized = $"({(isAsync ? "async " : "")}({temporary}) => {{ {assignments} return {temporary}; }})({creation})";
-        return isAsync ? $"(await {initialized})" : initialized;
+        return isAsync ? AsyncInitializerBody(source, [temporary], [creation], assignments, temporary)
+            : $"(({temporary}) => {{ {assignments} return {temporary}; }})({creation})";
+    }
+
+    private string AsyncInitializerBody(SyntaxNode source, IEnumerable<string> parameters, IEnumerable<string> arguments, string body, string result)
+    {
+        // A skipped await must keep both completion and failures synchronous in the caller.
+        if (!_expressionTemporaryScopes.TryPeek(out var temporaries)) throw Unsupported("WRK108", source);
+        var state = _names.Get($"initializer-state:{source.SyntaxTree.FilePath}:{source.SpanStart}", "initializerState");
+        temporaries.Add(state);
+        var read = _helpers.Require(JavaScriptHelper.AsyncExpressionResult);
+        var invocation = $"(async ({string.Join(", ", parameters.Append(state))}) => {{ try {{ {body} {state}.value = {result}; }} "
+            + $"catch ($workers$error) {{ {state}.error = $workers$error; {state}.failed = true; }} {state}.done = true; }})"
+            + $"({string.Join(", ", arguments.Append(state))})";
+        return $"(({state} = {{}}), {state}.pending = {invocation}, {state}.done ? {read}({state}) : "
+            + $"(await {state}.pending, {read}({state})))";
     }
 
     private string UserInitializerMemberAccess(string receiver, ExpressionSyntax expression) =>

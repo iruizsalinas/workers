@@ -13,7 +13,8 @@ internal sealed partial class JavaScriptEmitter
     private string UserIndexerReference(IPropertyReferenceOperation operation, string? receiverOverride = null, string[]? argumentOverrides = null)
     {
         var parameters = operation.Arguments.Select((_, i) => $"index{i}").ToArray();
-        var ordered = operation.Arguments.Select((argument, i) => (argument.Parameter!.Ordinal, Value: parameters[i]))
+        var ordered = operation.Arguments.Select((argument, i) =>
+                (argument.Parameter!.Ordinal, Value: CopyValue(argument.Parameter.Type, parameters[i])))
             .OrderBy(item => item.Ordinal).Select(item => item.Value).ToArray();
         var property = operation.Property;
         string Call(bool getter)
@@ -50,6 +51,7 @@ internal sealed partial class JavaScriptEmitter
                         .Append(parameters.Length == 0 ? "" : ", " + string.Join(", ", parameters)).AppendLine(");");
                 else
                 {
+                    if (!getter) EmitSetterValueCopy(accessor, 2);
                     var syntax = declaration.AccessorList?.Accessors.SingleOrDefault(item => getter ? item.IsKind(SyntaxKind.GetAccessorDeclaration)
                         : item.IsKind(SyntaxKind.SetAccessorDeclaration) || item.IsKind(SyntaxKind.InitAccessorDeclaration));
                     var expression = getter ? declaration.ExpressionBody?.Expression ?? syntax?.ExpressionBody?.Expression : syntax?.ExpressionBody?.Expression;

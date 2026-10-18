@@ -36,9 +36,11 @@ internal sealed partial class JavaScriptEmitter
                 return $"(({holder}) => {Reference(holder + StaticMemberKey(field.Field))})({StaticHolder(field.Field.ContainingType)}())";
             }
             var receiver = _names.Get(key + ":receiver", "receiver");
-            QueueUserType(field.Field.ContainingType, field.Syntax);
+            var generated = IsGeneratedInstanceType(field.Field.ContainingType);
+            if (!generated) QueueUserType(field.Field.ContainingType, field.Syntax);
+            var storage = generated ? $"{receiver}.{GeneratedFieldName(field.Field)}" : UserMemberAccess(receiver, field.Field);
             return $"(({receiver}) => {{ if ({receiver} == null) throw {NullReferenceException()}; " +
-                $"return {Reference(UserMemberAccess(receiver, field.Field))}; }})({Expression(field.Instance!)})";
+                $"return {Reference(storage)}; }})({Expression(field.Instance!)})";
         }
         if (target is IArrayElementReferenceOperation { Indices.Length: 1 } array)
         {

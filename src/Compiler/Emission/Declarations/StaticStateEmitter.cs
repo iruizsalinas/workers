@@ -149,7 +149,8 @@ internal sealed partial class JavaScriptEmitter
         var staticConstructor = declaration.Members.OfType<ConstructorDeclarationSyntax>()
             .SingleOrDefault(constructor => constructor.Modifiers.Any(SyntaxKind.StaticKeyword));
         if (staticConstructor?.ExpressionBody is not null)
-            _output.Append("    ").Append(Expression(staticConstructor.ExpressionBody.Expression)).AppendLine(";");
+            EmitWithExpressionScope(2, () =>
+                _output.Append("    ").Append(Expression(staticConstructor.ExpressionBody.Expression)).AppendLine(";"));
         else if (staticConstructor is not null)
         {
             _output.AppendLine("    (() => {");

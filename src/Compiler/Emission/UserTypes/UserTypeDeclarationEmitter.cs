@@ -96,15 +96,16 @@ internal sealed partial class JavaScriptEmitter
     private void EmitComputedProperty(PropertyDeclarationSyntax property)
     {
         var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
-        var name = UserMemberName(symbol);
+        var name = UserMemberDeclarationName(symbol);
         foreach (var getter in new[] { true, false })
         {
             var accessorSymbol = getter ? symbol.GetMethod : symbol.SetMethod;
             if (accessorSymbol is null) continue;
-            _output.Append(getter ? "  get " : "  set ").Append(IsJavaScriptPropertyIdentifier(name) ? name : $"[{JsonSerializer.Serialize(name)}]")
+            _output.Append(getter ? "  get " : "  set ").Append(name)
                 .Append('(').Append(getter ? "" : UserIdentifier(accessorSymbol.Parameters[0], accessorSymbol.Parameters[0].Name)).AppendLine(") {");
             EmitWithExpressionScope(2, () =>
             {
+                if (!getter) EmitSetterValueCopy(accessorSymbol, 2);
                 var syntax = property.AccessorList?.Accessors.SingleOrDefault(accessor => getter
                     ? accessor.IsKind(SyntaxKind.GetAccessorDeclaration)
                     : accessor.IsKind(SyntaxKind.SetAccessorDeclaration) || accessor.IsKind(SyntaxKind.InitAccessorDeclaration));

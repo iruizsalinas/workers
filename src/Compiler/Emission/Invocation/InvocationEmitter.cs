@@ -29,8 +29,10 @@ internal sealed partial class JavaScriptEmitter
             var receiverValue = operation.Instance is null ? "this" : Expression(operation.Instance);
             var targetFunction = invocation.Expression is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
                 ? QueueUserMethod(method, invocation) : GenericMethodTarget(method);
+            // Async and iterator bodies cannot perform the call-site null check:
+            // their checks would run in a promise or only when enumeration starts.
             return EmitNormalizedInvocation(invocation, method, receiverValue, (target, values) =>
-                $"{targetFunction}.call({target}{(values.Length == 0 ? "" : ", " + string.Join(", ", values))})");
+                $"{targetFunction}.call({(NeedsNullCheck(operation.Instance) ? NotNull(target!) : target)}{(values.Length == 0 ? "" : ", " + string.Join(", ", values))})");
         }
         if (method.MethodKind != MethodKind.DelegateInvoke && method.DeclaringSyntaxReferences.Length == 0 && !IsSynthesizedRecordMember(method)
             && TryEmitOutInvocation(operation, method, out var outInvocation))
@@ -148,7 +150,7 @@ internal sealed partial class JavaScriptEmitter
             (Parameter: BoundParameter(argument), Value: values[index], Kind: BoundArgument(argument).ArgumentKind)).ToArray();
         var sourceParams = (method.DeclaringSyntaxReferences.Length != 0 || method.MethodKind == MethodKind.DelegateInvoke)
             && method.Parameters.LastOrDefault()?.IsParams == true;
-        var lastOrdinal = sourceParams ? method.Parameters.Length - 1
+        var lastOrdinal = sourceParams || method.MethodKind == MethodKind.DelegateInvoke ? method.Parameters.Length - 1
             : supplied.Length == 0 ? -1 : supplied.Max(argument => argument.Parameter.Ordinal);
         var ordered = new List<string>();
         foreach (var parameter in method.Parameters.Take(lastOrdinal + 1))
@@ -169,10 +171,17 @@ internal sealed partial class JavaScriptEmitter
             }
             if (!parameter.HasExplicitDefaultValue)
                 throw UnsupportedSymbol(method, source);
-            ordered.Add(LiteralConstant(parameter.ExplicitDefaultValue, source));
+            ordered.Add(ParameterDefaultValue(parameter, source));
         }
 
         return ordered.ToArray();
+    }
+
+    private string ParameterDefaultValue(IParameterSymbol parameter, SyntaxNode source)
+    {
+        var type = ResolveType(parameter.Type);
+        return parameter.ExplicitDefaultValue is null && type.IsValueType
+            ? DefaultFieldValue(type, source) : LiteralConstant(parameter.ExplicitDefaultValue, source);
     }
 
     private IArgumentOperation BoundArgument(ArgumentSyntax argument)
