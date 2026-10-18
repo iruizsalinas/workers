@@ -3,6 +3,73 @@ namespace Workers.Compiler.Tests;
 public sealed class ExpressionRegressionTests
 {
     [Fact]
+    public void ConditionalExpressionsKeepAssignmentsInsideTheirCondition() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            public static object Run()
+            {
+                var matched = false;
+                var selected = (matched = true) ? 7 : 3;
+                return new { matched, selected };
+            }
+        }
+        """);
+
+    [Fact]
+    public void ConditionalExpressionsKeepNestedConditionsGrouped() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            private static object Select(bool first, bool second, bool third)
+            {
+                var selected = (first ? second : third) ? "yes" : "no";
+                return new { selected };
+            }
+            public static object Run() => new[] { Select(true, true, false), Select(true, false, true), Select(false, true, false) };
+        }
+        """);
+
+    [Fact]
+    public void NullableEqualityKeepsAssignmentsInsideTheComparedOperand() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            public static object Run()
+            {
+                int? number = null;
+                var equal = (number = 7) == 7;
+                var different = (number = 3) != 7;
+                return new { equal, different, number };
+            }
+        }
+        """);
+
+    [Fact]
+    public void TypeEqualityKeepsAssignmentsInsideTheComparedOperand() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            public static object Run()
+            {
+                System.Type type = null;
+                var equal = (type = typeof(string)) == typeof(string);
+                return new { equal, name = type.Name };
+            }
+        }
+        """);
+
+    [Fact]
+    public void AssignmentsKeepTheirPrecedenceThroughImplicitReferenceConversions() => DifferentialRunner.Equal("""
+        public sealed class Item { public string Name => "kept"; }
+        public static class Test
+        {
+            public static object Run()
+            {
+                Item item = null;
+                var matched = (item = new Item()) != null;
+                return new { matched, name = item.Name };
+            }
+        }
+        """);
+
+    [Fact]
     public void UnsignedBitwiseResultsKeepTheirHighBit() => DifferentialRunner.Equal("""
         public static class Test
         {

@@ -5,6 +5,10 @@ using System.Text.Json;
 
 internal sealed partial class JavaScriptEmitter
 {
+    private static bool HasPropertyDescriptor(IPropertySymbol property) =>
+        property.IsVirtual || property.IsOverride || property.DeclaringSyntaxReferences.Any(reference =>
+            reference.GetSyntax() is PropertyDeclarationSyntax declaration && !IsAutoProperty(declaration));
+
     private string UserPropertyStorage(string receiver, IPropertySymbol property) =>
         property.IsVirtual || property.IsOverride
             ? $"{receiver}.{_names.Get($"property-storage:{property.OriginalDefinition.ToDisplayString()}", $"backing${property.ContainingType.Name}${property.Name}")}"

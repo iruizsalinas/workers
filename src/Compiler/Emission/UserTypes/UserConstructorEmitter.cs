@@ -53,7 +53,7 @@ internal sealed partial class JavaScriptEmitter
             var property = type.GetMembers(parameterSymbol.Name).OfType<IPropertySymbol>().SingleOrDefault();
             if (property is null || property.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is PropertyDeclarationSyntax)) continue;
             _output.Append("    ").Append(UserMemberAccess("this", property)).Append(" = ")
-                .Append(ParameterName(parameter)).AppendLine(";");
+                .Append(CopyValue(property.Type, ParameterName(parameter))).AppendLine(";");
         }
 
         foreach (var member in declaration.Members)

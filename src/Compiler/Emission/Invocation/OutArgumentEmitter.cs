@@ -11,11 +11,12 @@ internal sealed partial class JavaScriptEmitter
 {
     private HashSet<ISymbol> _declaredOutVariables = new(SymbolEqualityComparer.Default);
 
-    private void EmitOutVariableDeclarations(StatementSyntax statement, string indent)
+    private void DeclareOutVariables(SyntaxNode statement, Action<string> declare, HashSet<string> names)
     {
         var declarations = statement
             .DescendantNodes(node => node == statement
-                || node is not (StatementSyntax or AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax))
+                || node is not (StatementSyntax or CatchClauseSyntax or SwitchExpressionArmSyntax
+                    or AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax))
             .OfType<DeclarationExpressionSyntax>()
             .Where(declaration => declaration.Parent is ArgumentSyntax argument && argument.RefKindKeyword.IsKind(SyntaxKind.OutKeyword))
             .Select(declaration => declaration.Designation)
@@ -24,7 +25,7 @@ internal sealed partial class JavaScriptEmitter
         {
             var symbol = _model.GetDeclaredSymbol(designation);
             if (symbol is null || !_declaredOutVariables.Add(symbol)) continue;
-            _output.Append(indent).Append("let ").Append(UserIdentifier(symbol, designation.Identifier)).AppendLine(";");
+            declare(LocalDeclarationName(symbol, designation, names));
         }
     }
 

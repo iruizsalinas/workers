@@ -55,8 +55,7 @@ internal sealed partial class JavaScriptEmitter
         return operation;
     }
 
-    private static string EscapeTemplateText(string value) => value.Replace("{{", "{", StringComparison.Ordinal)
-        .Replace("}}", "}", StringComparison.Ordinal).Replace("\\", "\\\\", StringComparison.Ordinal)
+    private static string EscapeTemplateText(string value) => value.Replace("\\", "\\\\", StringComparison.Ordinal)
         .Replace("`", "\\`", StringComparison.Ordinal).Replace("${", "\\${", StringComparison.Ordinal);
 
 }

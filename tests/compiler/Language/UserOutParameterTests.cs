@@ -3,6 +3,87 @@ namespace Workers.Compiler.Tests;
 public sealed class UserOutParameterTests
 {
     [Fact]
+    public void FromEndOutReferencesValidateBoundsAndCaptureTheirLocationBeforeLaterArguments() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            private static int calls;
+            private static System.Index position = ^1;
+            private static int Input() { calls++; position = 0; return 7; }
+            private static void Write(out int value, int input) { value = input; }
+            public static object Run()
+            {
+                var values = new[] { 1, 2, 3 };
+                var caught = false;
+                try { Write(out values[^0], Input()); }
+                catch (System.IndexOutOfRangeException) { caught = true; }
+                Write(out values[position], Input());
+                return new { values, caught, calls };
+            }
+        }
+        """);
+
+    [Fact]
+    public void FromEndOutArgumentsWriteTheSelectedArrayElement() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            private static void Write(out int value) { value = 7; }
+            public static object Run()
+            {
+                var values = new[] { 1, 2, 3 };
+                Write(out values[^1]);
+                System.Index first = 0;
+                System.Index middle = ^2;
+                Write(out values[first]);
+                Write(out values[middle]);
+                return values;
+            }
+        }
+        """);
+
+    [Fact]
+    public void NestedTupleOutReferencesPreserveAliasingAndWritesBeforeExceptions() => DifferentialRunner.Equal("""
+        public sealed class Box { public ((int, int), int) Value = ((1, 2), 3); }
+        public static class Test
+        {
+            private static void Change(out int first, out int second)
+            {
+                first = 4;
+                second = 5;
+                first += second;
+                throw new System.Exception("stop");
+            }
+            public static object Run()
+            {
+                var box = new Box();
+                var values = new[] { ((1, 2), 3) };
+                try { Change(out box.Value.Item1.Item2, out box.Value.Item1.Item2); }
+                catch (System.Exception) { }
+                try { Change(out values[0].Item1.Item2, out values[0].Item1.Item2); }
+                catch (System.Exception) { }
+                return new { field = box.Value.Item1.Item2, array = values[0].Item1.Item2 };
+            }
+        }
+        """);
+
+    [Fact]
+    public void TupleFieldOutArgumentsValidateTheirStorageBeforeLaterArguments() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            private static string trace = "";
+            private static int Input() { trace += "argument;"; return 7; }
+            private static void Change(out int value, int input) { trace += "method;"; value = input; }
+            public static object Run()
+            {
+                var values = new[] { (1, 2) };
+                var caught = false;
+                try { Change(out values[2].Item1, Input()); }
+                catch (System.IndexOutOfRangeException) { caught = true; }
+                return new { caught, trace, first = values[0].Item1 };
+            }
+        }
+        """);
+
+    [Fact]
     public void DeclaresOutLocalsInExpressionBodiedGettersAndConstructors() => DifferentialRunner.Equal("""
         public sealed class Item
         {

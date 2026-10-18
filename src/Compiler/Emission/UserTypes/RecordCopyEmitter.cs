@@ -50,10 +50,7 @@ internal sealed partial class JavaScriptEmitter
             _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
                 .Append(DefaultFieldValue(symbol.Type, property)).AppendLine(";");
         }
-        if (constructor.ExpressionBody is not null)
-            _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
-        else
-            EmitStatements(constructor.Body?.Statements ?? [], 2);
+        EmitWithExpressionScope(2, () => EmitUserConstructorStatements(constructor));
         _output.AppendLine("  }");
     }
 

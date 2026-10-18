@@ -51,7 +51,7 @@ internal sealed partial class JavaScriptEmitter
                 IAwaitOperation value => $"await {Operand(value.Operation)}",
                 IBinaryOperation value => Binary(value),
                 ICoalesceOperation value => Coalesce(value),
-                IConditionalOperation value => $"{Expression(value.Condition)} ? {Expression(value.WhenTrue)} : {Expression(value.WhenFalse!)}",
+                IConditionalOperation value => $"{Operand(value.Condition)} ? {Expression(value.WhenTrue)} : {Expression(value.WhenFalse!)}",
                 IConditionalAccessOperation value => ConditionalAccess(value),
                 IConditionalAccessInstanceOperation value => ConditionalReceiver(value),
                 ISimpleAssignmentOperation value => SimpleAssignment(value),
@@ -91,6 +91,7 @@ internal sealed partial class JavaScriptEmitter
     private string Operand(IOperation operation)
     {
         var value = Expression(operation);
+        while (operation is IConversionOperation conversion) operation = conversion.Operand;
         return operation is IBinaryOperation or IConditionalOperation or IAwaitOperation
             or ISimpleAssignmentOperation or ICompoundAssignmentOperation ? $"({value})" : value;
     }
@@ -162,7 +163,7 @@ internal sealed partial class JavaScriptEmitter
             return $"((reference, value) => reference.value = value)({AssignmentReference(operation.Target)}, {right})";
         if (operation.Target is IPropertyReferenceOperation baseProperty
             && baseProperty.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
-            && (baseProperty.Property.IsVirtual || baseProperty.Property.IsOverride))
+            && HasPropertyDescriptor(baseProperty.Property))
             return BasePropertySet(baseProperty.Property, operation.Syntax, right);
         if (operation.Target is IDiscardOperation) return $"({right})";
         if (operation.Target is IMemberReferenceOperation member && NeedsNullCheck(member.Instance)
@@ -309,7 +310,7 @@ internal sealed partial class JavaScriptEmitter
         }
         if (operation is IPropertyReferenceOperation propertyReference
             && operation.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
-            && (propertyReference.Property.IsVirtual || propertyReference.Property.IsOverride))
+            && HasPropertyDescriptor(propertyReference.Property))
         {
             var reference = _names.Get($"base-mutation:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "reference");
             var mutation = emit(reference + ".value");

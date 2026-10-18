@@ -3,6 +3,51 @@ namespace Workers.Compiler.Tests;
 public sealed class NextLanguageFeaturesTests
 {
     [Fact]
+    public void ExtensionDeconstructorsCanHandleNullReceivers() => DifferentialRunner.Equal("""
+        public sealed class Pair { }
+        public static class Extensions
+        {
+            public static void Deconstruct(this Pair pair, out int first, out int second)
+            {
+                first = pair is null ? 3 : 4;
+                second = 5;
+            }
+        }
+        public static class Test
+        {
+            public static object Run()
+            {
+                Pair pair = null;
+                var (first, second) = pair;
+                return new { first, second };
+            }
+        }
+        """);
+
+    [Fact]
+    public void DeconstructingNullInstancesThrowsCatchableNullReferenceExceptions() => DifferentialRunner.Equal("""
+        public sealed class Pair
+        {
+            public void Deconstruct(out int first, out int second) { first = 1; second = 2; }
+        }
+        public sealed record Row(int First, int Second);
+        public static class Test
+        {
+            public static object Run()
+            {
+                Pair pair = null;
+                Row row = null;
+                var caught = 0;
+                try { var (first, second) = pair; }
+                catch (System.NullReferenceException) { caught++; }
+                try { var (first, second) = row; }
+                catch (System.NullReferenceException) { caught++; }
+                return caught;
+            }
+        }
+        """);
+
+    [Fact]
     public void NestedDeconstructionSnapshotsTupleValuesBeforeCallingUserCode() => DifferentialRunner.Equal("""
         public sealed class Pair
         {

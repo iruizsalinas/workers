@@ -89,12 +89,12 @@ internal sealed partial class JavaScriptEmitter
         if (method.ContainingType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.KeyValuePair<TKey, TValue>")
             return value;
         if (method.IsImplicitlyDeclared && method.ContainingType.IsRecord)
-            return "[" + string.Join(", ", outputs.Select(parameter => UserMemberAccess(value,
-                UserTypeProperties(method.ContainingType).First(property => property.Name == parameter.Name)))) + "]";
+            return "((receiver) => [" + string.Join(", ", outputs.Select(parameter => UserMemberAccess("receiver",
+                UserTypeProperties(method.ContainingType).First(property => property.Name == parameter.Name)))) + $"])({NotNull(value)})";
         var args = outputs.Select((_, index) => $"({{ set value(value) {{ outputs[{index}] = value; }} }})").ToArray();
         var call = method.IsStatic
             ? $"{QueueUserMethod(method, source)}({string.Join(", ", new[] { "receiver" }.Concat(args))})"
-            : $"receiver.{UserInstanceMethodName(method)}({string.Join(", ", args)})";
+            : $"{NotNull("receiver")}.{UserInstanceMethodName(method)}({string.Join(", ", args)})";
         return $"((receiver) => {{ const outputs = []; {call}; return outputs; }})({value})";
     }
 
@@ -125,12 +125,13 @@ internal sealed partial class JavaScriptEmitter
         }
         if (target is IMemberReferenceOperation member)
         {
-            if (member.Member is IFieldSymbol { ContainingType.IsTupleType: true } tupleField)
-                return $"((reference) => ({{ get value() {{ return {TupleFieldAccess("reference.value", tupleField, target.Syntax)}; }}, set value(value) {{ {TupleFieldAccess("reference.value", tupleField, target.Syntax)} = value; }} }}))({AssignmentReference(member.Instance!)})";
+            if (member.Member is IFieldSymbol { ContainingType.IsTupleType: true })
+                return UserOutReference(target);
             if (member.Member.IsStatic)
                 return $"({{ get value() {{ return {Expression(target)}; }}, set value({assigned}) {{ {Expression(target)} = {assigned}; }} }})";
-            if (target.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax } && member.Member is IPropertySymbol property)
-                return $"((receiver) => ({{ set value(value) {{ {BasePropertyDescriptor(property, target.Syntax)}.set.call(receiver, value); }} }}))(this)";
+            if (target.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax } && member.Member is IPropertySymbol property
+                && HasPropertyDescriptor(property))
+                return BasePropertyReference(property, target.Syntax);
             var storage = Member(target, NeedsNullCheck(member.Instance) ? NotNull("receiver") : "receiver");
             return $"((receiver) => ({{ get value() {{ return {storage}; }}, set value(value) {{ {storage} = value; }} }}))({Expression(member.Instance!)})";
         }

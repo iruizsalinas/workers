@@ -3,6 +3,43 @@ namespace Workers.Compiler.Tests;
 public sealed class ConstructionRegressionTests
 {
     [Fact]
+    public void ExpressionBodiedRecordCopyConstructorsCanDeclareOutVariables() => DifferentialRunner.Equal("""
+        public sealed record Item
+        {
+            public int Value { get; init; }
+            public Item(int value) { Value = value; }
+            private Item(Item original) => Value = Read(original.Value, out var value) ? value : 0;
+            private static bool Read(int input, out int value) { value = input + 1; return true; }
+        }
+        public static class Test
+        {
+            public static object Run()
+            {
+                var original = new Item(3);
+                var copy = original with { };
+                return new { original = original.Value, copied = copy.Value };
+            }
+        }
+        """);
+
+    [Fact]
+    public void PositionalRecordPropertiesCopyTupleParametersBeforeOtherInitializers() => DifferentialRunner.Equal("""
+        public sealed record Item((int, int) Value)
+        {
+            public int Changed { get; } = ++Value.Item1;
+        }
+        public static class Test
+        {
+            public static object Run()
+            {
+                var original = (1, 2);
+                var item = new Item(original);
+                return new { stored = item.Value.Item1, changed = item.Changed, original = original.Item1 };
+            }
+        }
+        """);
+
+    [Fact]
     public void AwaitsObjectInitializersAfterConstructingTheInstance() => DifferentialRunner.Equal("""
         public static class Test
         {

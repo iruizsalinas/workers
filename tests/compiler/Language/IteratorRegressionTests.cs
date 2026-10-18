@@ -3,6 +3,55 @@ namespace Workers.Compiler.Tests;
 public sealed class IteratorRegressionTests
 {
     [Fact]
+    public void YieldBreakEndsIteratorsAndRunsTheirFinallyBlocks() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            private static int disposals;
+            public static object Run()
+            {
+                var empty = Values(true).ToArray();
+                var one = Values(false).ToArray();
+                return new { empty, one, disposals };
+            }
+            private static IEnumerable<int> Values(bool empty)
+            {
+                try
+                {
+                    if (empty) yield break;
+                    yield return 7;
+                    yield break;
+                }
+                finally { disposals++; }
+            }
+        }
+        """);
+
+    [Fact]
+    public void YieldBreakEndsAsyncIteratorsAndRunsTheirFinallyBlocks() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            private static int disposals;
+            public static async Task<object> Run()
+            {
+                var values = new List<int>();
+                await foreach (var value in Values(true)) values.Add(value);
+                await foreach (var value in Values(false)) values.Add(value);
+                return new { values, disposals };
+            }
+            private static async IAsyncEnumerable<int> Values(bool empty)
+            {
+                try
+                {
+                    await Task.FromResult(0);
+                    if (empty) yield break;
+                    yield return 7;
+                }
+                finally { disposals++; }
+            }
+        }
+        """);
+
+    [Fact]
     public void IteratorSequencesCanBeEnumeratedAgainAfterEarlyDisposal() => DifferentialRunner.Equal("""
         public static class Test
         {

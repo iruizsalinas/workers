@@ -10,7 +10,7 @@ internal sealed partial class JavaScriptEmitter
         var expression = operation.Syntax;
         if (operation.OperatorMethod?.ContainingType.ToDisplayString() == "System.Type"
             && operation.OperatorKind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals)
-            return $"({Expression(operation.LeftOperand)} {(operation.OperatorKind == BinaryOperatorKind.Equals ? "===" : "!==")} {Expression(operation.RightOperand)})";
+            return $"({Operand(operation.LeftOperand)} {(operation.OperatorKind == BinaryOperatorKind.Equals ? "===" : "!==")} {Operand(operation.RightOperand)})";
         if (operation.LeftOperand.Type?.TypeKind == TypeKind.Delegate || operation.RightOperand.Type?.TypeKind == TypeKind.Delegate)
         {
             var helper = operation.OperatorKind switch
@@ -190,7 +190,7 @@ internal sealed partial class JavaScriptEmitter
         var expression = operation.Syntax;
         var kind = operation.OperatorKind;
         if (kind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals)
-            return $"{Expression(operation.LeftOperand)} {BinaryOperator(kind)} {Expression(operation.RightOperand)}";
+            return $"{Operand(operation.LeftOperand)} {BinaryOperator(kind)} {Operand(operation.RightOperand)}";
 
         var key = $"nullable-numeric:{expression.SyntaxTree.FilePath}:{expression.SpanStart}";
         var left = _names.Get(key + ":left", "left");
@@ -280,11 +280,11 @@ internal sealed partial class JavaScriptEmitter
     private string UserIdentifier(ISymbol symbol, SyntaxToken token) => UserIdentifier(symbol, token.ValueText);
     private string UserIdentifier(ISymbol symbol, string value)
     {
+        if (_userIdentifiers.TryGetValue(symbol, out var existing))
+            return existing;
         if (IsLegalJavascriptIdentifier(value) && !JavascriptReservedWords.Contains(value)
             && !JavascriptRuntimeGlobals.Contains(value))
             return value;
-        if (_userIdentifiers.TryGetValue(symbol, out var existing))
-            return existing;
         var allocated = _names.Get("user:" + _userIdentifiers.Count, "user$" + value);
         _userIdentifiers.Add(symbol, allocated);
         return allocated;

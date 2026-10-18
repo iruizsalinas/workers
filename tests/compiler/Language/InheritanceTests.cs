@@ -2,6 +2,98 @@ namespace Workers.Compiler.Tests;
 
 public sealed class InheritanceTests
 {
+    [Theory]
+    [InlineData("base.Value = 4")]
+    [InlineData("base.Value += 4")]
+    [InlineData("base.Value++")]
+    [InlineData("++base.Value")]
+    public void NonvirtualBaseComputedPropertiesSupportAssignments(string update) => DifferentialRunner.Equal($$"""
+        public class Base
+        {
+            private int stored = 2;
+            public int Value { get => stored; set => stored = value; }
+        }
+        public sealed class Child : Base
+        {
+            public object Change()
+            {
+                var result = {{update}};
+                return new { result, stored = base.Value };
+            }
+        }
+        public static class Test { public static object Run() => new Child().Change(); }
+        """);
+
+    [Fact]
+    public void BaseAutoPropertiesSupportCoalesceAndDeconstructionAssignments() => DifferentialRunner.Equal("""
+        public class Base { public string Value { get; set; } = "kept"; }
+        public sealed class Child : Base
+        {
+            public object Change()
+            {
+                var present = base.Value ??= "unused";
+                (base.Value, var other) = ("assigned", 3);
+                return new { present, stored = base.Value, other };
+            }
+        }
+        public static class Test { public static object Run() => new Child().Change(); }
+        """);
+
+    [Fact]
+    public void BaseEventSubscriptionsBypassOverriddenAccessors() => DifferentialRunner.Equal("""
+        public class Base
+        {
+            public int BaseAdds;
+            public int BaseRemoves;
+            public virtual event System.Action Changed
+            {
+                add { BaseAdds++; }
+                remove { BaseRemoves++; }
+            }
+        }
+        public sealed class Child : Base
+        {
+            public int ChildAdds;
+            public int ChildRemoves;
+            public override event System.Action Changed
+            {
+                add { ChildAdds++; }
+                remove { ChildRemoves++; }
+            }
+            public void Subscribe(System.Action handler) { base.Changed += handler; base.Changed -= handler; }
+        }
+        public static class Test
+        {
+            public static object Run()
+            {
+                var child = new Child();
+                child.Subscribe(() => { });
+                child.Changed += () => { };
+                return new { baseAdds = child.BaseAdds, baseRemoves = child.BaseRemoves,
+                    childAdds = child.ChildAdds, childRemoves = child.ChildRemoves };
+            }
+        }
+        """);
+
+    [Fact]
+    public void BaseCoalesceAssignmentReadsTheBaseGetterAndSkipsUnusedFallbacks() => DifferentialRunner.Equal("""
+        public class Base { public virtual string Value { get; set; } = "kept"; }
+        public sealed class Child : Base
+        {
+            public override string Value { get; set; } = "child";
+            private int calls;
+            private string Fallback() { calls++; return "fallback"; }
+            public object Change()
+            {
+                var present = base.Value ??= Fallback();
+                base.Value = null;
+                var absent = base.Value ??= Fallback();
+                return new { present, absent, stored = base.Value, derived = Value, calls };
+            }
+        }
+        public static class Test { public static object Run() => new Child().Change(); }
+        """);
+
     [Fact]
     public void PreservesPrivateBaseSetterUsedByBaseMethods() => DifferentialRunner.Equal("""
         public class Base

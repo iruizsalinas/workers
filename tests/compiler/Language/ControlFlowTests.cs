@@ -3,6 +3,60 @@ namespace Workers.Compiler.Tests;
 public sealed class ControlFlowTests
 {
     [Fact]
+    public void TypedCatchVariablesCanBeReassigned() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            public static object Run()
+            {
+                try { throw new System.InvalidOperationException("original"); }
+                catch (System.InvalidOperationException error)
+                {
+                    error = new System.InvalidOperationException("changed");
+                    return error.Message;
+                }
+            }
+        }
+        """);
+
+    [Fact]
+    public void ExceptionFiltersPreserveAssignmentsToTheCatchVariable() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            public static object Run()
+            {
+                try { throw new System.Exception("original"); }
+                catch (System.Exception error) when (Accept(error = new System.Exception("changed")))
+                {
+                    return error.Message;
+                }
+            }
+            private static bool Accept(System.Exception error) => true;
+        }
+        """);
+
+    [Theory]
+    [InlineData("System.Exception")]
+    [InlineData("System.InvalidOperationException")]
+    public void RethrowKeepsTheOriginalExceptionAfterReassigningTheCatchVariable(string catchType) => DifferentialRunner.Equal($$"""
+        public static class Test
+        {
+            public static object Run()
+            {
+                try
+                {
+                    try { throw new System.InvalidOperationException("original"); }
+                    catch ({{catchType}} error)
+                    {
+                        error = new System.InvalidOperationException("changed");
+                        throw;
+                    }
+                }
+                catch (System.Exception error) { return error.Message; }
+            }
+        }
+        """);
+
+    [Fact]
     public void RethrowsTheActiveJavaScriptException()
     {
         var module = Compile("""

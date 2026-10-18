@@ -14,7 +14,13 @@ internal sealed partial class JavaScriptEmitter
         {
             var variable = CatchVariable(single);
             _output.Append(" catch (").Append(variable).AppendLine(") {");
-            EmitCatchBody(single, variable, depth + 1);
+            var original = variable;
+            if (single.ExceptionDeclarationOrExpression is not null)
+            {
+                original = _names.Get($"rethrow:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "originalException");
+                _output.Append(indent).Append("  const ").Append(original).Append(" = ").Append(variable).AppendLine(";");
+            }
+            EmitCatchBody(single, original, depth + 1);
             _output.Append(indent).Append('}');
         }
         else if (operation.Catches.Length != 0)
@@ -22,24 +28,7 @@ internal sealed partial class JavaScriptEmitter
             var source = operation.Syntax;
             var caught = _names.Get($"catch:{source.SyntaxTree.FilePath}:{source.SpanStart}", "exception");
             _output.Append(" catch (").Append(caught).AppendLine(") {");
-            var catchAll = false;
-            for (var index = 0; index < operation.Catches.Length && !catchAll; index++)
-            {
-                var clause = operation.Catches[index];
-                var variable = CatchVariable(clause);
-                var conditions = new List<string>();
-                if (CatchTypeTest(clause, caught) is { } typeTest) conditions.Add(typeTest);
-                // C# treats an exception thrown by a filter as a failed match.
-                if (clause.Filter is not null)
-                    conditions.Add($"(({variable}) => {{ try {{ return {Expression(clause.Filter)}; }} catch {{ return false; }} }})({caught})");
-                catchAll = conditions.Count == 0;
-                _output.Append(indent).Append(index == 0 ? "  " : "  else ")
-                    .Append(catchAll ? "" : $"if ({string.Join(" && ", conditions)}) ").AppendLine("{");
-                _output.Append(indent).Append("    const ").Append(variable).Append(" = ").Append(caught).AppendLine(";");
-                EmitCatchBody(clause, variable, depth + 2);
-                _output.Append(indent).AppendLine("  }");
-            }
-            if (!catchAll) _output.Append(indent).Append("  else throw ").Append(caught).AppendLine(";");
+            EmitCatchClauses(operation.Catches, caught, 0, depth + 1);
             _output.Append(indent).Append('}');
         }
 
@@ -50,6 +39,35 @@ internal sealed partial class JavaScriptEmitter
             _output.Append(indent).Append('}');
         }
         _output.AppendLine();
+    }
+
+    private void EmitCatchClauses(System.Collections.Immutable.ImmutableArray<ICatchClauseOperation> clauses, string caught, int index, int depth)
+    {
+        var indent = new string(' ', depth * 2);
+        if (index == clauses.Length)
+        {
+            _output.Append(indent).Append("throw ").Append(caught).AppendLine(";");
+            return;
+        }
+        var clause = clauses[index];
+        var variable = CatchVariable(clause);
+        _output.Append(indent).Append("let ").Append(variable).Append(" = ").Append(caught).AppendLine(";");
+        EmitScopeVariableDeclarations(clause.Syntax, indent);
+        var conditions = new List<string>();
+        if (CatchTypeTest(clause, caught) is { } typeTest) conditions.Add(typeTest);
+        // Share the catch binding with its filter, while treating a thrown filter as false.
+        if (clause.Filter is not null)
+            conditions.Add($"(() => {{ try {{ return {Expression(clause.Filter)}; }} catch {{ return false; }} }})()");
+        if (conditions.Count == 0)
+        {
+            EmitCatchBody(clause, caught, depth);
+            return;
+        }
+        _output.Append(indent).Append("if (").Append(string.Join(" && ", conditions)).AppendLine(") {");
+        EmitCatchBody(clause, caught, depth + 1);
+        _output.Append(indent).AppendLine("} else {");
+        EmitCatchClauses(clauses, caught, index + 1, depth + 1);
+        _output.Append(indent).AppendLine("}");
     }
 
     private string CatchVariable(ICatchClauseOperation clause) =>

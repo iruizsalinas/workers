@@ -5,6 +5,30 @@ using Microsoft.CodeAnalysis.Operations;
 
 internal sealed partial class JavaScriptEmitter
 {
+    private void EmitScopeVariableDeclarations(SyntaxNode scope, string indent) =>
+        DeclareScopeVariables(scope, name => _output.Append(indent).Append("let ").Append(name).AppendLine(";"));
+
+    private void DeclareScopeVariables(SyntaxNode scope, Action<string> declare)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        DeclareOutVariables(scope, declare, names);
+        DeclarePatternVariables(StatementPatternDesignations(scope), declare, names);
+    }
+
+    private string LocalDeclarationName(ISymbol symbol, SingleVariableDesignationSyntax designation, HashSet<string> names)
+    {
+        var name = UserIdentifier(symbol, designation.Identifier);
+        // Case-label locals are emitted before the switch; reserve a symbol-specific
+        // name so successive switch statements cannot collide in the enclosing block.
+        if (designation.Ancestors().Any(node => node is SwitchLabelSyntax) || !names.Add(name))
+        {
+            name = _names.Get($"local-variable:{designation.SyntaxTree.FilePath}:{designation.SpanStart}", $"local${symbol.Name}");
+            _userIdentifiers[symbol] = name;
+            names.Add(name);
+        }
+        return name;
+    }
+
     private void EmitStatement(StatementSyntax statement, int depth) =>
         EmitStatement(_model.GetOperation(statement) ?? throw Unsupported("WRK100", statement), depth);
 
@@ -13,17 +37,13 @@ internal sealed partial class JavaScriptEmitter
         var indent = new string(' ', depth * 2);
         _diagnosticNode = operation.Syntax;
         if (operation.Syntax is StatementSyntax statement)
-        {
-            EmitOutVariableDeclarations(statement, indent);
-            DeclarePatternVariables(StatementPatternDesignations(statement),
-                name => _output.Append(indent).Append("let ").Append(name).AppendLine(";"));
-        }
+            EmitScopeVariableDeclarations(statement, indent);
         switch (operation)
         {
             case IReturnOperation value when value.Kind == OperationKind.YieldReturn:
                 _output.Append(indent).Append("yield ").Append(ValueExpression(value.ReturnedValue!)).AppendLine(";");
                 break;
-            case IReturnOperation value when value.Kind == OperationKind.Return:
+            case IReturnOperation value when value.Kind is OperationKind.Return or OperationKind.YieldBreak:
                 _output.Append(indent).Append("return");
                 if (value.ReturnedValue is not null) _output.Append(' ').Append(ValueExpression(value.ReturnedValue));
                 _output.AppendLine(";");

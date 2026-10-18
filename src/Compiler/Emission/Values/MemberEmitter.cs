@@ -49,8 +49,7 @@ internal sealed partial class JavaScriptEmitter
             return property.Name switch { "Start" => $"{Receiver()}[0]", "End" => $"{Receiver()}[1]",
                 "All" => "[[0, false], [0, true]]", _ => throw UnsupportedSymbol(property, member) };
         if (property is not null && member is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
-            && (property.IsVirtual || property.IsOverride || property.DeclaringSyntaxReferences.Any(reference =>
-                reference.GetSyntax() is PropertyDeclarationSyntax declaration && !IsAutoProperty(declaration))))
+            && HasPropertyDescriptor(property))
             return BasePropertyGet(property, member);
         if (IsSourceInterface(symbol.ContainingType))
         {

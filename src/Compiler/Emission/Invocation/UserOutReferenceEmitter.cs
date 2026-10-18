@@ -7,7 +7,11 @@ internal sealed partial class JavaScriptEmitter
 {
     private string UserOutReference(IOperation target)
     {
-        if (target is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true }) return AssignmentReference(target);
+        if (target is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true } tupleField)
+        {
+            var storage = TupleFieldAccess("reference.value", tupleField.Field, target.Syntax);
+            return $"((reference) => ({{ get value() {{ return {storage}; }}, set value(value) {{ {storage} = value; }} }}))({UserOutReference(tupleField.Instance!)})";
+        }
         if (target is IParameterReferenceOperation primary && IsClassPrimaryParameter(primary.Parameter)) return AssignmentReference(target);
         if (target is IDeclarationExpressionOperation declaration)
         {
@@ -41,7 +45,7 @@ internal sealed partial class JavaScriptEmitter
             var receiver = _names.Get(key + ":array", "array");
             var index = _names.Get(key + ":index", "index");
             var check = HelperInvocation(JavaScriptHelper.SequenceIndex, [receiver, index]);
-            return $"(({receiver}, {index}) => {{ {check}; return {Reference($"{receiver}[{index}]")}; }})" +
+            return $"(({receiver}, {index}) => {{ {check}; if (Array.isArray({index})) {index} = {index}[1] ? {receiver}.length - {index}[0] : {index}[0]; return {Reference($"{receiver}[{index}]")}; }})" +
                 $"({Expression(array.ArrayReference)}, {Expression(array.Indices[0])})";
         }
         throw Unsupported("WRK108", target.Syntax);

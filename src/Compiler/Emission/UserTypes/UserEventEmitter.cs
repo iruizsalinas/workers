@@ -73,6 +73,8 @@ internal sealed partial class JavaScriptEmitter
         // before the receiver null check, as for ordinary instance invocations.
         var call = symbol.IsStatic || IsSourceInterface(symbol.ContainingType) && !accessor.IsAbstract
             ? $"{QueueEventAccessor(accessor, operation.Syntax)}.call({(symbol.IsStatic ? "receiver" : NotNull("receiver"))}, handler)"
+            : reference.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
+            ? $"{QueueUserType(accessor.ContainingType, operation.Syntax)}.prototype.{UserInstanceMethodName(accessor)}.call(receiver, handler)"
             : $"{NotNull("receiver")}.{UserInstanceMethodName(accessor)}(handler)";
         return $"((receiver, handler) => {call})({receiver}, {value})";
     }

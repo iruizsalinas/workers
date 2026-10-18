@@ -3,6 +3,22 @@ namespace Workers.Compiler.Tests;
 public sealed class TextEmissionTests
 {
     [Fact]
+    public void RawInterpolatedStringsPreserveLiteralBracePairs() => DifferentialRunner.Equal(""""
+        public static class Test
+        {
+            public static object Run()
+            {
+                var value = 7;
+                return new
+                {
+                    raw = $$$"""{{literal}} {{{value}}} ${{marker}}""",
+                    escaped = $"{{{{literal}}}} {value} ${{{{marker}}}}"
+                };
+            }
+        }
+        """");
+
+    [Fact]
     public void EmitsJavascriptSafeLiteralValuesInsteadOfCSharpTokenText()
     {
         var module = Compile(""""

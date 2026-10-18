@@ -184,29 +184,27 @@ internal sealed partial class JavaScriptEmitter
     }
 
     // Pattern variables declared by a statement's "is" patterns and pattern case labels, excluding
-    // those owned by nested statements, lambdas and switch expressions.
-    private IEnumerable<SingleVariableDesignationSyntax> StatementPatternDesignations(StatementSyntax statement) =>
+    // those owned by nested statements, catch clauses, lambdas and switch expression arms.
+    // Catch clauses and switch expression arms also use this traversal for their local variables.
+    private IEnumerable<SingleVariableDesignationSyntax> StatementPatternDesignations(SyntaxNode statement) =>
         statement
             .DescendantNodes(node => node == statement
-                || node is not (StatementSyntax or AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax
-                    or SwitchExpressionSyntax))
-            .Where(node => node is PatternSyntax && node.Ancestors().TakeWhile(ancestor => ancestor != statement)
-                .All(ancestor => ancestor is not SwitchExpressionSyntax))
-            .SelectMany(pattern => pattern.DescendantNodesAndSelf(node => node is not SwitchExpressionSyntax))
+                || node is not (StatementSyntax or CatchClauseSyntax or AnonymousFunctionExpressionSyntax or LocalFunctionStatementSyntax
+                    or SwitchExpressionArmSyntax))
+            .Where(node => node is PatternSyntax)
+            .SelectMany(pattern => pattern.DescendantNodesAndSelf(node => node is not SwitchExpressionArmSyntax))
             .OfType<SingleVariableDesignationSyntax>()
             .Distinct();
 
-    // Variables of different arms or sections may share a name; they share one JavaScript variable,
-    // which is safe because each pattern assigns it before its arm reads it.
-    private void DeclarePatternVariables(IEnumerable<SingleVariableDesignationSyntax> designations, Action<string> declare)
+    // Distinct pattern symbols need distinct bindings, even when arms or sections
+    // reuse a name: a failed guard can retain a closure over its pattern variable.
+    private void DeclarePatternVariables(IEnumerable<SingleVariableDesignationSyntax> designations, Action<string> declare, HashSet<string> names)
     {
-        var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var designation in designations)
         {
             var symbol = _model.GetDeclaredSymbol(designation);
             if (symbol is null || !_declaredPatternVariables.Add(symbol)) continue;
-            var name = UserIdentifier(symbol, designation.Identifier);
-            if (names.Add(name)) declare(name);
+            declare(LocalDeclarationName(symbol, designation, names));
         }
     }
 
@@ -227,11 +225,6 @@ internal sealed partial class JavaScriptEmitter
     {
         var value = (SwitchExpressionSyntax)operation.Syntax;
         var parameter = _names.Get($"switch:{value.SyntaxTree.FilePath}:{value.SpanStart}", "subject");
-        var variables = new List<string>();
-        DeclarePatternVariables(
-            value.Arms.SelectMany(arm => arm.Pattern.DescendantNodesAndSelf(node => node is not SwitchExpressionSyntax))
-                .OfType<SingleVariableDesignationSyntax>(),
-            variables.Add);
         var isAsync = operation.Arms.Any(ContainsAwait);
         string? state = null;
         if (isAsync)
@@ -241,16 +234,19 @@ internal sealed partial class JavaScriptEmitter
             temporaries.Add(state);
         }
         var body = new List<string>();
-        if (variables.Count != 0) body.Add($"let {string.Join(", ", variables)};");
         foreach (var arm in operation.Arms)
         {
+            var variables = new List<string>();
+            DeclareScopeVariables(arm.Syntax, variables.Add);
+            var declarations = variables.Count == 0 ? "" : $"let {string.Join(", ", variables)}; ";
             var condition = PatternTest(arm.Pattern, parameter);
             if (arm.Guard is not null) condition = $"{condition} && ({Expression(arm.Guard)})";
             var result = arm.Value is IThrowOperation thrown
                 ? $"throw {Expression(thrown.Exception!)};"
                 : isAsync ? $"{state}.value = ({Expression(arm.Value)}); {state}.done = true; return;"
                 : $"return {Expression(arm.Value)};";
-            body.Add(condition == "true" ? result : isAsync ? $"if ({condition}) {{ {result} }}" : $"if ({condition}) {result}");
+            var selected = condition == "true" ? result : isAsync ? $"if ({condition}) {{ {result} }}" : $"if ({condition}) {result}";
+            body.Add($"{{ {declarations}{selected} }}");
         }
         body.Add("throw new Error(\"The switch expression does not handle all possible values.\");");
         if (!isAsync)
