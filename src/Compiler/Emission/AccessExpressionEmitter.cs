@@ -57,7 +57,7 @@ internal sealed partial class JavaScriptEmitter
         if (IsUserIndexer(operation.Property)) return UserIndexerReference(operation) + ".value";
         if (operation.Instance is null) throw Unsupported("WRK101", operation.Syntax);
         var receiver = Expression(operation.Instance);
-        var arguments = operation.Arguments.Select(argument => Expression(argument.Value)).ToArray();
+        var arguments = operation.Arguments.Select(argument => ValueExpression(argument.Value)).ToArray();
         var type = operation.Instance.Type;
         if (UsesKeyDictionary(type)) return $"((receiver, key) => {NotNull("receiver")}.get(key))({receiver}, {arguments.Single()})";
         if (type?.ToDisplayString() == "Workers.Headers")
@@ -70,8 +70,9 @@ internal sealed partial class JavaScriptEmitter
         return $"{receiver}[{arguments[0]}]";
     }
 
-    private static bool IsSequenceType(ITypeSymbol? type)
+    private bool IsSequenceType(ITypeSymbol? type)
     {
+        type = type is null ? null : ResolveType(type);
         if (type?.SpecialType == SpecialType.System_String || type is IArrayTypeSymbol) return true;
         return type is INamedTypeSymbol named
             && (named.OriginalDefinition.ToDisplayString() is

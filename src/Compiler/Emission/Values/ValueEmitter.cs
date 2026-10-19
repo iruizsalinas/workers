@@ -19,7 +19,7 @@ internal sealed partial class JavaScriptEmitter
         };
     }
 
-    private static bool IsDictionary(ITypeSymbol? type) => type is INamedTypeSymbol named
+    private bool IsDictionary(ITypeSymbol? type) => type is not null && ResolveType(type) is INamedTypeSymbol named
         && (named.OriginalDefinition.ToDisplayString() is
                 "System.Collections.Generic.Dictionary<TKey, TValue>" or
                 "System.Collections.Generic.IDictionary<TKey, TValue>" or
@@ -51,7 +51,7 @@ internal sealed partial class JavaScriptEmitter
     }
 
     // A method group converted to a delegate, such as items.Select(Format).
-    private string MethodGroup(ExpressionSyntax syntax, IMethodSymbol method, ExpressionSyntax? receiver)
+    private string MethodGroup(ExpressionSyntax syntax, IMethodSymbol method, ExpressionSyntax? receiver, IOperation? boundReceiver)
     {
         method = _model.GetSymbolInfo(syntax).Symbol as IMethodSymbol ?? method;
         method = (IMethodSymbol)StaticInterfaceImplementation(method, receiver is null ? null : _model.GetTypeInfo(receiver).Type, syntax);
@@ -73,6 +73,13 @@ internal sealed partial class JavaScriptEmitter
             ? $"{QueueUserType(method.ContainingType, syntax)}.prototype.{UserInstanceMethodName(method)}"
             : $"{target}.{UserInstanceMethodName(method)}";
         var instance = reduced || !method.IsStatic ? receiver is null ? "this" : Expression(receiver) : "null";
+        if (reduced && boundReceiver is not null)
+        {
+            var receiverType = extensionBlock ? method.ContainingType.ExtensionParameter!.Type : method.Parameters[0].Type;
+            instance = receiverType.SpecialType == SpecialType.System_Object
+                || _compilation.ClassifyConversion(ResolveType(boundReceiver.Type!), ResolveType(receiverType)).IsBoxing
+                ? ObjectConversion(boundReceiver.Type!, Expression(boundReceiver), syntax) : ValueExpression(boundReceiver);
+        }
         if (method.MethodKind == MethodKind.LocalFunction && !localThis && !localValues) instance = "null";
         if (!reduced && !method.IsStatic && method.MethodKind != MethodKind.LocalFunction)
         {

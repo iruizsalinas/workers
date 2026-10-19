@@ -85,37 +85,18 @@ internal sealed partial class JavaScriptEmitter
             output = declaration.Expression;
             if (output is ILocalReferenceOperation local) DeclareExpressionOutLocal(local);
         }
-        string? outputReceiver = null;
-        string? outputValue = null;
-        string? target;
-        if (output is IFieldReferenceOperation { Instance: not null } field
-            && field.Instance is not IInstanceReferenceOperation && IsUserInstanceType(field.Field.ContainingType))
-        {
-            QueueUserType(field.Field.ContainingType, field.Syntax);
-            outputReceiver = _names.Get(key + ":outReceiver", "outReceiver");
-            outputValue = Expression(field.Instance);
-            target = UserMemberAccess(outputReceiver, field.Field);
-        }
-        else target = output switch
-        {
-            IDiscardOperation => null,
-            ILocalReferenceOperation or IParameterReferenceOperation => Expression(output),
-            IFieldReferenceOperation { Instance: IInstanceReferenceOperation } => Expression(output),
-            _ => throw Unsupported("WRK108", output.Syntax)
-        };
+        var outputReference = output is IDiscardOperation ? null : _names.Get(key + ":outReference", "outReference");
         var outcome = _names.Get(key + ":outcome", "outcome");
-        var body = target is null
+        var body = outputReference is null
             ? $"{call}[0]"
-            : $"(({outcome}) => ({target} = {CopyValue(outType, outcome + "[1]")}, {outcome}[0]))({call})";
+            : $"(({outcome}) => ({outputReference}.value = {CopyValue(outType, outcome + "[1]")}, {outcome}[0]))({call})";
         if (receiver is not null) body = $"({NotNull(receiver)}, {body})";
         var parameters = receiver is null ? inputs : [receiver, .. inputs];
         var values = receiver is null ? sourceInputs : [Expression(operation.Instance!), .. sourceInputs];
-        if (outputReceiver is not null)
+        if (outputReference is not null)
         {
-            parameters = [.. parameters, outputReceiver];
-            values = [.. values, outputValue!];
-            // Form the field reference before invoking the Try-method, even if it fails.
-            body = $"{{ if ({outputReceiver} == null) throw {NullReferenceException()}; return {body}; }}";
+            parameters = [.. parameters, outputReference];
+            values = [.. values, UserOutReference(output)];
         }
         // Evaluate inputs outside TryCall, so exceptions from evaluating arguments propagate.
         result = $"(({string.Join(", ", parameters)}) => {body})({string.Join(", ", values)})";

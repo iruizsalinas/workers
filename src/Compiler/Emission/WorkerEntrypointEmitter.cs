@@ -38,16 +38,19 @@ internal sealed partial class JavaScriptEmitter
         if (fields.Length != 0 || constructor is not null)
         {
             _output.AppendLine("  constructor(ctx, env) {").AppendLine("    super(ctx, env);");
-            foreach (var field in fields)
-                foreach (var variable in field.Declaration.Variables)
-                    _output.Append("    this.").Append(GeneratedFieldName((IFieldSymbol)_model.GetDeclaredSymbol(variable)!)).Append(" = ")
-                        .Append(variable.Initializer is null
-                            ? DefaultFieldValue(_model.GetTypeInfo(field.Declaration.Type).Type!, variable)
-                            : Expression(variable.Initializer.Value)).AppendLine(";");
-            if (constructor?.ExpressionBody is not null)
-                _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
-            else
-                EmitStatements(constructor?.Body?.Statements ?? [], 2);
+            EmitWithExpressionScope(2, () =>
+            {
+                foreach (var field in fields)
+                    foreach (var variable in field.Declaration.Variables)
+                        _output.Append("    this.").Append(GeneratedFieldName((IFieldSymbol)_model.GetDeclaredSymbol(variable)!)).Append(" = ")
+                            .Append(variable.Initializer is null
+                                ? DefaultFieldValue(_model.GetTypeInfo(field.Declaration.Type).Type!, variable)
+                                : ValueExpression(variable.Initializer.Value)).AppendLine(";");
+                if (constructor?.ExpressionBody is not null)
+                    _output.Append("    ").Append(Expression(constructor.ExpressionBody.Expression)).AppendLine(";");
+                else
+                    EmitStatements(constructor?.Body?.Statements ?? [], 2);
+            });
             _output.AppendLine("  }");
         }
         foreach (var method in declaration.Members.OfType<MethodDeclarationSyntax>())

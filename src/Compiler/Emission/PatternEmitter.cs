@@ -20,13 +20,23 @@ internal sealed partial class JavaScriptEmitter
             $"{(binary.OperatorKind == BinaryOperatorKind.And ? "&&" : "||")} {PatternTest(binary.RightPattern, value)})",
         INegatedPatternOperation { Pattern: IConstantPatternOperation { Value.ConstantValue: { HasValue: true, Value: null } } } => $"{value} != null",
         INegatedPatternOperation negated => $"!({PatternTest(negated.Pattern, value)})",
-        IDeclarationPatternOperation declaration => Bind(declaration.DeclaredSymbol, value,
-            declaration.MatchesNull ? "true" : TypePatternTest(declaration.MatchedType!, value, declaration.InputType, declaration.Syntax)),
+        IDeclarationPatternOperation declaration => DeclarationPatternTest(declaration, value),
         ITypePatternOperation type => TypePatternTest(type.MatchedType, value, type.InputType, type.Syntax),
         IRecursivePatternOperation recursive => RecursivePatternTest(recursive, value),
         IListPatternOperation list => ListPatternTest(list, value),
         _ => throw Unsupported("WRK104", operation.Syntax)
     };
+
+    private string DeclarationPatternTest(IDeclarationPatternOperation operation, string value)
+    {
+        var condition = operation.MatchesNull ? "true"
+            : TypePatternTest(operation.MatchedType!, value, operation.InputType, operation.Syntax);
+        var assigned = operation.DeclaredSymbol is ILocalSymbol local
+            && (ResolveType(local.Type).SpecialType == SpecialType.System_Object
+                || _compilation.ClassifyConversion(ResolveType(operation.InputType), ResolveType(local.Type)).IsBoxing)
+            ? ObjectConversion(operation.InputType, value, operation.Syntax) : value;
+        return Bind(operation.DeclaredSymbol, assigned, condition);
+    }
 
     private string RelationalPatternTest(IRelationalPatternOperation operation, string value)
     {
@@ -113,7 +123,7 @@ internal sealed partial class JavaScriptEmitter
         if (operation.DeconstructionSubpatterns.Length != 0)
         {
             var components = type is INamedTypeSymbol { IsTupleType: true } ? value
-                : operation.DeconstructSymbol is IMethodSymbol method ? DeconstructComponents(method, value, recursive)
+                : operation.DeconstructSymbol is IMethodSymbol method ? DeconstructComponents(method, type, value, recursive)
                 : throw Unsupported("WRK104", recursive);
             var extracted = _names.Get($"pattern-deconstruction:{recursive.SyntaxTree.FilePath}:{recursive.SpanStart}", "components");
             var tests = operation.DeconstructionSubpatterns.Select((pattern, index) => SubpatternTest(pattern, $"{extracted}[{index}]"));
@@ -148,7 +158,7 @@ internal sealed partial class JavaScriptEmitter
         if (instance is IMemberReferenceOperation) value = PatternMemberAccess(instance, value);
         else if (instance is not IInstanceReferenceOperation) throw Unsupported("WRK104", operation.Syntax);
         if (IsExtensionBlockProperty(operation, out var extensionProperty))
-            return ExtensionAccessorCall(extensionProperty.Property, true, operation.Syntax, value);
+            return ExtensionAccessorCall(extensionProperty.Property, true, operation.Syntax, CopyValue(instance.Type, value));
         if (symbol.ContainingType is { } owner && IsUserInstanceType(owner))
             return UserMemberAccess(value, symbol);
         if (symbol.Name == "Count" && symbol.ContainingType.OriginalDefinition.ToDisplayString() is
@@ -166,7 +176,7 @@ internal sealed partial class JavaScriptEmitter
     private string ListPatternTest(IListPatternOperation operation, string value)
     {
         var list = (ListPatternSyntax)operation.Syntax;
-        var input = operation.InputType;
+        var input = ResolveType(operation.InputType);
         if (input is not IArrayTypeSymbol && input.SpecialType != SpecialType.System_String
             && input.OriginalDefinition.ToDisplayString() is not ("System.Collections.Generic.List<T>"
                 or "System.Collections.Generic.IReadOnlyList<T>"))
@@ -179,10 +189,11 @@ internal sealed partial class JavaScriptEmitter
             break;
         }
         var fixedCount = operation.Patterns.Length - (sliceIndex >= 0 ? 1 : 0);
+        // A nested getter can mutate a list; trailing indices still use its initial length.
+        var length = _names.Get($"list-pattern-length:{list.SyntaxTree.FilePath}:{list.SpanStart}", "length");
         var conditions = new List<string>
         {
-            $"{value} != null",
-            sliceIndex >= 0 ? $"{value}.length >= {fixedCount}" : $"{value}.length === {fixedCount}"
+            sliceIndex >= 0 ? $"{length} >= {fixedCount}" : $"{length} === {fixedCount}"
         };
         for (var index = 0; index < operation.Patterns.Length; index++)
         {
@@ -192,18 +203,18 @@ internal sealed partial class JavaScriptEmitter
                 var after = operation.Patterns.Length - index - 1;
                 if (slice.Pattern is not null)
                 {
-                    var sliced = $"{value}.slice({index}, {value}.length - {after})";
+                    var sliced = $"{value}.slice({index}, {length} - {after})";
                     if (input is IArrayTypeSymbol array) sliced = CopySequenceValues(array.ElementType, sliced);
                     conditions.Add(SubpatternTest(slice.Pattern, sliced));
                 }
                 continue;
             }
             var position = sliceIndex >= 0 && index > sliceIndex
-                ? $"{value}[{value}.length - {operation.Patterns.Length - index}]"
+                ? $"{value}[{length} - {operation.Patterns.Length - index}]"
                 : $"{value}[{index}]";
             conditions.Add(SubpatternTest(item, position));
         }
-        var condition = $"({string.Join(" && ", conditions)})";
+        var condition = $"({value} != null && (({length}) => {string.Join(" && ", conditions)})({value}.length))";
         return Bind(operation.DeclaredSymbol, value, condition);
     }
 

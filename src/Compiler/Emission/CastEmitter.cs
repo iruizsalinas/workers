@@ -28,8 +28,8 @@ internal sealed partial class JavaScriptEmitter
         var source = operand.Type;
         if (source is null) return value;
         source = ResolveType(source);
-        if (target.TypeKind == TypeKind.Interface && source is INamedTypeSymbol { IsRecord: true } interfaceRecord
-            && IsUserInstanceType(interfaceRecord)) return AttachObjectText(source, value, cast);
+        if (target.TypeKind == TypeKind.Interface && UnwrapNullable(source) is INamedTypeSymbol { IsRecord: true } interfaceRecord
+            && IsUserInstanceType(interfaceRecord)) return ObjectConversion(source, value, cast);
         if (target.SpecialType == SpecialType.System_Object && IsWebValueBoundary(conversion)) return value;
         if (target.SpecialType == SpecialType.System_Object) return ObjectConversion(source, value, cast);
         if (source is INamedTypeSymbol { IsTupleType: true } sourceTuple && target is INamedTypeSymbol { IsTupleType: true } targetTuple)
@@ -43,6 +43,15 @@ internal sealed partial class JavaScriptEmitter
 
         if (conversion.ConstantValue is { HasValue: true } constant && constant.Value is not decimal)
             return LiteralConstant(constant.Value, cast);
+        if (source is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullableSource
+            && SymbolEqualityComparer.Default.Equals(nullableSource.TypeArguments[0], target))
+        {
+            var present = _names.Get($"cast:{cast.SyntaxTree.FilePath}:{cast.SpanStart}", "value");
+            return $"(({present}) => {{ if ({present} == null) throw {NewBuiltInException("System.InvalidOperationException", "Nullable object must have a value.")}; return {present}; }})({value})";
+        }
+        if (source.IsReferenceType && target is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullableTarget
+            && nullableTarget.TypeArguments[0] is INamedTypeSymbol { IsRecord: true } recordTarget && IsUserInstanceType(recordTarget))
+            return CheckedReferenceConversion(target, value, cast, conversion.IsTryCast);
         if (target is INamedTypeSymbol userTarget && (IsSourceInterface(userTarget) || IsUserInstanceType(userTarget)))
             return CheckedReferenceConversion(target, value, cast, conversion.IsTryCast);
         var targetValue = UnwrapNullable(target);
@@ -85,9 +94,10 @@ internal sealed partial class JavaScriptEmitter
         if (IsTextEnum(source)) return BoxEnumText(source, value);
         if (IsKeyValuePair(source)) return AttachObjectText(source, CopyValue(source, value), node);
         if (source is INamedTypeSymbol { IsTupleType: true }) return AttachObjectText(source, CopyValue(source, value), node);
+        if (source is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record))
+            return AttachObjectText(source, record.IsValueType ? CopyRecordFields(record, value) : value, node);
         if (source is IArrayTypeSymbol || HasCollectionTypeName(source)
-            || source is INamedTypeSymbol { IsAnonymousType: true }
-            || source is INamedTypeSymbol { IsRecord: true } record && IsUserInstanceType(record))
+            || source is INamedTypeSymbol { IsAnonymousType: true })
             return AttachObjectText(source, value, node);
         return value;
     }
@@ -95,9 +105,10 @@ internal sealed partial class JavaScriptEmitter
     private string CheckedReferenceConversion(ITypeSymbol target, string value, SyntaxNode node, bool tryCast = false)
     {
         var parameter = _names.Get($"reference-cast:{node.SyntaxTree.FilePath}:{node.SpanStart}", "value");
-        var test = TypePatternTest(target, parameter, null, node);
+        var test = TypePatternTest(UnwrapNullable(target), parameter, null, node);
         var failure = tryCast ? "return null;" : $"throw {NewBuiltInException("System.InvalidCastException", "Specified cast is not valid.")};";
-        return $"(({parameter}) => {{ if ({parameter} == null || {test}) return {parameter}; {failure} }})({value})";
+        var missing = target.IsValueType && !IsNullable(target) ? $"throw {NullReferenceException()};" : $"return {parameter};";
+        return $"(({parameter}) => {{ if ({parameter} == null) {{ {missing} }} if ({test}) return {parameter}; {failure} }})({value})";
     }
 
     // Types that stand for a JavaScript union, such as string | ReadableStream. Each member converts to the union

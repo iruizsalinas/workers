@@ -40,6 +40,8 @@ internal sealed partial class JavaScriptEmitter
         IMethodSymbol constructor,
         ArgumentSyntax[] arguments)
     {
+        if (constructor.ContainingType.IsValueType && constructor.Parameters.Length == 0)
+            return UserObjectInitializers(source, DefaultFieldValue(constructor.ContainingType, source));
         string Create(IEnumerable<string> properties) =>
             $"Object.defineProperty({{ {string.Join(", ", properties)} }}, {PlainRecordIdentitySlot}, {{ value: {PlainRecordIdentity(constructor.ContainingType)} }})";
         if (constructor.Parameters.LastOrDefault()?.IsParams == true)
@@ -56,14 +58,7 @@ internal sealed partial class JavaScriptEmitter
                                 && supplied.All(argument => argument.Parameter.Ordinal != parameter.Ordinal))
             .Select(parameter =>
                 $"{JavaScriptObjectKey(LowerFirst(parameter.Name))}: {ParameterDefaultValue(parameter, source)}"));
-        if (source.Initializer is not null)
-            properties.AddRange(source.Initializer.Expressions.Select(expression => expression switch
-            {
-                AssignmentExpressionSyntax assignment when assignment.Left is IdentifierNameSyntax =>
-                    $"{JavaScriptObjectKey(UserInitializerMemberName(assignment.Left))}: {ValueExpression(assignment.Right)}",
-                _ => throw Unsupported("WRK106", expression)
-            }));
-        return Create(properties);
+        return UserObjectInitializers(source, Create(properties));
     }
 
     private string PositionalObjectCreation(

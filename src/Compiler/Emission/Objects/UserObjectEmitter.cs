@@ -49,9 +49,4 @@ internal sealed partial class JavaScriptEmitter
             ? UserMemberAccess(receiver, symbol)
             : throw UnsupportedSymbol(null, expression);
 
-    private string UserInitializerMemberName(ExpressionSyntax expression) =>
-        _model.GetSymbolInfo(expression).Symbol is { } symbol
-            ? UserMemberName(symbol)
-            : throw UnsupportedSymbol(null, expression);
-
 }

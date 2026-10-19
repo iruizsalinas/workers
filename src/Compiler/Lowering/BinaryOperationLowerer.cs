@@ -25,7 +25,7 @@ internal sealed partial class JavaScriptEmitter
         if (operation.OperatorMethod is { } recordOperator && IsSynthesizedRecordMember(recordOperator)
             && operation.OperatorKind is BinaryOperatorKind.Equals or BinaryOperatorKind.NotEquals)
         {
-            var equals = RecordEquals(recordOperator.ContainingType, Expression(operation.LeftOperand), Expression(operation.RightOperand), expression, referenceComparison: true);
+            var equals = RecordEquals(recordOperator.ContainingType, ValueExpression(operation.LeftOperand), ValueExpression(operation.RightOperand), expression, referenceComparison: true);
             return operation.OperatorKind == BinaryOperatorKind.Equals ? equals : $"!{equals}";
         }
         if (operation.OperatorMethod is { } sourceOperator && sourceOperator.DeclaringSyntaxReferences.Length != 0)

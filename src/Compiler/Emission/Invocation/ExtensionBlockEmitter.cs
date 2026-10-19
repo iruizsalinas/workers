@@ -91,7 +91,7 @@ internal sealed partial class JavaScriptEmitter
     private string ExtensionPropertyReference(IPropertyReferenceOperation operation)
     {
         var property = operation.Property;
-        var receiver = property.IsStatic ? null : "receiver";
+        var receiver = property.IsStatic ? null : CopyValue(operation.Instance!.Type, "receiver");
         var accessors = new List<string>();
         if (property.GetMethod is not null)
             accessors.Add($"get value() {{ return {ExtensionAccessorCall(property, true, operation.Syntax, receiver)}; }}");

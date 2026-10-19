@@ -11,6 +11,13 @@ internal sealed partial class JavaScriptEmitter
         if (IsRangeType(type)) return "[[0, false], [0, false]]";
         if (type is INamedTypeSymbol { IsTupleType: true } tuple)
             return TupleValue(tuple.TupleElements.Select(element => DefaultFieldValue(element.Type, source)));
+        if (type is INamedTypeSymbol { IsRecord: true, IsValueType: true } record
+            && IsUserInstanceType(record) && !RequiresUserClass(record))
+        {
+            var members = record.GetMembers().OfType<IPropertySymbol>().Where(property => !property.IsStatic)
+                .Select(property => $"{JavaScriptObjectKey(UserMemberName(property))}: {DefaultFieldValue(property.Type, source)}");
+            return $"Object.defineProperty({{ {string.Join(", ", members)} }}, {PlainRecordIdentitySlot}, {{ value: {PlainRecordIdentity(record)} }})";
+        }
         if (type.IsReferenceType || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) return "null";
         if (type.SpecialType == SpecialType.System_Boolean) return "false";
         if (type.SpecialType == SpecialType.System_Char) return "\"\\u0000\"";

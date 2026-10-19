@@ -42,14 +42,14 @@ internal sealed partial class JavaScriptEmitter
         }
         if (type is not null && ResolveType(type) is INamedTypeSymbol { IsRecord: true, IsValueType: true, IsReadOnly: false } record
             && IsUserInstanceType(record))
-            return MutableRecordStructCopy(record, value);
+            return CopyRecordFields(record, value);
         if (type is null || ResolveType(type) is not INamedTypeSymbol { IsTupleType: true } tuple) return value;
         return $"((tuple) => {TupleValue(tuple.TupleElements.Select((field, index) => CopyValue(field.Type, $"tuple[{index}]")))})({value})";
     }
 
-    // A mutable record struct is a value: each copy owns its fields, including nested value-typed ones.
-    // Readonly record structs cannot change after construction, so sharing them is unobservable.
-    private string MutableRecordStructCopy(INamedTypeSymbol type, string value)
+    // Record copies duplicate value-typed fields while preserving reference-typed fields.
+    // Boxing also uses this for readonly structs, whose boxes need distinct identities.
+    private string CopyRecordFields(INamedTypeSymbol type, string value)
     {
         var copy = "Object.assign(Object.create(Object.getPrototypeOf(source)), source)";
         if (!RequiresUserClass(type))

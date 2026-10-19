@@ -24,6 +24,12 @@ internal sealed partial class JavaScriptEmitter
             return EmitExtensionBlockInvocation(operation, invocation, ResolveMethod(method));
         method = (IMethodSymbol)StaticInterfaceImplementation(method, operation.ConstrainedToType, invocation);
         method = ResolveMethod(method);
+        // A struct receiver keeps its storage through argument evaluation, which may replace its value.
+        if (!method.IsStatic && method.ContainingType.IsValueType && IsSynthesizedRecordMember(method)
+            && operation.Arguments.Length != 0
+            && IsValueTypeVariable(operation.Instance))
+            return EmitNormalizedInvocation(invocation, method, UserOutReference(operation.Instance!),
+                (target, values) => InvocationCore(invocation, method, values, invocation.Expression as MemberAccessExpressionSyntax, target + ".value"));
         if (method.MethodKind == MethodKind.LocalFunction)
             return EmitNormalizedInvocation(invocation, method, null, (_, values) =>
                 $"{LocalFunctionTarget(method, invocation)}.call(this{(values.Length == 0 ? "" : ", " + string.Join(", ", values))})");
@@ -225,7 +231,7 @@ internal sealed partial class JavaScriptEmitter
             return UserOutReference(bound.Value);
         // Platform adapters deliberately receive expanded params as individual JS arguments.
         return bound.ArgumentKind is ArgumentKind.ParamArray or ArgumentKind.ParamCollection
-            ? CopyValue(_model.GetTypeInfo(argument.Expression).Type, Expression(argument.Expression)) : ValueExpression(bound.Value);
+            ? ValueExpression(argument.Expression) : ValueExpression(bound.Value);
     }
 
 }

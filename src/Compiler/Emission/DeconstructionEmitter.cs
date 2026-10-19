@@ -53,7 +53,7 @@ internal sealed partial class JavaScriptEmitter
                     var method = ResolveMethod(boundMethod.GetConstructedReducedFrom() ?? boundMethod);
                     var outputs = method.Parameters.Where(parameter => parameter.RefKind == RefKind.Out).ToArray();
                     var slots = Temporary("outputs");
-                    body.Append("const ").Append(slots).Append(" = ").Append(DeconstructComponents(method, value, source)).Append("; ");
+                    body.Append("const ").Append(slots).Append(" = ").Append(DeconstructComponents(method, valueType, value, source)).Append("; ");
                     elements.AddRange(outputs.Select((parameter, index) => ($"{slots}[{index}]", ResolveType(parameter.Type))));
                 }
                 else if (valueType is INamedTypeSymbol { IsTupleType: true } inputTuple)
@@ -82,7 +82,7 @@ internal sealed partial class JavaScriptEmitter
         }
     }
 
-    private string DeconstructComponents(IMethodSymbol boundMethod, string value, SyntaxNode source)
+    private string DeconstructComponents(IMethodSymbol boundMethod, ITypeSymbol receiverType, string value, SyntaxNode source)
     {
         var method = ResolveMethod(boundMethod.GetConstructedReducedFrom() ?? boundMethod);
         var outputs = method.Parameters.Where(parameter => parameter.RefKind == RefKind.Out).ToArray();
@@ -91,9 +91,17 @@ internal sealed partial class JavaScriptEmitter
         if (method.IsImplicitlyDeclared && method.ContainingType.IsRecord)
             return "((receiver) => [" + string.Join(", ", outputs.Select(parameter => CopyValue(parameter.Type, UserMemberAccess("receiver",
                 RecordPositionalMember(method.ContainingType, parameter.Name))))) + $"])({NotNull(value)})";
-        var args = outputs.Select((_, index) => $"({{ set value(value) {{ outputs[{index}] = value; }} }})").ToArray();
+        var args = outputs.Select((_, index) => $"({{ get value() {{ return outputs[{index}]; }}, set value(value) {{ outputs[{index}] = value; }} }})").ToArray();
+        var receiver = "receiver";
+        if (method.IsStatic)
+        {
+            var parameterType = method.Parameters[0].Type;
+            receiver = parameterType.SpecialType == SpecialType.System_Object
+                || _compilation.ClassifyConversion(ResolveType(receiverType), parameterType).IsBoxing
+                ? ObjectConversion(receiverType, receiver, source) : CopyValue(parameterType, receiver);
+        }
         var call = method.IsStatic
-            ? $"{QueueUserMethod(method, source)}({string.Join(", ", new[] { "receiver" }.Concat(args))})"
+            ? $"{QueueUserMethod(method, source)}({string.Join(", ", new[] { receiver }.Concat(args))})"
             : $"{NotNull("receiver")}.{UserInstanceMethodName(method)}({string.Join(", ", args)})";
         return $"((receiver) => {{ const outputs = []; {call}; return outputs; }})({value})";
     }
@@ -132,6 +140,11 @@ internal sealed partial class JavaScriptEmitter
         {
             if (member.Member is IFieldSymbol { ContainingType.IsTupleType: true })
                 return UserOutReference(target);
+            if (IsValueTypeVariable(member.Instance))
+            {
+                var valueStorage = Member(target, "reference.value");
+                return $"((reference) => ({{ get value() {{ return {valueStorage}; }}, set value({assigned}) {{ {valueStorage} = {assigned}; }} }}))({UserOutReference(member.Instance!)})";
+            }
             if (member.Member.IsStatic)
                 return $"({{ get value() {{ return {Expression(target)}; }}, set value({assigned}) {{ {Expression(target)} = {assigned}; }} }})";
             if (target.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax } && member.Member is IPropertySymbol property

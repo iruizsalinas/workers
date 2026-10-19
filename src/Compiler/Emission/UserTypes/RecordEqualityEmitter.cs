@@ -73,8 +73,8 @@ internal sealed partial class JavaScriptEmitter
             if (type.BaseType is { IsRecord: true } parent)
                 comparisons = [$"{RecordEqualityFunction(parent, source)}(left, right)", .. comparisons];
             _output.Append("function ").Append(_recordEqualityFunctions[type]).AppendLine("(left, right) {");
-            _output.AppendLine("  if (left === right) return true;");
-            _output.AppendLine("  if (left == null || right == null) return false;");
+            if (!type.IsValueType) _output.AppendLine("  if (left === right) return true;");
+            _output.AppendLine("  if (left == null || right == null) return left == right;");
             if (RequiresUserClass(type))
                 _output.AppendLine("  if (Object.getPrototypeOf(left) !== Object.getPrototypeOf(right)) return false;");
             _output.Append("  return ").Append(comparisons.Length == 0 ? "true" : string.Join("\n    && ", comparisons)).AppendLine(";");

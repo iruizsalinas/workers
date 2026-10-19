@@ -78,12 +78,13 @@ internal sealed partial class JavaScriptEmitter
                         "use iterator methods returning IEnumerable<T> or IAsyncEnumerable<T> instead.");
                 var collection = loop.Collection;
                 while (collection is IConversionOperation { IsImplicit: true } conversion) collection = conversion.Operand;
+                var collectionType = ResolveType(collection.Type!);
                 var enumerable = NeedsNullCheck(collection) ? NotNull(Expression(collection)) : Expression(collection);
-                if (collection.Type?.SpecialType == SpecialType.System_String)
+                if (collectionType.SpecialType == SpecialType.System_String)
                     enumerable = $"{_helpers.Require(JavaScriptHelper.LinqValues)}({enumerable})";
-                else if (IsDictionary(collection.Type) && !UsesKeyDictionary(collection.Type)) enumerable = $"Object.entries({enumerable})";
-                else if (!loop.IsAsynchronous && !IsArrayBackedList(collection.Type)
-                    && collection.Type is INamedTypeSymbol { TypeKind: TypeKind.Interface } contract
+                else if (IsDictionary(collectionType) && !UsesKeyDictionary(collectionType)) enumerable = $"Object.entries({enumerable})";
+                else if (!loop.IsAsynchronous && !IsArrayBackedList(collectionType)
+                    && collectionType is INamedTypeSymbol { TypeKind: TypeKind.Interface } contract
                     && (contract.ToDisplayString() == "System.Collections.IEnumerable"
                         || contract.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T
                         || contract.AllInterfaces.Any(item => item.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)))
@@ -188,9 +189,13 @@ internal sealed partial class JavaScriptEmitter
     {
         source = ResolveType(source);
         target = ResolveType(target);
-        if (target.SpecialType == SpecialType.System_Object) return ObjectConversion(source, value, node);
+        if (target.SpecialType == SpecialType.System_Object || _compilation.ClassifyConversion(source, target).IsBoxing)
+            return ObjectConversion(source, value, node);
         if (source.IsReferenceType && target.IsReferenceType)
             return implicitConversion ? value : CheckedReferenceConversion(target, value, node);
+        if (source.IsReferenceType && UnwrapNullable(target) is INamedTypeSymbol { IsRecord: true } record
+            && IsUserInstanceType(record))
+            return CopyValue(target, CheckedReferenceConversion(target, value, node));
         var from = UnwrapNullable(source);
         var to = UnwrapNullable(target);
         var widening = implicitConversion && from.SpecialType is SpecialType.System_Int32 or SpecialType.System_UInt32

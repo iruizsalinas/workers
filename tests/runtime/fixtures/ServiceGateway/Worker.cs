@@ -146,9 +146,31 @@ public sealed class LocalCore : ICoreView
 
 public sealed class CoreService : WorkerEntrypoint, ICoreView, ICovariantCore<RpcUser>
 {
+    private int _constructorValue;
+    private (int, int) _initializerPair = RpcValueSource.Pair;
+    private (int, int) _returnPair = (3, 4);
     private int _iteratorOffset;
     private RpcUser _sharedUser = new RpcUser("Ada");
     private int _touches;
+
+    public CoreService() => _constructorValue = RpcValueSource.TryInitial(out var value) ? value : 0;
+    public int ConstructorValue() => _constructorValue;
+
+    public bool FieldInitializerSnapshot()
+    {
+        var original = _initializerPair.Item1;
+        RpcValueSource.Pair.Item1 = original + 1;
+        return _initializerPair.Item1 == original;
+    }
+    private async Task<(int, int)> ReadPairAsync() =>
+        _returnPair.Item1 == 3 ? _returnPair : await Task.FromResult(_returnPair);
+    public async Task<int> AsyncReturnSnapshot()
+    {
+        var pending = ReadPairAsync();
+        _returnPair.Item1 = 9;
+        var snapshot = await pending;
+        return snapshot.Item1;
+    }
 
     public RpcUser BuildUser() => _sharedUser;
     public bool HasTypedAliases(RpcBase first, RpcDerived second) =>
@@ -370,4 +392,10 @@ public sealed class RpcCollectionData
     public (RpcUser, RpcUser) Pair { get; init; }
     public IEnumerable<RpcUser> Sequence { get; init; } = [];
     public HashSet<int> Points { get; init; } = [];
+}
+
+public static class RpcValueSource
+{
+    public static (int, int) Pair = (1, 2);
+    public static bool TryInitial(out int value) { value = 7; return true; }
 }

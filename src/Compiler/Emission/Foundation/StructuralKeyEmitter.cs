@@ -10,9 +10,9 @@ internal sealed partial class JavaScriptEmitter
     private string RecordHashSlot => _names.Get("record-hash-slot", "hashRecord");
 
     private bool IsCompositeKey(ITypeSymbol type) => ResolveType(UnwrapNullable(type)) is INamedTypeSymbol { IsTupleType: true } or INamedTypeSymbol { IsRecord: true };
-    private bool UsesKeyDictionary(ITypeSymbol? type) => type is INamedTypeSymbol named && IsDictionary(type)
+    private bool UsesKeyDictionary(ITypeSymbol? type) => type is not null && ResolveType(type) is INamedTypeSymbol named && IsDictionary(named)
         && ResolveType(DictionaryKeyType(named)).SpecialType != SpecialType.System_String;
-    private static ITypeSymbol DictionaryKeyType(INamedTypeSymbol type) =>
+    private ITypeSymbol DictionaryKeyType(INamedTypeSymbol type) =>
         type.TypeArguments.Length == 2 ? type.TypeArguments[0] : type.AllInterfaces.First(item => IsDictionary(item)).TypeArguments[0];
 
     private string KeyHash(ITypeSymbol type, string value, SyntaxNode source)
@@ -139,10 +139,10 @@ internal sealed partial class JavaScriptEmitter
         var calls = syntax.Initializer.Expressions.Select(item => item switch
         {
             AssignmentExpressionSyntax { Left: ImplicitElementAccessSyntax index } assignment =>
-                $"{collection}.set({Expression(index.ArgumentList.Arguments.Single().Expression)}, {Expression(assignment.Right)});",
+                $"{collection}.set({ValueExpression(index.ArgumentList.Arguments.Single().Expression)}, {ValueExpression(assignment.Right)});",
             InitializerExpressionSyntax pair when pair.Expressions.Count == 2 =>
-                $"{collection}.add({Expression(pair.Expressions[0])}, {Expression(pair.Expressions[1])});",
-            _ when IsSet(type) => $"{collection}.add({Expression(item)});",
+                $"{collection}.add({ValueExpression(pair.Expressions[0])}, {ValueExpression(pair.Expressions[1])});",
+            _ when IsSet(type) => $"{collection}.add({ValueExpression(item)});",
             _ => throw Unsupported("WRK101", item)
         });
         var asynchronous = _model.GetOperation(syntax.Initializer) is { } initializer && ContainsAwait(initializer);

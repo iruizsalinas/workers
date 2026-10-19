@@ -55,7 +55,15 @@ internal sealed partial class JavaScriptEmitter
         return operation;
     }
 
-    private static string EscapeTemplateText(string value) => value.Replace("\\", "\\\\", StringComparison.Ordinal)
-        .Replace("`", "\\`", StringComparison.Ordinal).Replace("${", "\\${", StringComparison.Ordinal);
+    private static string EscapeTemplateText(string value)
+    {
+        // Template literals normalize carriage returns, and lone surrogates cannot be
+        // written as UTF-8 source. Escape their code units before emitting the module.
+        var escaped = value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("`", "\\`", StringComparison.Ordinal).Replace("${", "\\${", StringComparison.Ordinal)
+            .Replace("\r", "\\r", StringComparison.Ordinal);
+        return string.Concat(escaped.Select(character => char.IsSurrogate(character)
+            ? "\\u" + ((int)character).ToString("X4", CultureInfo.InvariantCulture) : character.ToString()));
+    }
 
 }

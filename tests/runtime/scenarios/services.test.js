@@ -9,6 +9,18 @@ beforeEach(async () => {
 });
 
 describe("named WorkerEntrypoint service bindings", () => {
+  it("supports out-variable declarations in generated constructors", async () => {
+    await expect(env.CORE.constructorValue()).resolves.toBe(7);
+  });
+
+  it("copies value snapshots in generated field initializers", async () => {
+    await expect(env.CORE.fieldInitializerSnapshot()).resolves.toBe(true);
+  });
+
+  it("copies value snapshots before completing async expression returns", async () => {
+    await expect(env.CORE.asyncReturnSnapshot()).resolves.toBe(3);
+  });
+
   it("preserves export names that collide with native JavaScript globals", async () => {
     await expect(env.OBJECT.ping()).resolves.toBe("6:4");
     await expect(env.RESERVED_FIELDS.ping()).resolves.toBe(10);

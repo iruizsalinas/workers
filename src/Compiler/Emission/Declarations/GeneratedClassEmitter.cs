@@ -100,7 +100,7 @@ internal sealed partial class JavaScriptEmitter
         }
         if (method.ExpressionBody is not null)
         {
-            var value = Expression(method.ExpressionBody.Expression);
+            var value = ValueExpression(method.ExpressionBody.Expression);
             _output.Append("    return ").Append(value).AppendLine(";");
             return;
         }

@@ -5,6 +5,16 @@ using Microsoft.CodeAnalysis.Operations;
 // values back after a call. This preserves aliasing and writes before exceptions.
 internal sealed partial class JavaScriptEmitter
 {
+    private bool IsValueTypeVariable(IOperation? operation) => operation?.Type is { } type && ResolveType(type).IsValueType
+        && operation switch
+        {
+            ILocalReferenceOperation or IParameterReferenceOperation or IArrayElementReferenceOperation => true,
+            IFieldReferenceOperation field => field.Field.IsStatic
+                || field.Instance?.Type is { } owner && ResolveType(owner).IsReferenceType
+                || IsValueTypeVariable(field.Instance),
+            _ => false
+        };
+
     private string UserOutReference(IOperation target)
     {
         if (target is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true } tupleField)

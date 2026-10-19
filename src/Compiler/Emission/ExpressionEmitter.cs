@@ -77,7 +77,7 @@ internal sealed partial class JavaScriptEmitter
                 ITypeParameterObjectCreationOperation value => GenericConstruction(value),
                 IDelegateCreationOperation value => DelegateCreation(value),
                 IMethodReferenceOperation value => MethodGroup((ExpressionSyntax)value.Syntax, value.Method,
-                    value.Syntax is MemberAccessExpressionSyntax member ? member.Expression : null),
+                    value.Syntax is MemberAccessExpressionSyntax member ? member.Expression : null, value.Instance),
                 IAnonymousFunctionOperation value => AnonymousFunction(value),
                 _ => throw Unsupported("WRK101", operation.Syntax)
             };
@@ -99,8 +99,7 @@ internal sealed partial class JavaScriptEmitter
     private string Coalesce(ICoalesceOperation operation)
     {
         var value = Expression(operation.Value);
-        if (!operation.ValueConversion.IsIdentity && !operation.ValueConversion.IsReference
-            && operation.Type?.SpecialType != SpecialType.System_Object)
+        if (!operation.ValueConversion.IsIdentity && !operation.ValueConversion.IsReference)
         {
             if (operation.ValueConversion.IsUserDefined) throw Unsupported("WRK108", operation.Syntax);
             var parameter = _names.Get($"coalesce:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "value");
@@ -108,7 +107,9 @@ internal sealed partial class JavaScriptEmitter
             var target = UnwrapNullable(operation.Type!);
             var widening = source.SpecialType is SpecialType.System_Int32 or SpecialType.System_UInt32
                 && target.SpecialType is SpecialType.System_Int64 or SpecialType.System_UInt64;
-            var converted = widening ? parameter : ConvertValue(source, target, parameter, operation.Syntax);
+            var converted = target.SpecialType == SpecialType.System_Object || _compilation.ClassifyConversion(source, target).IsBoxing
+                ? IsWebValueBoundary(operation) ? parameter : ObjectConversion(source, parameter, operation.Syntax)
+                : widening ? parameter : ConvertValue(source, target, parameter, operation.Syntax);
             // Keep the null path lazy while converting a present value exactly once.
             value = $"(({parameter}) => {parameter} == null ? null : {converted})({value})";
         }
@@ -161,7 +162,8 @@ internal sealed partial class JavaScriptEmitter
             return $"((reference, value) => reference.value = value)({UserIndexerReference(userIndexer)}, {right})";
         if (IsExtensionBlockProperty(operation.Target, out var extensionProperty))
             return $"((reference, value) => reference.value = value)({ExtensionPropertyReference(extensionProperty)}, {right})";
-        if (operation.Target is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true })
+        if (operation.Target is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true }
+            || operation.Target is IMemberReferenceOperation structMember && IsValueTypeVariable(structMember.Instance))
             return $"((reference, value) => reference.value = value)({AssignmentReference(operation.Target)}, {right})";
         if (operation.Target is IPropertyReferenceOperation baseProperty
             && baseProperty.Syntax is MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax }
@@ -226,6 +228,9 @@ internal sealed partial class JavaScriptEmitter
             UnaryOperatorKind.BitwiseNegation => "~",
             _ => throw Unsupported("WRK108", operation.Syntax)
         };
+        if (operation.OperatorKind == UnaryOperatorKind.BitwiseNegation
+            && operation.Type is INamedTypeSymbol { EnumUnderlyingType: { } enumUnderlying })
+            return ConvertValue(_compilation.GetSpecialType(SpecialType.System_Int32), enumUnderlying, $"{token}{operand}", operation.Syntax);
         return NumericResult($"{token}{operand}", operation.Type?.SpecialType ?? SpecialType.None, operation.Syntax);
     }
 
@@ -243,11 +248,19 @@ internal sealed partial class JavaScriptEmitter
             || !IsSimpleMutationTarget(operation.Target))
             throw Unsupported("WRK108", operation.Syntax);
         var token = operation.Kind == OperationKind.Increment ? "+" : "-";
-        var type = operation.Type?.SpecialType ?? SpecialType.None;
-        var updated = NumericResult($"$workers$value {token} 1", type, operation.Syntax);
+        var type = operation.Type is INamedTypeSymbol { EnumUnderlyingType: { } underlying } ? underlying : operation.Type!;
+        string Updated(string value) => type.SpecialType switch
+        {
+            SpecialType.System_Char => ConvertValue(_compilation.GetSpecialType(SpecialType.System_Int32), type,
+                $"({value}.charCodeAt(0) {token} 1)", operation.Syntax),
+            SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16 or SpecialType.System_UInt16 =>
+                ConvertValue(_compilation.GetSpecialType(SpecialType.System_Int32), type, $"({value} {token} 1)", operation.Syntax),
+            _ => NumericResult($"{value} {token} 1", type.SpecialType, operation.Syntax)
+        };
+        var updated = Updated("$workers$value");
         return Mutate(operation.Target, target => operation.IsPostfix
             ? $"(($workers$value) => {{ {target} = {updated}; return $workers$value; }})({target})"
-            : $"({target} = {NumericResult($"{target} {token} 1", type, operation.Syntax)})");
+            : $"({target} = {Updated(target)})");
     }
 
     private string CompoundAssignment(ICompoundAssignmentOperation operation)
@@ -303,7 +316,8 @@ internal sealed partial class JavaScriptEmitter
             var mutation = emit(reference + ".value");
             return Capture(reference, AssignmentReference(operation), mutation);
         }
-        if (operation is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true })
+        if (operation is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true }
+            || operation is IMemberReferenceOperation structMember && IsValueTypeVariable(structMember.Instance))
         {
             var reference = _names.Get($"tuple-mutation:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "reference");
             var mutation = emit(reference + ".value");
@@ -364,17 +378,13 @@ internal sealed partial class JavaScriptEmitter
             clone = $"{record}.$copy({Expression(operation.Operand)})";
         }
         else
-        {
-            var copy = "Object.assign(Object.create(Object.getPrototypeOf(source)), source)";
-            if (!RequiresUserClass(type)) copy = $"Object.defineProperty({copy}, {PlainRecordIdentitySlot}, {{ value: source[{PlainRecordIdentitySlot}] }})";
-            clone = $"((source) => {copy})({NotNull(Expression(operation.Operand))})";
-        }
+            clone = CopyRecordFields(type, NotNull(Expression(operation.Operand)));
         var isAsync = ContainsAwait(operation.Initializer);
         return isAsync ? AsyncInitializerBody(value, [temporary], [clone], string.Join(" ", assignments), temporary)
             : $"(({temporary}) => {{ {string.Join(" ", assignments)} return {temporary}; }})({clone})";
     }
 
-    private static bool IsSimpleMutationTarget(IOperation target) => target switch
+    private bool IsSimpleMutationTarget(IOperation target) => target switch
     {
         IArrayElementReferenceOperation => true,
         IPropertyReferenceOperation { Property.IsIndexer: true } property when IsSequenceType(property.Instance?.Type) => true,
@@ -442,20 +452,21 @@ internal sealed partial class JavaScriptEmitter
 
     private string Collection(ICollectionExpressionOperation operation)
     {
-        var elementType = operation.Type is IArrayTypeSymbol array ? array.ElementType
-            : (operation.Type as INamedTypeSymbol)?.TypeArguments.FirstOrDefault();
+        var type = ResolveType(operation.Type!);
+        var elementType = type is IArrayTypeSymbol array ? array.ElementType
+            : (type as INamedTypeSymbol)?.TypeArguments.FirstOrDefault();
         var items = "[" + string.Join(", ", operation.Elements.Select(element => element is ISpreadOperation spread
             ? "..." + Spread(spread, elementType) : ValueExpression(element))) + "]";
-        if (operation.Type is INamedTypeSymbol set
+        if (type is INamedTypeSymbol set
             && set.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.HashSet<T>")
         {
             if (IsCompositeKey(set.TypeArguments[0])) return KeyCollection(set, operation.Syntax, items);
             if (!SupportsLinqEquality(set.TypeArguments[0])) throw UnsupportedSymbol(set, operation.Syntax);
             return CreateSet(items);
         }
-        return operation.Type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
+        return type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
             ? $"Uint8Array.from({items})"
-            : IsListType(operation.Type) ? CreateList(items) : items;
+            : IsListType(type) ? CreateList(items) : items;
     }
 
     private string Spread(ISpreadOperation operation, ITypeSymbol? elementType)
@@ -463,7 +474,9 @@ internal sealed partial class JavaScriptEmitter
         var values = Expression(operation.Operand);
         if (operation.Operand.Type is not IArrayTypeSymbol && !IsArrayBackedList(operation.Operand.Type))
             values = HelperInvocation(JavaScriptHelper.LinqValues, [values]);
-        if (elementType?.SpecialType == SpecialType.System_Object && operation.ElementType is { } sourceElement)
+        if (elementType is not null && operation.ElementType is { } sourceElement
+            && (elementType.SpecialType == SpecialType.System_Object
+                || _compilation.ClassifyConversion(ResolveType(sourceElement), ResolveType(elementType)).IsBoxing))
         {
             var boxed = ObjectConversion(sourceElement, "value", operation.Syntax);
             return boxed == "value" ? values : $"Array.from({values}, value => {boxed})";
