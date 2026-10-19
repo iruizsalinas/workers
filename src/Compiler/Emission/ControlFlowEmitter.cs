@@ -178,26 +178,34 @@ internal sealed partial class JavaScriptEmitter
         if (patterns)
             _output.Append(indent).Append("const ").Append(subject).Append(" = ").Append(ValueExpression(operation.Value)).AppendLine(";");
         _output.Append(indent).Append("switch (").Append(patterns ? "true" : Expression(operation.Value)).AppendLine(") {");
-        foreach (var section in operation.Cases)
+        // Local functions declared directly under case labels share the switch block's scope.
+        var frame = new LocalFunctionFrame(operation.Cases.SelectMany(section => section.Body).OfType<ILocalFunctionOperation>());
+        _localFunctionFrames.Push(frame);
+        try
         {
-            foreach (var clause in section.Clauses)
+            foreach (var section in operation.Cases)
             {
-                _output.Append(indent).Append("  ");
-                if (clause is IDefaultCaseClauseOperation) _output.AppendLine("default:");
-                else
+                foreach (var clause in section.Clauses)
                 {
-                    var condition = clause switch
+                    _output.Append(indent).Append("  ");
+                    if (clause is IDefaultCaseClauseOperation) _output.AppendLine("default:");
+                    else
                     {
-                        ISingleValueCaseClauseOperation single => patterns ? $"{subject} === {Expression(single.Value)}" : Expression(single.Value),
-                        IPatternCaseClauseOperation pattern => PatternTest(pattern.Pattern, subject)
-                            + (pattern.Guard is null ? "" : $" && ({Expression(pattern.Guard)})"),
-                        _ => throw Unsupported("WRK100", clause.Syntax)
-                    };
-                    _output.Append("case ").Append(condition).AppendLine(":");
+                        var condition = clause switch
+                        {
+                            ISingleValueCaseClauseOperation single => patterns ? $"{subject} === {Expression(single.Value)}" : Expression(single.Value),
+                            IPatternCaseClauseOperation pattern => PatternTest(pattern.Pattern, subject)
+                                + (pattern.Guard is null ? "" : $" && ({Expression(pattern.Guard)})"),
+                            _ => throw Unsupported("WRK100", clause.Syntax)
+                        };
+                        _output.Append("case ").Append(condition).AppendLine(":");
+                    }
                 }
+                EmitStatements(section.Body.Where(statement => statement is not ILocalFunctionOperation).ToArray(), depth + 2);
             }
-            EmitStatements(section.Body, depth + 2);
+            EmitLocalFunctions(frame, depth + 1);
         }
+        finally { _localFunctionFrames.Pop(); }
         _output.Append(indent).AppendLine("}");
     }
 }

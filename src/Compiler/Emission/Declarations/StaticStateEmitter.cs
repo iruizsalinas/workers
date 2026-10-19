@@ -19,6 +19,8 @@ internal sealed partial class JavaScriptEmitter
         IFieldSymbol { IsStatic: true, HasConstantValue: false, IsImplicitlyDeclared: false } field =>
             IsStaticStateContainer(field.ContainingType)
             && field.DeclaringSyntaxReferences.Length == 1,
+        IFieldSymbol { IsStatic: true } backing when IsFieldKeywordBackingField(backing) =>
+            IsStaticStateContainer(backing.ContainingType),
         IPropertySymbol { IsStatic: true, IsIndexer: false } property =>
             IsStaticStateContainer(property.ContainingType)
             && property.DeclaringSyntaxReferences is [{ } reference]
@@ -131,6 +133,9 @@ internal sealed partial class JavaScriptEmitter
                 var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
                 members.Add((symbol, symbol.Type, property.Initializer?.Value, property));
             }
+            else if (member is PropertyDeclarationSyntax backedProperty && backedProperty.Modifiers.Any(SyntaxKind.StaticKeyword)
+                     && FieldKeywordBackingField((IPropertySymbol)_model.GetDeclaredSymbol(backedProperty)!) is { } backing)
+                members.Add((backing, backing.Type, backedProperty.Initializer?.Value, backedProperty));
         }
         _output.Append("var ").Append(storage).AppendLine(";");
         _output.Append("var ").Append(failure).AppendLine(";");

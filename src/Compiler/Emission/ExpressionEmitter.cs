@@ -159,6 +159,8 @@ internal sealed partial class JavaScriptEmitter
         var right = ValueExpression(operation.Value);
         if (operation.Target is IPropertyReferenceOperation userIndexer && IsUserIndexer(userIndexer.Property))
             return $"((reference, value) => reference.value = value)({UserIndexerReference(userIndexer)}, {right})";
+        if (IsExtensionBlockProperty(operation.Target, out var extensionProperty))
+            return $"((reference, value) => reference.value = value)({ExtensionPropertyReference(extensionProperty)}, {right})";
         if (operation.Target is IFieldReferenceOperation { Field.ContainingType.IsTupleType: true })
             return $"((reference, value) => reference.value = value)({AssignmentReference(operation.Target)}, {right})";
         if (operation.Target is IPropertyReferenceOperation baseProperty
@@ -294,7 +296,8 @@ internal sealed partial class JavaScriptEmitter
     // Capture a member receiver before a getter or RHS can change the original variable.
     private string Mutate(IOperation operation, Func<string, string> emit, bool isAsync = false)
     {
-        if (operation is IArrayElementReferenceOperation || operation is IPropertyReferenceOperation { Property.IsIndexer: true })
+        if (operation is IArrayElementReferenceOperation || operation is IPropertyReferenceOperation { Property.IsIndexer: true }
+            || IsExtensionBlockProperty(operation, out _))
         {
             var reference = _names.Get($"indexer-mutation:{operation.Syntax.SyntaxTree.FilePath}:{operation.Syntax.SpanStart}", "reference");
             var mutation = emit(reference + ".value");
@@ -376,6 +379,7 @@ internal sealed partial class JavaScriptEmitter
         IArrayElementReferenceOperation => true,
         IPropertyReferenceOperation { Property.IsIndexer: true } property when IsSequenceType(property.Instance?.Type) => true,
         IPropertyReferenceOperation { Property.IsIndexer: true } property when IsDictionary(property.Instance?.Type) => true,
+        IPropertyReferenceOperation { Property.IsIndexer: true } property when property.Property.ContainingType.ToDisplayString() == "Workers.Headers" => true,
         ILocalReferenceOperation or IParameterReferenceOperation => true,
         IFieldReferenceOperation { Field.ContainingType.IsTupleType: true } => true,
         IFieldReferenceOperation { Field.HasConstantValue: false } field => field.Field.DeclaringSyntaxReferences.Length != 0,

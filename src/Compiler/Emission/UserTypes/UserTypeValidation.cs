@@ -38,12 +38,14 @@ internal sealed partial class JavaScriptEmitter
                     || modifier.IsKind(SyntaxKind.InKeyword)))))
             throw new NotSupportedException($"WRK119: User type '{type}' contains an unsupported constructor.");
 
+        var fieldBacked = type.GetMembers().OfType<IPropertySymbol>().Where(property => FieldKeywordBackingField(property) is not null)
+            .Select(property => property.DeclaringSyntaxReferences[0].GetSyntax()).ToHashSet();
         var unsupported = declaration.Members.FirstOrDefault(member => member switch
         {
             FieldDeclarationSyntax => false,
             ConstructorDeclarationSyntax => false,
             MethodDeclarationSyntax method => !IsSupportedUserMethod(method),
-            PropertyDeclarationSyntax property => !IsSupportedUserProperty(property),
+            PropertyDeclarationSyntax property => !IsSupportedUserProperty(property, fieldBacked.Contains(property)),
             IndexerDeclarationSyntax => false,
             OperatorDeclarationSyntax or ConversionOperatorDeclarationSyntax => false,
             EventDeclarationSyntax or EventFieldDeclarationSyntax => false,
@@ -77,15 +79,16 @@ internal sealed partial class JavaScriptEmitter
                 && !modifier.IsKind(SyntaxKind.InKeyword)));
     }
 
-    private static bool IsSupportedUserProperty(PropertyDeclarationSyntax property)
+    // A field-backed property (C# 14 `field`) may keep an initializer and auto accessors: both use the backing field.
+    private static bool IsSupportedUserProperty(PropertyDeclarationSyntax property, bool fieldBacked)
     {
         var emittedName = LowerFirst(property.Identifier.ValueText);
         if (emittedName is "constructor" or "toJSON") return false;
         if (IsAutoProperty(property)) return true;
-        if (property.Initializer is not null) return false;
+        if (property.Initializer is not null && !fieldBacked) return false;
         if (property.ExpressionBody is not null) return true;
         return property.AccessorList?.Accessors.All(accessor =>
             (accessor.IsKind(SyntaxKind.GetAccessorDeclaration) || accessor.IsKind(SyntaxKind.SetAccessorDeclaration) || accessor.IsKind(SyntaxKind.InitAccessorDeclaration))
-            && (accessor.Body is not null || accessor.ExpressionBody is not null)) == true;
+            && (fieldBacked || accessor.Body is not null || accessor.ExpressionBody is not null)) == true;
     }
 }

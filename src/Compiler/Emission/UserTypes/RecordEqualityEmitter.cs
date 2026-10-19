@@ -89,7 +89,9 @@ internal sealed partial class JavaScriptEmitter
         foreach (var member in type.GetMembers())
         {
             if (member.IsStatic) continue;
-            if (member is IFieldSymbol { AssociatedSymbol: IPropertySymbol property })
+            if (member is IFieldSymbol { AssociatedSymbol: IPropertySymbol } backing && IsFieldKeywordBackingField(backing))
+                yield return (backing, backing.Type);
+            else if (member is IFieldSymbol { AssociatedSymbol: IPropertySymbol property })
                 yield return (property, property.Type);
             else if (member is IEventSymbol ev && ev.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is VariableDeclaratorSyntax))
                 yield return (ev, ev.Type);

@@ -57,14 +57,17 @@ internal sealed partial class JavaScriptEmitter
         method = (IMethodSymbol)StaticInterfaceImplementation(method, receiver is null ? null : _model.GetTypeInfo(receiver).Type, syntax);
         var reduced = method.ReducedFrom is not null;
         method = ResolveMethod(method.GetConstructedReducedFrom() ?? method);
+        // An extension block instance member binds its receiver like a reduced extension method.
+        var extensionBlock = IsExtensionBlockMember(method) && !method.IsStatic;
+        reduced |= extensionBlock;
         var target = _names.Get($"delegate-target:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}", "delegateTarget");
         var core = MethodGroupCore(syntax, method, receiver, target, reduced);
         string identity;
         var localThis = false;
         var localValues = false;
         if (method.MethodKind == MethodKind.LocalFunction) identity = LocalDelegateIdentity(method, syntax, out localThis, out localValues);
-        else if (method.IsGenericMethod && !method.IsStatic) identity = receiver is BaseExpressionSyntax ? QueueUserMethod(method, syntax) : GenericMethodTarget(method);
-        else if (method.IsStatic) identity = QueueUserMethod(method, syntax);
+        else if (method.IsGenericMethod && !method.IsStatic && !extensionBlock) identity = receiver is BaseExpressionSyntax ? QueueUserMethod(method, syntax) : GenericMethodTarget(method);
+        else if (method.IsStatic || extensionBlock) identity = QueueUserMethod(method, syntax);
         else if (IsSourceInterface(method.ContainingType) && _runtimeInterfaceCalls.TryGetValue(method, out var dispatcher)) identity = dispatcher;
         else identity = receiver is BaseExpressionSyntax
             ? $"{QueueUserType(method.ContainingType, syntax)}.prototype.{UserInstanceMethodName(method)}"
@@ -85,7 +88,7 @@ internal sealed partial class JavaScriptEmitter
     {
         if (method.MethodKind == MethodKind.LocalFunction)
             return $"{LocalFunctionTarget(method, syntax)}.bind({receiverValue})";
-        if (!method.IsStatic && method.IsGenericMethod && method.DeclaringSyntaxReferences.Length != 0)
+        if (!method.IsStatic && method.IsGenericMethod && method.DeclaringSyntaxReferences.Length != 0 && !IsExtensionBlockMember(method))
         {
             var helper = receiver is BaseExpressionSyntax ? QueueUserMethod(method, syntax) : GenericMethodTarget(method);
             return $"{helper}.bind({receiverValue})";
@@ -95,7 +98,7 @@ internal sealed partial class JavaScriptEmitter
             var helper = QueueUserMethod(method, syntax);
             var key = $"extension-group:{syntax.SyntaxTree.FilePath}:{syntax.SpanStart}";
             var target = _names.Get(key + ":target", "target");
-            var parameters = method.Parameters.Skip(1).Select((_, index) =>
+            var parameters = method.Parameters.Skip(IsExtensionBlockMember(method) ? 0 : 1).Select((_, index) =>
                 _names.Get($"{key}:{index}", $"arg{index + 1}")).ToArray();
             return $"(({target}) => ({string.Join(", ", parameters)}) => " +
                 $"{helper}({string.Join(", ", new[] { target }.Concat(parameters))}))" +

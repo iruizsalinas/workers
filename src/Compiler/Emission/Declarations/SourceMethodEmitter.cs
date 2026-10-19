@@ -56,6 +56,12 @@ internal sealed partial class JavaScriptEmitter
     private string QueueUserMethod(IMethodSymbol method, SyntaxNode callSite)
     {
         method = ResolveMethod(method);
+        if (ExtensionBlockMemberFor(method) is { } extensionMember)
+        {
+            if (extensionMember.MethodKind != MethodKind.Ordinary) return QueueExtensionAccessor(extensionMember, callSite);
+            method = extensionMember;
+        }
+        if (IsExtensionBlockMember(method)) ValidateExtensionReceiver(method, callSite);
         if (method.MethodKind is not (MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation) || method.IsAbstract
             || method.ReturnsByRef || method.ReturnsByRefReadonly
             || method.Parameters.Any(parameter => parameter.RefKind is not (RefKind.None or RefKind.Out)
@@ -84,24 +90,34 @@ internal sealed partial class JavaScriptEmitter
             var symbol = _pendingUserMethods.Dequeue();
             if (!_emittedUserMethods.Add(symbol)) continue;
             using var specialization = SpecializationScope(symbol.ContainingType, symbol);
+            if (symbol.MethodKind is MethodKind.PropertyGet or MethodKind.PropertySet)
+            {
+                EmitExtensionAccessor(symbol);
+                continue;
+            }
             var declaration = (MethodDeclarationSyntax)symbol.DeclaringSyntaxReferences.Single().GetSyntax();
             _model = _compilation.GetSemanticModel(declaration.SyntaxTree);
             _diagnosticNode = declaration;
-            var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(ParameterDeclaration));
+            var extensionBlock = IsExtensionBlockMember(symbol);
+            var receiver = extensionBlock ? ExtensionReceiverSyntax(symbol, declaration, declaration) : null;
+            // Prepend explicitly: a collection expression typed as SeparatedSyntaxList would rebuild detached nodes.
+            var parameterList = (receiver is null ? declaration.ParameterList.Parameters : declaration.ParameterList.Parameters.Prepend(receiver)).ToArray();
+            var parameters = string.Join(", ", parameterList.Select(ParameterDeclaration));
             var isAsync = declaration.Modifiers.Any(SyntaxKind.AsyncKeyword);
             var isIterator = IsIterator(declaration);
             var isEnumerable = IsEnumerableIterator(declaration, symbol);
-            var asyncWrapper = isAsync && !isEnumerable && HasExplicitStaticConstructor(symbol.ContainingType);
+            var staticOwner = DeclaringClass(symbol);
+            var asyncWrapper = isAsync && !isEnumerable && HasExplicitStaticConstructor(staticOwner);
             _output.Append(isAsync && !isEnumerable && !asyncWrapper ? "async " : "").Append(isIterator && !isEnumerable ? "function* " : "function ")
                 .Append(_userMethods[symbol]).Append('(').Append(parameters).AppendLine(") {");
-            if (!symbol.IsStatic)
+            if (!symbol.IsStatic && !extensionBlock)
                 _output.AppendLine($"  if (this == null) throw {NullReferenceException()};");
             EmitWithExpressionScope(1, () =>
             {
-                EmitExplicitStaticInitialization(symbol.ContainingType, 1);
+                EmitExplicitStaticInitialization(staticOwner, 1);
                 if (asyncWrapper) _output.AppendLine("  return (async () => {");
                 if (isEnumerable)
-                    EmitEnumerableIteratorBody(declaration, 1);
+                    EmitEnumerableIteratorBody(declaration, 1, parameterList);
                 else if (declaration.ExpressionBody is not null)
                     _output.Append("  return ").Append(ValueExpression(declaration.ExpressionBody.Expression)).AppendLine(";");
                 else
@@ -119,16 +135,17 @@ internal sealed partial class JavaScriptEmitter
 
     // Each enumeration gets new parameter locals, while the factory captures the original
     // arguments and instance. A generator object alone can only be consumed once.
-    private void EmitEnumerableIteratorBody(MethodDeclarationSyntax declaration, int depth)
+    private void EmitEnumerableIteratorBody(MethodDeclarationSyntax declaration, int depth, IReadOnlyList<ParameterSyntax>? parameterList = null)
     {
         var indent = new string(' ', depth * 2);
         var isAsync = declaration.Modifiers.Any(SyntaxKind.AsyncKeyword);
-        var parameters = string.Join(", ", declaration.ParameterList.Parameters.Select(ParameterName));
+        parameterList ??= declaration.ParameterList.Parameters;
+        var parameters = string.Join(", ", parameterList.Select(ParameterName));
         _output.Append(indent).Append("return { [Symbol.").Append(isAsync ? "asyncIterator" : "iterator")
             .Append("]: (").Append(isAsync ? "async " : "").Append("function* (").Append(parameters).AppendLine(") {");
         EmitWithExpressionScope(depth + 1, () =>
         {
-            EmitIteratorParameterCopies(declaration.ParameterList.Parameters, depth + 1);
+            EmitIteratorParameterCopies(parameterList, depth + 1);
             EmitStatements(declaration.Body?.Statements ?? [], depth + 1);
         });
         _output.Append(indent).Append("}).bind(this").Append(parameters.Length == 0 ? "" : ", " + parameters).AppendLine(") };");

@@ -3,6 +3,14 @@ namespace Workers.Compiler.Tests;
 public sealed class StringRegressionTests
 {
     [Fact]
+    public void NonAsciiTextRoundTripsThroughTheWorker() => DifferentialRunner.Equal("""
+        public static class Test
+        {
+            public static object Run() => new[] { "café", "日本", "é\tñ", "😀".Length.ToString() };
+        }
+        """);
+
+    [Fact]
     public void OrdinalComparisonModesUseBoundConstantValues()
     {
         DifferentialRunner.Equal("""

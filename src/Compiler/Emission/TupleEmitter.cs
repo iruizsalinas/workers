@@ -40,8 +40,32 @@ internal sealed partial class JavaScriptEmitter
             var copy = CopyValue(nullable.TypeArguments[0], "value");
             return copy == "value" ? value : $"((value) => value == null ? null : {copy})({value})";
         }
+        if (type is not null && ResolveType(type) is INamedTypeSymbol { IsRecord: true, IsValueType: true, IsReadOnly: false } record
+            && IsUserInstanceType(record))
+            return MutableRecordStructCopy(record, value);
         if (type is null || ResolveType(type) is not INamedTypeSymbol { IsTupleType: true } tuple) return value;
         return $"((tuple) => {TupleValue(tuple.TupleElements.Select((field, index) => CopyValue(field.Type, $"tuple[{index}]")))})({value})";
+    }
+
+    // A mutable record struct is a value: each copy owns its fields, including nested value-typed ones.
+    // Readonly record structs cannot change after construction, so sharing them is unobservable.
+    private string MutableRecordStructCopy(INamedTypeSymbol type, string value)
+    {
+        var copy = "Object.assign(Object.create(Object.getPrototypeOf(source)), source)";
+        if (!RequiresUserClass(type))
+            copy = $"Object.defineProperty({copy}, {PlainRecordIdentitySlot}, {{ value: source[{PlainRecordIdentitySlot}] }})";
+        var nested = new List<string>();
+        foreach (var field in type.GetMembers().OfType<IFieldSymbol>().Where(field => !field.IsStatic))
+        {
+            var storage = field.AssociatedSymbol is not null ? BackingStorage("copy", field)
+                : field.IsImplicitlyDeclared ? null : UserMemberAccess("copy", field);
+            if (storage is null) continue;
+            var member = CopyValue(field.Type, storage);
+            if (member != storage) nested.Add($"{storage} = {member};");
+        }
+        return nested.Count == 0
+            ? $"((source) => {copy})({value})"
+            : $"((source) => {{ const copy = {copy}; {string.Join(" ", nested)} return copy; }})({value})";
     }
 
     private string CopySequenceValues(ITypeSymbol type, string values)

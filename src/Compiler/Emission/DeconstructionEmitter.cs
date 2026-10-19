@@ -101,6 +101,11 @@ internal sealed partial class JavaScriptEmitter
     private string AssignmentReference(IOperation target)
     {
         if (target is IPropertyReferenceOperation userIndexer && IsUserIndexer(userIndexer.Property)) return UserIndexerReference(userIndexer);
+        if (IsExtensionBlockProperty(target, out var extensionProperty)) return ExtensionPropertyReference(extensionProperty);
+        if (target is IPropertyReferenceOperation { Property.IsIndexer: true } headerIndexer
+            && headerIndexer.Property.ContainingType.ToDisplayString() == "Workers.Headers")
+            return $"((headers, name) => ({{ get value() {{ return {NotNull("headers")}.get(name); }}, set value(value) {{ {NotNull("headers")}.set(name, value); }} }}))"
+                + $"({Expression(headerIndexer.Instance!)}, {ValueExpression(headerIndexer.Arguments.Single().Value)})";
         if (target is IPropertyReferenceOperation mapIndexer && UsesKeyDictionary(mapIndexer.Instance?.Type))
             return $"((map, key) => ({{ get value() {{ return {NotNull("map")}.get(key); }}, set value(value) {{ {NotNull("map")}.set(key, value); }} }}))({Expression(mapIndexer.Instance!)}, {ValueExpression(mapIndexer.Arguments.Single().Value)})";
         var assigned = _names.Get($"assignment-reference:{target.Syntax.SyntaxTree.FilePath}:{target.Syntax.SpanStart}:value", "assigned");

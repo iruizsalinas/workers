@@ -112,6 +112,9 @@ internal sealed partial class JavaScriptEmitter
                 var expression = getter ? property.ExpressionBody?.Expression ?? syntax?.ExpressionBody?.Expression : syntax?.ExpressionBody?.Expression;
                 if (expression is not null)
                     _output.Append("    ").Append(getter ? "return " : "").Append(ValueExpression(expression)).AppendLine(";");
+                else if (syntax is not null && IsAutoAccessor(syntax) && FieldKeywordBackingField(symbol) is { } backing)
+                    _output.Append("    ").AppendLine(AutoAccessorStatement(getter, BackingStorage("this", backing),
+                        getter ? "" : UserIdentifier(accessorSymbol.Parameters[0], accessorSymbol.Parameters[0].Name)));
                 else
                     EmitStatements(syntax?.Body?.Statements ?? [], 2);
             });

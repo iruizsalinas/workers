@@ -29,10 +29,8 @@ internal sealed partial class JavaScriptEmitter
         else
             foreach (var field in type.GetMembers().OfType<IFieldSymbol>().Where(field => !field.IsStatic))
             {
-                var member = field.AssociatedSymbol ?? field;
-                string Storage(string receiver) => member is IPropertySymbol property
-                    ? UserPropertyStorage(receiver, property) : UserMemberAccess(receiver, member);
-                _output.Append("    ").Append(Storage("this")).Append(" = ").Append(CopyValue(field.Type, Storage(source))).AppendLine(";");
+                _output.Append("    ").Append(BackingStorage("this", field)).Append(" = ")
+                    .Append(CopyValue(field.Type, BackingStorage(source, field))).AppendLine(";");
             }
         _output.AppendLine("  }");
     }

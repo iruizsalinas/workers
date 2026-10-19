@@ -15,10 +15,13 @@ internal sealed partial class JavaScriptEmitter
             throw UnsupportedSymbol(operation.TargetMethod, operation.Syntax);
         }
         var invocation = (InvocationExpressionSyntax)operation.Syntax;
+        if (MemoryExtensionsInvocation(operation) is { } spanInvocation) return spanInvocation;
         // Reduced extension symbols retain the platform adapters' receiver convention.
         var method = _model.GetSymbolInfo(invocation).Symbol as IMethodSymbol ?? operation.TargetMethod;
         if (method is { ReducedFrom.DeclaringSyntaxReferences.Length: > 0 })
             return EmitSourceExtensionInvocation(operation, invocation, method);
+        if (IsExtensionBlockMember(method))
+            return EmitExtensionBlockInvocation(operation, invocation, ResolveMethod(method));
         method = (IMethodSymbol)StaticInterfaceImplementation(method, operation.ConstrainedToType, invocation);
         method = ResolveMethod(method);
         if (method.MethodKind == MethodKind.LocalFunction)
@@ -159,9 +162,11 @@ internal sealed partial class JavaScriptEmitter
                 argument.Parameter.Ordinal == parameter.Ordinal).Select(argument => argument.Value).ToArray();
             if (sourceParams && parameter.IsParams)
             {
-                if (parameter.Type is not IArrayTypeSymbol) throw UnsupportedSymbol(parameter, source);
+                if (ResolveType(parameter.Type) is not IArrayTypeSymbol array) throw UnsupportedSymbol(parameter, source);
                 var explicitArray = supplied.Any(argument => argument.Parameter.Ordinal == parameter.Ordinal && argument.Kind == ArgumentKind.Explicit);
-                ordered.Add(explicitArray ? parameterValues.Single() : $"[{string.Join(", ", parameterValues)}]");
+                var packed = $"[{string.Join(", ", parameterValues)}]";
+                if (array.ElementType.SpecialType == SpecialType.System_Byte) packed = $"Uint8Array.from({packed})";
+                ordered.Add(explicitArray ? parameterValues.Single() : packed);
                 continue;
             }
             if (parameterValues.Length != 0)

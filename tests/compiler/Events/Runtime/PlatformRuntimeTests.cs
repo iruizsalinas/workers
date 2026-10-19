@@ -82,7 +82,7 @@ public sealed class PlatformRuntimeTests
         Assert.Contains("$workers$notNull(reader).releaseLock();", module);
         Assert.Contains("$workers$notNull(chunk).done ? 0 : $workers$notNull($workers$notNull(chunk).value).length", module);
         Assert.Contains("await new Response(stream).bytes()", module);
-        Assert.Contains("$workers$notNull($workers$notNull(pair)[1]).addEventListener(\"message\", event => (message =>", module);
+        Assert.Contains("$workers$notNull($workers$notNull(pair)[1]).addEventListener(\"message\", ((handler) => event => handler(event.data))(message =>", module);
         Assert.Contains("(event.data)", module);
         Assert.Contains("$workers$notNull($workers$notNull(pair)[1]).addEventListener(\"close\", close => console.info($workers$notNull(close).code))", module);
         Assert.Contains("$workers$connectSocket({ hostname: \"example.com\", port: 443 }, {  })", module);
@@ -153,9 +153,9 @@ public sealed class PlatformRuntimeTests
         Assert.Contains("this.#attribute()", module);
         Assert.Contains("  element(element)", module);
         Assert.DoesNotContain("async element(element)", module);
-        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => (value => { value.setAttribute($workers$arg1, $workers$arg2); return value; })($workers$notNull($workers$receiver)))(element, this.#attribute(), \"csharp\")", module);
+        Assert.Contains("(($workers$receiver, $workers$arg1, $workers$arg2) => ((value, arg0, arg1) => { value.setAttribute(arg0, arg1); return value; })($workers$notNull($workers$receiver), $workers$arg1, $workers$arg2))(element, this.#attribute(), \"csharp\")", module);
         Assert.DoesNotContain("this.Source", module);
-        Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).transform($workers$arg1$2))((value => { value.on(\"p\", new Handler()); return value; })(new HTMLRewriter()), new Response(\"\\u003Cp\\u003Ex\\u003C/p\\u003E\", { headers: (($workers$value) => { $workers$value.set(\"content-type\", \"text/html; charset=utf-8\"); return $workers$value; })(new Headers()) }))", module);
+        Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).transform($workers$arg1$2))(((value, arg0, arg1) => { value.on(arg0, arg1); return value; })(new HTMLRewriter(), \"p\", new Handler()), new Response(\"\\u003Cp\\u003Ex\\u003C/p\\u003E\", { headers: (($workers$value) => { $workers$value.set(\"content-type\", \"text/html; charset=utf-8\"); return $workers$value; })(new Headers()) }))", module);
     }
 
     [Fact]

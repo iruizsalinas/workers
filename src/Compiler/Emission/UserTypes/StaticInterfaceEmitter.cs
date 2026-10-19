@@ -75,6 +75,11 @@ internal sealed partial class JavaScriptEmitter
                 EmitExplicitStaticInitialization(method.ContainingType, 1);
                 if (method.MethodKind == MethodKind.PropertySet) EmitSetterValueCopy(method, 1);
                 if (expression is not null) _output.Append("  ").Append(method.ReturnsVoid ? "" : "return ").Append(ValueExpression(expression)).AppendLine(";");
+                else if (syntax is AccessorDeclarationSyntax auto && IsAutoAccessor(auto)
+                         && method.AssociatedSymbol is IPropertySymbol { IsStatic: true } backedProperty
+                         && FieldKeywordBackingField(backedProperty) is { } backing)
+                    _output.Append("  ").AppendLine(AutoAccessorStatement(method.MethodKind == MethodKind.PropertyGet,
+                        StaticBackingStorage(backing), method.Parameters.Length == 0 ? "" : UserIdentifier(method.Parameters[0], method.Parameters[0].Name)));
                 else EmitStatements(body?.Statements ?? [], 1);
             });
             _output.AppendLine("}");

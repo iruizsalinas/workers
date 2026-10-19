@@ -7,12 +7,12 @@ internal sealed partial class JavaScriptEmitter
 {
     private string ExceptionTypeNameSlot => _names.Get("exception-type-name", "exceptionTypeName");
 
-    private void EmitExceptionInitialization(INamedTypeSymbol type, ConstructorDeclarationSyntax? constructor)
+    // The base call is either a constructor initializer or, for a primary constructor, the base list entry.
+    private void EmitExceptionInitialization(INamedTypeSymbol type, SyntaxNode? baseCall, ArgumentListSyntax? baseArguments)
     {
         var fallback = $"{JsonSerializer.Serialize("Exception of type '")} + this.{ExceptionTypeNameSlot} + {JsonSerializer.Serialize("' was thrown.")}";
-        var initializer = constructor?.Initializer;
-        var arguments = initializer?.ArgumentList.Arguments.ToArray() ?? [];
-        var key = $"exception-base:{initializer?.SyntaxTree.FilePath}:{initializer?.SpanStart}";
+        var arguments = baseArguments?.Arguments.ToArray() ?? [];
+        var key = $"exception-base:{baseCall?.SyntaxTree.FilePath}:{baseCall?.SpanStart}";
         var temporaries = arguments.Select((_, index) => _names.Get($"{key}:{index}", $"arg{index + 1}")).ToArray();
         var message = fallback;
         string? inner = null;

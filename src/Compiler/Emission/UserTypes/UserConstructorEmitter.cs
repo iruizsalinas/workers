@@ -76,11 +76,13 @@ internal sealed partial class JavaScriptEmitter
                             ? DefaultFieldValue(symbol.Type, variable)
                             : ValueExpression(variable.Initializer.Value)).AppendLine(";");
                 }
-            else if (member is PropertyDeclarationSyntax property && IsAutoProperty(property))
+            else if (member is PropertyDeclarationSyntax property
+                     && (IsAutoProperty(property) || FieldKeywordBackingField((IPropertySymbol)_model.GetDeclaredSymbol(property)!) is not null))
             {
                 var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
                 if (symbol.IsStatic) continue;
-                _output.Append("    ").Append(UserPropertyStorage("this", symbol)).Append(" = ")
+                var storage = FieldKeywordBackingField(symbol) is { } backing ? BackingStorage("this", backing) : UserPropertyStorage("this", symbol);
+                _output.Append("    ").Append(storage).Append(" = ")
                     .Append(property.Initializer is null
                         ? DefaultFieldValue(symbol.Type, property)
                         : ValueExpression(property.Initializer.Value)).AppendLine(";");

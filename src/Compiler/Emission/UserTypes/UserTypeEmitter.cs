@@ -136,11 +136,12 @@ internal sealed partial class JavaScriptEmitter
                     used.Add(name);
         }
         var members = type.GetMembers()
-            .Where(member => !member.IsStatic && member.DeclaringSyntaxReferences.Length != 0)
+            .Where(member => !member.IsStatic && (member.DeclaringSyntaxReferences.Length != 0 || IsFieldKeywordBackingField(member)))
             .OrderBy(member => member is IPropertySymbol property
                 ? IsJsonContractProperty(property) ? 0 : 1
                 : 2)
-            .ThenBy(member => member.DeclaringSyntaxReferences[0].Span.Start);
+            .ThenBy(member => (member.DeclaringSyntaxReferences.FirstOrDefault()
+                ?? ((IFieldSymbol)member).AssociatedSymbol!.DeclaringSyntaxReferences[0]).Span.Start);
         foreach (var member in members)
         {
             if (member is IPropertySymbol { OverriddenProperty: not null }) continue;
@@ -149,6 +150,7 @@ internal sealed partial class JavaScriptEmitter
                 IPropertySymbol property => IsJsonContractProperty(property)
                     ? JsonPropertyName(property) ?? LowerFirst(property.Name)
                     : LowerFirst(property.Name),
+                IFieldSymbol { AssociatedSymbol: IPropertySymbol backed } => $"{LowerFirst(backed.Name)}$field",
                 IFieldSymbol field => field.Name,
                 IEventSymbol ev => $"event${ev.Name}",
                 _ => null

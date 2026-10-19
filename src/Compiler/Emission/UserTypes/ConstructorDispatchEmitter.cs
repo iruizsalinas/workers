@@ -63,7 +63,13 @@ internal sealed partial class JavaScriptEmitter
                         primaryBase?.ArgumentList.Arguments.ToArray() ?? []);
                 }
                 if (IsUserException(type) && syntax?.Initializer?.IsKind(SyntaxKind.ThisConstructorInitializer) != true)
-                    EmitExceptionInitialization(type, syntax);
+                {
+                    var primaryBase = syntax is null
+                        ? declaration.BaseList?.Types.OfType<PrimaryConstructorBaseTypeSyntax>().SingleOrDefault()
+                        : null;
+                    EmitExceptionInitialization(type, (SyntaxNode?)syntax?.Initializer ?? primaryBase,
+                        syntax?.Initializer?.ArgumentList ?? primaryBase?.ArgumentList);
+                }
                 EmitUserConstructorStatements(syntax);
             });
             _output.AppendLine("  }");
@@ -84,9 +90,7 @@ internal sealed partial class JavaScriptEmitter
         foreach (var field in type.GetMembers().OfType<IFieldSymbol>().Where(field => !field.IsStatic))
         {
             if (field.IsImplicitlyDeclared && field.AssociatedSymbol is null) continue;
-            var member = field.AssociatedSymbol ?? field;
-            _output.Append("    ").Append(member is IPropertySymbol property
-                    ? UserPropertyStorage(receiver, property) : UserMemberAccess(receiver, member)).Append(" = ")
+            _output.Append("    ").Append(BackingStorage(receiver, field)).Append(" = ")
                 .Append(DefaultFieldValue(field.Type, type.DeclaringSyntaxReferences[0].GetSyntax())).AppendLine(";");
         }
     }

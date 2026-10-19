@@ -129,7 +129,7 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.Direct => $"{receiver}.{intrinsic.JavascriptName}({values})",
             BindingIntrinsicKind.Property => $"{receiver}.{intrinsic.JavascriptName}",
             BindingIntrinsicKind.PropertyByName => $"{receiver}[{arguments[0].Value}]",
-            BindingIntrinsicKind.Fluent => $"(value => {{ value.{intrinsic.JavascriptName}({values}); return value; }})({receiver})",
+            BindingIntrinsicKind.Fluent => EmitFluentBinding(receiver, intrinsic.JavascriptName, arguments),
             BindingIntrinsicKind.Dispose => $"{receiver}[Symbol.dispose]()",
             BindingIntrinsicKind.RequestJson => $"{RequireHelperName(arguments.Count == 0 ? JavaScriptHelper.HttpError : JavaScriptHelper.BoundedBody, "requestJson")}({string.Join(", ", new[] { receiver }.Concat(arguments.Select(item => item.Value)))})",
             BindingIntrinsicKind.RequestBodyRead => arguments.Count == 0
@@ -160,7 +160,7 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.WebSocketMessageText => $"(message => typeof message === \"string\" ? message : new TextDecoder().decode(message))({receiver})",
             BindingIntrinsicKind.WebSocketMessageBytes => $"(message => typeof message === \"string\" ? new TextEncoder().encode(message) : new Uint8Array(message))({receiver})",
             BindingIntrinsicKind.EventListener => intrinsic.JavascriptName == "message"
-                ? $"{receiver}.addEventListener(\"message\", event => ({arguments[0].Value})(event.data))"
+                ? $"{receiver}.addEventListener(\"message\", ((handler) => event => handler(event.data))({arguments[0].Value}))"
                 : $"{receiver}.addEventListener(\"{intrinsic.JavascriptName}\", {arguments[0].Value})",
             BindingIntrinsicKind.CryptoDigestBody => EmitCryptoDigest(receiver, method, arguments),
             BindingIntrinsicKind.CryptoSignHmac => EmitCryptoHmac(receiver, method, arguments, verify: false),
@@ -170,6 +170,17 @@ internal sealed partial class JavaScriptEmitter
             BindingIntrinsicKind.CryptoExportJwk => $"{receiver}.exportKey(\"jwk\", {arguments[0].Value})",
             _ => throw new InvalidOperationException($"Unknown binding intrinsic kind '{intrinsic.Kind}'.")
         };
+    }
+
+    private static string EmitFluentBinding(string receiver, string method,
+        IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
+    {
+        var parameters = arguments.Select((_, index) => $"arg{index}").ToArray();
+        var names = string.Join(", ", parameters);
+        var values = string.Join(", ", arguments.Select(argument => argument.Value));
+        // Evaluate user expressions outside the adapter's scope, preserving their bindings and await context.
+        return $"((value{(parameters.Length == 0 ? "" : ", " + names)}) => {{ value.{method}({names}); return value; }})"
+            + $"({receiver}{(parameters.Length == 0 ? "" : ", " + values)})";
     }
 
     private string EmitReadableFrom(string value) => $"{_helpers.Require(JavaScriptHelper.StreamFrom)}({value})";

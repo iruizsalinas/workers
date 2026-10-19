@@ -45,7 +45,7 @@ public sealed class LinkRewriter : HtmlElementHandler
 
     public override Task ElementAsync(HtmlElement element)
     {
-        var href = element.GetAttribute("href");
+        var href = element.Attributes["href"];
         if (href is not null && href.StartsWith('/'))
             element.SetAttribute("href", new Url(href, _origin).ToString());
         return Task.CompletedTask;

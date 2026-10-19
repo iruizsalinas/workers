@@ -34,7 +34,8 @@ internal sealed partial class JavaScriptEmitter
             "Workers.Numbers" => method.Name switch
             {
                 "From" => $"Number({values})",
-                "ParseInt" or "ParseFloat" or "IsNaN" or "IsFinite" or "IsInteger" or "IsSafeInteger" =>
+                "ParseInt" => $"Number.parseInt({arguments[0]}, {(arguments.Length > 1 ? arguments[1] : ParameterDefaultValue(method.Parameters[1], source))})",
+                "ParseFloat" or "IsNaN" or "IsFinite" or "IsInteger" or "IsSafeInteger" =>
                     $"Number.{LowerFirst(method.Name)}({values})",
                 "ToFixed" => $"({arguments[0]}).toFixed({string.Join(", ", arguments.Skip(1))})",
                 "ToPrecision" => $"({arguments[0]}).toPrecision({arguments[1]})",
@@ -88,6 +89,7 @@ internal sealed partial class JavaScriptEmitter
     {
         return property.ContainingType.ToDisplayString() switch
         {
+            "Workers.HtmlElement" when property.Name == "Attributes" => $"Object.fromEntries({receiver}.attributes)",
             "Workers.Crypto" when property.Name == "Subtle" => "globalThis.crypto.subtle",
             "Workers.DigestStream" when property.Name == "BytesWritten" => $"Number({receiver}.bytesWritten)",
             "Workers.CryptoKeyAlgorithm" when property.Name == "Hash" => $"({receiver}.hash?.name ?? null)",

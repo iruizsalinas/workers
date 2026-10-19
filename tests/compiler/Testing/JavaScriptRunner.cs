@@ -18,7 +18,10 @@ internal static class JavaScriptRunner
             var start = new ProcessStartInfo("node")
             {
                 RedirectStandardOutput = true,
-                RedirectStandardError = true
+                RedirectStandardError = true,
+                // Node writes UTF-8; the default decoder is the console code page on Windows.
+                StandardOutputEncoding = System.Text.Encoding.UTF8,
+                StandardErrorEncoding = System.Text.Encoding.UTF8
             };
             foreach (var argument in new[] { "--input-type=module", "-e", Script, new Uri(path).AbsoluteUri, url })
                 start.ArgumentList.Add(argument);

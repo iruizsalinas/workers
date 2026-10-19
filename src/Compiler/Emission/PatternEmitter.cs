@@ -147,6 +147,8 @@ internal sealed partial class JavaScriptEmitter
         var instance = ((IMemberReferenceOperation)operation).Instance;
         if (instance is IMemberReferenceOperation) value = PatternMemberAccess(instance, value);
         else if (instance is not IInstanceReferenceOperation) throw Unsupported("WRK104", operation.Syntax);
+        if (IsExtensionBlockProperty(operation, out var extensionProperty))
+            return ExtensionAccessorCall(extensionProperty.Property, true, operation.Syntax, value);
         if (symbol.ContainingType is { } owner && IsUserInstanceType(owner))
             return UserMemberAccess(value, symbol);
         if (symbol.Name == "Count" && symbol.ContainingType.OriginalDefinition.ToDisplayString() is

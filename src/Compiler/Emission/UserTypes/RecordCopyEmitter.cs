@@ -45,11 +45,14 @@ internal sealed partial class JavaScriptEmitter
                 _output.Append("    ").Append(UserMemberAccess("this", property)).Append(" = ")
                     .Append(DefaultFieldValue(property.Type, parameter)).AppendLine(";");
             }
-        foreach (var property in declaration.Members.OfType<PropertyDeclarationSyntax>().Where(IsAutoProperty))
+        foreach (var property in declaration.Members.OfType<PropertyDeclarationSyntax>())
         {
             var symbol = (IPropertySymbol)_model.GetDeclaredSymbol(property)!;
             if (symbol.IsStatic) continue;
-            _output.Append("    ").Append(UserMemberAccess("this", symbol)).Append(" = ")
+            var storage = IsAutoProperty(property) ? UserMemberAccess("this", symbol)
+                : FieldKeywordBackingField(symbol) is { } backing ? BackingStorage("this", backing) : null;
+            if (storage is null) continue;
+            _output.Append("    ").Append(storage).Append(" = ")
                 .Append(DefaultFieldValue(symbol.Type, property)).AppendLine(";");
         }
         EmitWithExpressionScope(2, () => EmitUserConstructorStatements(constructor));

@@ -13,6 +13,8 @@ internal sealed partial class JavaScriptEmitter
         var symbol = operation is IPropertyReferenceOperation propertyReference ? (ISymbol)propertyReference.Property : ((IFieldReferenceOperation)operation).Field;
         var instance = operation is IPropertyReferenceOperation propertyInstance ? propertyInstance.Instance : ((IFieldReferenceOperation)operation).Instance;
         string Receiver() => receiverOverride ?? (instance is null ? "this" : NeedsNullCheck(instance) ? NotNull(Operand(instance)) : Operand(instance));
+        if (IsExtensionBlockProperty(operation, out var extensionProperty))
+            return ExtensionPropertyGet(extensionProperty, receiverOverride);
         if (symbol.ContainingType.IsAnonymousType)
         {
             var name = AnonymousPropertyName((IPropertySymbol)symbol);
@@ -189,13 +191,38 @@ internal sealed partial class JavaScriptEmitter
         // Use one storage name per shape, including inferred and explicit initializers.
         var key = (property.ContainingType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), property.Name);
         if (_anonymousPropertyNames.TryGetValue(key, out var existing)) return existing;
-        var inferred = property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is
-            AnonymousObjectMemberDeclaratorSyntax { NameEquals: null, Expression: MemberAccessExpressionSyntax };
+        // An inferred member (new { user.Name }) follows its source's camelCase JSON name; an explicit
+        // name is the author's key. One shape has one storage name, so decide over every creation site,
+        // not whichever declaration Roslyn reports first: any explicit spelling keeps the C# name.
+        var inferred = AnonymousMembersInferredEverywhere().TryGetValue(key, out var everywhere)
+            ? everywhere
+            : property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is
+                AnonymousObjectMemberDeclaratorSyntax { NameEquals: null, Expression: MemberAccessExpressionSyntax };
         var collision = property.ContainingType.GetMembers().OfType<IPropertySymbol>()
             .Any(other => other.Name != property.Name && LowerFirst(other.Name) == LowerFirst(property.Name));
         var name = inferred && !collision ? LowerFirst(property.Name) : property.Name;
         _anonymousPropertyNames.Add(key, name);
         return name;
+    }
+
+    private Dictionary<(string Type, string Name), bool>? _anonymousMembersInferredEverywhere;
+
+    private Dictionary<(string Type, string Name), bool> AnonymousMembersInferredEverywhere()
+    {
+        if (_anonymousMembersInferredEverywhere is not null) return _anonymousMembersInferredEverywhere;
+        var members = new Dictionary<(string Type, string Name), bool>();
+        foreach (var tree in _compilation.SyntaxTrees)
+        {
+            var model = _compilation.GetSemanticModel(tree);
+            foreach (var declarator in tree.GetRoot().DescendantNodes().OfType<AnonymousObjectMemberDeclaratorSyntax>())
+            {
+                if (model.GetDeclaredSymbol(declarator) is not { ContainingType: { } type } member) continue;
+                var key = (type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), member.Name);
+                var inferred = declarator is { NameEquals: null, Expression: MemberAccessExpressionSyntax };
+                members[key] = inferred && members.GetValueOrDefault(key, true);
+            }
+        }
+        return _anonymousMembersInferredEverywhere = members;
     }
 
 }
