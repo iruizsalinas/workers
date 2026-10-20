@@ -178,7 +178,7 @@ public sealed class RuntimeCoverageTests
         Assert.Contains("{ provider: \"workers-ai\", endpoint: \"@cf/meta/llama-3.1-8b-instruct\"", module);
         Assert.Contains("{ gateway: { skipCache: true } }", module);
         Assert.Contains("(($workers$receiver$3, $workers$arg1$3) => $workers$notNull($workers$receiver$3).models($workers$arg1$3))(ai, { task: \"Text Generation\", per_page: 5, hide_experimental: true })", module);
-        Assert.Contains("(($workers$receiver$4, $workers$arg1$4, $workers$arg2$3) => $workers$notNull($workers$receiver$4).toMarkdown($workers$arg1$4, $workers$arg2$3))(ai, { name: \"page.html\", blob: new Blob([\"hello\"], { type: \"text/html\" ?? undefined }) }, { conversionOptions: { output: { format: \"text\" }, html: { cssSelector: \"main\", images: { convertOGImage: true } } } })", module);
+        Assert.Contains("(($workers$receiver$4, $workers$arg1$4, $workers$arg2$3) => $workers$notNull($workers$receiver$4).toMarkdown($workers$arg1$4, $workers$arg2$3))(ai, { name: \"page.html\", blob: new Blob([\"hello\"], { type: (\"text/html\") ?? undefined }) }, { conversionOptions: { output: { format: \"text\" }, html: { cssSelector: \"main\", images: { convertOGImage: true } } } })", module);
         Assert.Contains("conversionOptions: { output: { format: \"text\" }, html: { cssSelector: \"main\", images: { convertOGImage: true } } }", module);
         Assert.Contains("$workers$notNull($workers$notNull(ai).toMarkdown()).supported()", module);
         Assert.Contains("statusCode: $workers$notNull(log).status_code", module);

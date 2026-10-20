@@ -23,7 +23,34 @@ public static class Worker
             return await VerifyAsync(request);
         if (new Url(request.Url).Pathname == "/stream")
             return Stream(request);
+        if (new Url(request.Url).Pathname == "/stream-pull")
+            return await InspectStreamPullAsync();
         return new Response("Not found") { Status = 404 };
+    }
+
+    private static async Task<Response> InspectStreamPullAsync()
+    {
+        int[] state = [0, 0];
+        var stream = ReadableStream.From(CountedChunks(state));
+        await Scheduler.WaitAsync(0);
+        var before = state[0];
+        var reader = stream.GetReader();
+        var first = await reader.ReadAsync();
+        await reader.CancelAsync();
+        reader.ReleaseLock();
+        return Response.Json(new { before, pulls = state[0], closed = state[1], value = first.Value![0] });
+    }
+
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> CountedChunks(int[] state)
+    {
+        try
+        {
+            state[0]++;
+            yield return new byte[] { 65 };
+            state[0]++;
+            yield return new byte[] { 66 };
+        }
+        finally { state[1]++; }
     }
 
     private static async Task<Response> InspectFormAsync(Request request)
@@ -126,6 +153,8 @@ public static class Worker
         var payload = await request.BytesAsync();
         var signature = Hex.Decode(request.Headers.Get("x-signature") ?? "");
         var pending = Crypto.VerifyHmacAsync(DigestAlgorithm.Sha256, "body-signing-secret", signature, payload);
+        if (signature.Length > 0) signature[0] = (byte)(signature[0] ^ 255);
+        if (payload.Length > 0) payload[0] = (byte)(payload[0] ^ 255);
         signature = new byte[signature.Length];
         payload = new TextEncoder().Encode("changed");
         return Response.Json(new { valid = await pending });

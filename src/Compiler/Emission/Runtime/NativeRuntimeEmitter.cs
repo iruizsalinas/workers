@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Text.Json;
 
 internal sealed partial class JavaScriptEmitter
 {
@@ -55,11 +56,11 @@ internal sealed partial class JavaScriptEmitter
             {
                 "EncodeComponent" => $"encodeURIComponent({values})",
                 "DecodeComponent" => $"decodeURIComponent({values})",
-                "CanParse" or "Parse" => $"URL.{LowerFirst(method.Name)}({arguments[0]}{(arguments.Length > 1 ? $", {arguments[1]} ?? undefined" : "")})",
+                "CanParse" or "Parse" => $"URL.{LowerFirst(method.Name)}({arguments[0]}{(arguments.Length > 1 ? $", ({arguments[1]}) ?? undefined" : "")})",
                 _ => ""
             },
             "Workers.Scheduler" when method.Name == "WaitAsync" =>
-                $"scheduler.wait({arguments[0]}{(arguments.Length > 1 ? $", {{ signal: {arguments[1]} ?? undefined }}" : "")})",
+                $"scheduler.wait({arguments[0]}{(arguments.Length > 1 ? $", {{ signal: ({arguments[1]}) ?? undefined }}" : "")})",
             "Workers.Crypto" when method.Name == "RandomUuid" => "globalThis.crypto.randomUUID()",
             "Workers.JsonValue" when method.Name == "From" => arguments[0],
             "Workers.Base64" => method.Name == "Encode"
@@ -112,6 +113,18 @@ internal sealed partial class JavaScriptEmitter
                 $"{receiver}.{LowerFirst(property.Name)}",
             _ => null
         };
+    }
+
+    private static string? NativeEnumConstant(ITypeSymbol type, object? value)
+    {
+        type = UnwrapNullable(type);
+        if (value is null || type.TypeKind != TypeKind.Enum) return null;
+        foreach (var field in type.GetMembers().OfType<IFieldSymbol>().Where(field => field.HasConstantValue && Equals(field.ConstantValue, value)))
+        {
+            if (CryptoEnumValue(type.ToDisplayString(), field.Name) is { } crypto) return crypto;
+            if (NativeEnumValue(type.ToDisplayString(), field.Name) is { } native) return JsonSerializer.Serialize(native);
+        }
+        return null;
     }
 
     // Values of runtime enums, which cross into JavaScript as the strings the platform expects.

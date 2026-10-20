@@ -77,6 +77,7 @@ internal sealed partial class JavaScriptEmitter
     private void EmitUserJsonProjection(INamedTypeSymbol type, TypeDeclarationSyntax declaration)
     {
         var members = JsonContractProperties(type)
+            .Where(property => property.GetMethod?.DeclaredAccessibility == Accessibility.Public)
             .Select(property => (Property: property, Name: JsonPropertyName(property) ?? LowerFirst(property.Name)))
             .ToList();
         _output.AppendLine("  toJSON() {");

@@ -6,7 +6,6 @@ internal static partial class HelperSource
         JavaScriptHelper.SetCookie => SetCookie(name),
         JavaScriptHelper.TaskWhenAll => TaskWhenAll(name),
         JavaScriptHelper.AsyncExpressionResult => AsyncExpressionResult(name),
-        JavaScriptHelper.StreamFrom => StreamFrom(name),
         JavaScriptHelper.SequenceIndex => SequenceIndex(name),
         JavaScriptHelper.IndexRange => IndexRange(name),
         JavaScriptHelper.Tuple => Tuple(name),

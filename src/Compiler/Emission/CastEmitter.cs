@@ -42,7 +42,7 @@ internal sealed partial class JavaScriptEmitter
             return value;
 
         if (conversion.ConstantValue is { HasValue: true } constant && constant.Value is not decimal)
-            return LiteralConstant(constant.Value, cast);
+            return NativeEnumConstant(target, constant.Value) ?? LiteralConstant(constant.Value, cast);
         if (source is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullableSource
             && SymbolEqualityComparer.Default.Equals(nullableSource.TypeArguments[0], target))
         {

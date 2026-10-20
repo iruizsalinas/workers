@@ -35,7 +35,8 @@ internal sealed partial class JavaScriptEmitter
     {
         var settings = new[] { "status", "headers", "statusText" }
             .Take(arguments.Length - 1)
-            .Select((name, index) => $"{name}: {arguments[index + 1]}{(index > 0 ? " ?? undefined" : "")}");
+            .Select((name, index) => index == 0 ? $"{name}: {arguments[index + 1]}"
+                : $"{name}: ({arguments[index + 1]}) ?? undefined");
         return arguments.Length == 1 ? $"Response.json({arguments[0]})"
             : $"Response.json({arguments[0]}, {{ {string.Join(", ", settings)} }})";
     }

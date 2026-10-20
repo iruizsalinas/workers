@@ -82,6 +82,9 @@ internal sealed partial class JavaScriptEmitter
         emitter.EmitRuntimeInterfaceMarkers();
 
         emitter._output.Append(emitter._helpers.Emit());
+        if (emitter._helpers.IsRequired(JavaScriptHelper.RpcArguments))
+            foreach (var name in emitter._userTypes.Values)
+                emitter._output.Append(emitter._helpers.Name("rpcClasses")).Append(".add(").Append(name).AppendLine(".prototype);");
         emitter._output.Insert(0, emitter.EmitBuiltInExceptionTypes());
         if (emitter._usesPlainRecordIdentity)
             emitter._output.Insert(0, $"const {emitter.PlainRecordIdentitySlot} = Symbol();" + Environment.NewLine);

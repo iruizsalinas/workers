@@ -52,7 +52,7 @@ public sealed class WebPlatformProfileTests
 
         Assert.Contains("instanceof File ?", module);
         Assert.Contains(")($workers$notNull(entry[1]))", module);
-        Assert.Contains("$workers$notNull((($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver).slice($workers$arg1, $workers$arg2))(file, 0, 8)).bytes()", module);
+        Assert.Contains("$workers$notNull((($workers$receiver, $workers$arg1, $workers$arg2) => $workers$notNull($workers$receiver).slice($workers$arg1, ($workers$arg2) ?? undefined))(file, 0, 8)).bytes()", module);
     }
 
     [Fact]

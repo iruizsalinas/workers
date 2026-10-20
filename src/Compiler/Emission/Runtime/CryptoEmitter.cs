@@ -23,10 +23,11 @@ internal sealed partial class JavaScriptEmitter
             ? $"new TextEncoder().encode({arguments[1].Value})"
             : arguments[1].Value;
         var import = $"crypto.subtle.importKey(\"raw\", raw, {{ name: \"HMAC\", hash }}, false, [\"{(verify ? "verify" : "sign")}\"])";
+        // Key import is asynchronous; capture the bytes before callers can reuse their buffers.
         return verify
-            ? $"((crypto, hash, raw, signature, payload) => {import}.then(key => crypto.subtle.verify(\"HMAC\", key, signature, payload)))"
+            ? $"((crypto, hash, raw, signature, payload) => {{ signature = signature.slice(); payload = payload.slice(); return {import}.then(key => crypto.subtle.verify(\"HMAC\", key, signature, payload)); }})"
               + $"({receiver}, {arguments[0].Value}, {key}, {arguments[2].Value}, {arguments[3].Value})"
-            : $"((crypto, hash, raw, payload) => {import}.then(key => crypto.subtle.sign(\"HMAC\", key, payload)).then(value => new Uint8Array(value)))"
+            : $"((crypto, hash, raw, payload) => {{ payload = payload.slice(); return {import}.then(key => crypto.subtle.sign(\"HMAC\", key, payload)).then(value => new Uint8Array(value)); }})"
               + $"({receiver}, {arguments[0].Value}, {key}, {arguments[2].Value})";
     }
 

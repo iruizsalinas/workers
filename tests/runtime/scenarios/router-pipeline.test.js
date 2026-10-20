@@ -22,6 +22,12 @@ async function expectEmptyError(response) {
 }
 
 describe("router middleware in workerd", () => {
+  it.each(["GET", "HEAD"])("preserves native network errors for %s with CORS", async method => {
+    const response = await call("/network-error", { method });
+    expect(response.status).toBe(0);
+    expect(response.type).toBe("error");
+  });
+
   it("runs in registration order and unwinds in reverse with matched parameters", async () => {
     const response = await call("/ok/42");
     expect(await response.text()).toBe("ok");

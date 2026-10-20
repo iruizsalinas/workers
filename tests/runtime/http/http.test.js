@@ -9,6 +9,20 @@ import proxyFetch from "../../../examples/ProxyFetch/dist/worker.js";
 import redirects from "../../../examples/Redirects/dist/worker.js";
 
 describe("HTTP workers", () => {
+  it.each([["/websocket-close-null", 1005], ["/websocket-close-reason", 1000]])("uses native defaults for nullable WebSocket close arguments: %s", async (path, code) => {
+    const { default: worker } = await import("../fixtures/NativeBindings/dist/worker.js");
+    const response = await worker.fetch(new Request(`https://worker.test${path}`, {
+      headers: { upgrade: "websocket" },
+    }), env, createExecutionContext());
+    expect(response.status).toBe(101);
+    const socket = response.webSocket;
+    const closed = new Promise(resolve => socket.addEventListener("close", resolve, { once: true }));
+    socket.accept();
+    const event = await closed;
+    expect(event.code).toBe(code);
+    expect(event.reason).toBe("");
+  });
+
   it("reads the native request URL and returns JSON", async () => {
     const response = await jsonApi.fetch(
       new Request("https://worker.test/items/42?ignored=true"),

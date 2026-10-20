@@ -99,7 +99,7 @@ internal sealed partial class JavaScriptEmitter
                 _ => throw Unsupported("WRK108", member)
             };
         if (symbol is IFieldSymbol { IsStatic: true, HasConstantValue: true } constant)
-            return LiteralConstant(constant.ConstantValue, member);
+            return NativeEnumConstant(constant.Type, constant.ConstantValue) ?? LiteralConstant(constant.ConstantValue, member);
         if (symbol is IFieldSymbol { IsStatic: true })
             throw Unsupported("WRK110", member);
         if (property is { Name: "CompletedTask", ContainingType: { } taskType }

@@ -3,6 +3,21 @@ import { describe, expect, it } from "vitest";
 import { env } from "../support.js";
 
 describe("Durable Object bindings", () => {
+  it.each([["array", 2], ["lazy", 2], ["null", 0]])("accepts WebSocket tags and optional filters with %s input", async (mode, count) => {
+    const stub = env.ECHO.getByName(`socket-tags-${crypto.randomUUID()}`);
+    await expect(stub.inspectSocketTags(mode)).resolves.toEqual([count, 1, 0]);
+  });
+
+  it.each([false, true])("reads keys from a lazy sequence with transaction=%s", async transaction => {
+    const stub = env.ECHO.getByName(`sequence-read-${crypto.randomUUID()}`);
+    await expect(stub.readSequence(transaction)).resolves.toBe(18);
+  });
+
+  it("deletes keys supplied as a lazy sequence", async () => {
+    const stub = env.ECHO.getByName(`sequence-delete-${crypto.randomUUID()}`);
+    await expect(stub.deleteSequence()).resolves.toBe(2);
+  });
+
   it("stores numeric dictionaries as native data rather than helper methods", async () => {
     const stub = env.ECHO.getByName(`stored-collections-${crypto.randomUUID()}`);
     await expect(stub.storedCollections()).resolves.toBe(true);

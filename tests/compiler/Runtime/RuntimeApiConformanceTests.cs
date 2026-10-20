@@ -258,7 +258,7 @@ public sealed partial class RuntimeApiConformanceTests
     private static readonly HashSet<BindingIntrinsicKind> MemberKinds =
     [
         BindingIntrinsicKind.Direct, BindingIntrinsicKind.Property, BindingIntrinsicKind.Fluent,
-        BindingIntrinsicKind.RequestBodyRead, BindingIntrinsicKind.KvJsonPut, BindingIntrinsicKind.R2Get,
+        BindingIntrinsicKind.RequestBodyRead, BindingIntrinsicKind.KvJsonPut, BindingIntrinsicKind.ArrayArguments, BindingIntrinsicKind.R2Get,
         BindingIntrinsicKind.DurableObjectGet, BindingIntrinsicKind.SyncStorageGet, BindingIntrinsicKind.CacheMatch,
         BindingIntrinsicKind.DictionaryObject, BindingIntrinsicKind.DateResult, BindingIntrinsicKind.IteratorArray,
         BindingIntrinsicKind.CryptoBytesResult, BindingIntrinsicKind.CryptoImportKey, BindingIntrinsicKind.CryptoExportJwk

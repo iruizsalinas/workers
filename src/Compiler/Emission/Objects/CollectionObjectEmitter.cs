@@ -24,7 +24,7 @@ internal sealed partial class JavaScriptEmitter
         PositionalObjectCreation(source, constructor, arguments, values => values.Count switch
         {
             1 => $"new URL({values[0]})",
-            2 => $"new URL({values[0]}, {values[1]} ?? undefined)",
+            2 => $"new URL({values[0]}, ({values[1]}) ?? undefined)",
             _ => throw UnsupportedSymbol(constructor, source)
         });
 

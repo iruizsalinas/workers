@@ -7,7 +7,7 @@ internal static partial class HelperSource
         }
         // Workers RPC rejects instances of user-defined classes, so compiled C# class and record
         // instances cross as plain objects with the same fields. Platform values pass through.
-        const {{name("rpcClasses")}} = new WeakMap();
+        const {{name("rpcClasses")}} = new WeakSet();
         function {{name("rpcValue")}}(value, seen = new WeakMap()) {
           if (value === null || typeof value !== "object") return value;
           if (seen.has(value)) return seen.get(value);
@@ -45,14 +45,8 @@ internal static partial class HelperSource
             return result;
           }
           const prototype = Object.getPrototypeOf(value);
-          let compiled = prototype === Object.prototype || prototype === null;
-          if (!compiled && !(value instanceof Error) && typeof prototype.constructor === "function") {
-            compiled = {{name("rpcClasses")}}.get(prototype.constructor);
-            if (compiled === undefined) {
-              compiled = Function.prototype.toString.call(prototype.constructor).startsWith("class");
-              {{name("rpcClasses")}}.set(prototype.constructor, compiled);
-            }
-          }
+          const compiled = prototype === Object.prototype || prototype === null
+            || !(value instanceof Error) && {{name("rpcClasses")}}.has(prototype);
           if (!compiled) return value;
           const result = prototype === null ? Object.create(null) : {};
           seen.set(value, result);

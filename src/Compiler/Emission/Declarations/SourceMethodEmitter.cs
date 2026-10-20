@@ -21,7 +21,8 @@ internal sealed partial class JavaScriptEmitter
         if (type.IsReferenceType || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) return "null";
         if (type.SpecialType == SpecialType.System_Boolean) return "false";
         if (type.SpecialType == SpecialType.System_Char) return "\"\\u0000\"";
-        if (type.TypeKind == TypeKind.Enum || type.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Double)
+        if (type.TypeKind == TypeKind.Enum) return NativeEnumConstant(type, 0) ?? "0";
+        if (type.SpecialType is >= SpecialType.System_SByte and <= SpecialType.System_Double)
             return "0";
         if (type is INamedTypeSymbol named)
         {

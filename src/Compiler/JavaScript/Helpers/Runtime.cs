@@ -26,19 +26,4 @@ internal static partial class HelperSource
         }
 
         """;
-
-    // ReadableStream.from is not available in Workers, so async iterables are pulled into a stream.
-    private static string StreamFrom(Func<string, string> name) => $$"""
-        function {{name("streamFrom")}}(chunks) {
-          const iterator = chunks[Symbol.asyncIterator]();
-          return new ReadableStream({
-            async pull(controller) {
-              const item = await iterator.next();
-              if (item.done) controller.close(); else controller.enqueue(item.value);
-            },
-            cancel() { return iterator.return?.(); }
-          });
-        }
-
-        """;
 }

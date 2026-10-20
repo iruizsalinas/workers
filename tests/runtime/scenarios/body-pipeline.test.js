@@ -5,6 +5,11 @@ import worker from "../fixtures/BodyPipeline/dist/worker.js";
 const invoke = (path, init) => worker.fetch(new Request(`https://worker.test${path}`, init), {}, createExecutionContext());
 
 describe("request body pipeline", () => {
+  it("pulls async sequences on demand and closes them on cancellation", async () => {
+    const response = await invoke("/stream-pull");
+    await expect(response.json()).resolves.toEqual({ before: 0, pulls: 1, closed: 1, value: 65 });
+  });
+
   it("fingerprints empty and populated uploads without evaluating body factories twice", async () => {
     const digest = async text => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))),
       byte => byte.toString(16).padStart(2, "0")).join("");

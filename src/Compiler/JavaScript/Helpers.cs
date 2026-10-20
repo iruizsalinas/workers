@@ -1,6 +1,6 @@
 internal enum JavaScriptHelper
 {
-    RequestCookies, SetCookie, TaskWhenAll, AsyncExpressionResult, StreamFrom, SequenceIndex, IndexRange, DictionaryIndex, IntegerDivide, IntegerRemainder,
+    RequestCookies, SetCookie, TaskWhenAll, AsyncExpressionResult, SequenceIndex, IndexRange, DictionaryIndex, IntegerDivide, IntegerRemainder,
     SetAdd, QueueStack, RpcArguments, QueueMessages, JsonExpect, TryCall, CollectionMembers, ListState, StringReplace,
     StringOrdinal, Tuple, Delegates, StructuralKeys, KeyCollectionData, TypeOf, Exceptions, SetState,
     Router, HttpError, Cors, BoundedBody, Redirect,
@@ -52,7 +52,6 @@ internal static class JavaScriptHelperExtensions
         JavaScriptHelper.SetCookie => "setCookie",
         JavaScriptHelper.TaskWhenAll => "taskWhenAll",
         JavaScriptHelper.AsyncExpressionResult => "asyncExpressionResult",
-        JavaScriptHelper.StreamFrom => "streamFrom",
         JavaScriptHelper.SequenceIndex => "sequenceIndex",
         JavaScriptHelper.IndexRange => "indexCreate",
         JavaScriptHelper.Tuple => "tupleCreate",

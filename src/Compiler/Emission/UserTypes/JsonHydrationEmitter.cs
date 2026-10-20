@@ -35,7 +35,11 @@ internal sealed partial class JavaScriptEmitter
         ValidateJsonAttributes(user);
         QueueUserType(user, source);
         _pendingJsonReaders.Enqueue((user, mode));
-        foreach (var property in JsonContractProperties(user)) RegisterJsonValueType(property.Type, source, mode);
+        HashSet<string> constructorProperties = declaration is RecordDeclarationSyntax { ParameterList: { } parameters }
+            ? parameters.Parameters.Select(parameter => parameter.Identifier.ValueText).ToHashSet(StringComparer.Ordinal) : [];
+        foreach (var property in JsonContractProperties(user).Where(property =>
+            property.SetMethod?.DeclaredAccessibility == Accessibility.Public || constructorProperties.Contains(property.Name)))
+            RegisterJsonValueType(property.Type, source, mode);
     }
 
     private static ITypeSymbol? JsonElementType(ITypeSymbol type) => type switch
@@ -104,7 +108,7 @@ internal sealed partial class JavaScriptEmitter
     {
         var fallback = source is ParameterSyntax parameter
             && _model.GetDeclaredSymbol(parameter) is IParameterSymbol { HasExplicitDefaultValue: true } symbol
-                ? LiteralConstant(symbol.ExplicitDefaultValue, source)
+                ? ParameterDefaultValue(symbol, source)
                 : DefaultFieldValue(property.Type, source);
         if (HasAttribute(property, "Workers.JsonIgnoreAttribute")) return fallback;
         var key = JsonReadKey(property);
@@ -170,7 +174,7 @@ internal sealed partial class JavaScriptEmitter
     }
 
     private static bool IsJsonContractProperty(IPropertySymbol property) =>
-        property.DeclaredAccessibility == Accessibility.Public && !property.IsStatic && property.GetMethod is not null
+        property.DeclaredAccessibility == Accessibility.Public && !property.IsStatic && !property.IsIndexer
         && !HasAttribute(property, "Workers.JsonIgnoreAttribute");
 
     private static void ValidateJsonAttributes(INamedTypeSymbol type)

@@ -179,7 +179,7 @@ public sealed class HttpRuntimeTests
             }
             """);
 
-        Assert.Contains(".close($workers$arg2, $workers$arg1)", module);
+        Assert.Contains(".close(($workers$arg2) ?? undefined, ($workers$arg1) ?? undefined)", module);
         Assert.Contains(", \"done\", 1000)", module);
         Assert.Contains(".put($workers$arg2$2, $workers$arg1$2)", module);
         Assert.Contains(", \"hello\", \"message\")", module);

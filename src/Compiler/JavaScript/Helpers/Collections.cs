@@ -85,7 +85,8 @@ internal static partial class HelperSource
         function {{name("dictionarySet")}}(source, key, value) {
           {{name("notNull")}}(source);
           if (key == null) throw new ({{name("exceptionType")}}("System.ArgumentNullException"))("Dictionary key cannot be null.");
-          source[key] = value;
+          // JSON and platform APIs can supply ordinary objects with inherited setters.
+          Object.defineProperty(source, key, { value, writable: true, enumerable: true, configurable: true });
           return value;
         }
 
@@ -117,11 +118,11 @@ internal static partial class HelperSource
         function {{name("dictionaryAdd")}}(source, key, value) {
           if (Object.hasOwn(source, {{name("collectionKey")}}(key)))
             throw new ({{name("exceptionType")}}("System.ArgumentException"))(`An item with the same key has already been added. Key: ${key}`);
-          source[key] = value;
+          Object.defineProperty(source, key, { value, writable: true, enumerable: true, configurable: true });
         }
         function {{name("dictionaryTryAdd")}}(source, key, value) {
           if (Object.hasOwn(source, {{name("collectionKey")}}(key))) return false;
-          source[key] = value;
+          Object.defineProperty(source, key, { value, writable: true, enumerable: true, configurable: true });
           return true;
         }
         function {{name("dictionaryContainsKey")}}(source, key) {

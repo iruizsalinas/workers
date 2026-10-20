@@ -8,6 +8,10 @@ public static class Worker
     public static async Task<Response> FetchAsync(Request request, Env env, ExecutionContext context)
     {
         var path = new Url(request.Url).Pathname;
+        if (path == "/network-error")
+            return await new Router().Use(Cors.Allow(["https://app.example"]))
+                .Any("/network-error", (request, route) => Response.Error())
+                .HandleAsync(request, env, context);
         if (path.StartsWith("/config/"))
         {
             try

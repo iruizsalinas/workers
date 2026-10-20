@@ -25,6 +25,26 @@ describe("native storage bindings", () => {
     await expect(response.json()).resolves.toEqual({ name: "Ada" });
   });
 
+  it.each(["/d1-sequence-batch", "/d1-session-sequence-batch"])("executes lazy statement sequences through %s", async path => {
+    const response = await invokeNative(path);
+    await expect(response.json()).resolves.toEqual({ first: 7, second: 11 });
+  });
+
+  it("reads KV keys supplied as a lazy sequence", async () => {
+    const response = await invokeNative("/kv-sequence-read");
+    await expect(response.json()).resolves.toEqual({ count: 2, first: "7", second: null, jsonCount: 2, number: 7, missing: true });
+  });
+
+  it("deletes R2 keys supplied as a lazy sequence", async () => {
+    const response = await invokeNative("/r2-sequence-delete");
+    await expect(response.json()).resolves.toEqual({ first: true, second: true });
+  });
+
+  it("completes multipart uploads using a lazy part sequence", async () => {
+    const response = await invokeNative("/r2-sequence-complete");
+    await expect(response.json()).resolves.toEqual({ size: 7, text: "payload" });
+  });
+
   it("round-trips KV metadata, listing, and deletion", async () => {
     const response = await invokeNative("/kv-lifecycle");
     const result = await response.json();

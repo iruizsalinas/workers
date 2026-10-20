@@ -85,7 +85,7 @@ public sealed class CompilationSemanticsTests
 
         Assert.Contains("{ count: 3, label: \"priority\" }", module);
         Assert.Matches(@"=> new Request\(\$workers\$arg2(?:\$\d+)?, \$workers\$arg1(?:\$\d+)?\)", module);
-        Assert.Matches(@"=> new URL\(\$workers\$arg2(?:\$\d+)?, \$workers\$arg1(?:\$\d+)? \?\? undefined\)", module);
+        Assert.Matches(@"=> new URL\(\$workers\$arg2(?:\$\d+)?, \(\$workers\$arg1(?:\$\d+)?\) \?\? undefined\)", module);
     }
 
     [Fact]

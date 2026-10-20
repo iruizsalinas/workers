@@ -192,7 +192,8 @@ internal sealed partial class JavaScriptEmitter
     {
         var type = ResolveType(parameter.Type);
         return parameter.ExplicitDefaultValue is null && type.IsValueType
-            ? DefaultFieldValue(type, source) : LiteralConstant(parameter.ExplicitDefaultValue, source);
+            ? DefaultFieldValue(type, source)
+            : NativeEnumConstant(type, parameter.ExplicitDefaultValue) ?? LiteralConstant(parameter.ExplicitDefaultValue, source);
     }
 
     private IArgumentOperation BoundArgument(ArgumentSyntax argument)

@@ -52,6 +52,7 @@ internal static partial class HelperSource
               if (maxAge > 0) response.headers.set("access-control-max-age", String(maxAge));
             } else {
               response = await next();
+              if (response.type === "error") return response;
               response = new Response(response.body, response);
             }
             // Clone response headers without buffering streams; overwrite downstream CORS grants.

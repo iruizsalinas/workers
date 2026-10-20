@@ -11,6 +11,64 @@ public static class Worker
         ExecutionContext context)
     {
         var path = new Url(request.Url).Pathname;
+        if (path == "/websocket-close-null" || path == "/websocket-close-reason")
+        {
+            var closingPair = new WebSocketPair();
+            closingPair.Server.Accept();
+            if (path == "/websocket-close-null") closingPair.Server.Close(null, null);
+            else closingPair.Server.Close(1000, null);
+            return new Response { Status = 101, WebSocket = closingPair.Client };
+        }
+        if (path == "/r2-sequence-complete")
+        {
+            var multipartBucket = environment.R2("BUCKET");
+            var upload = await multipartBucket.CreateMultipartUploadAsync("sequence-multipart");
+            var part = await upload.UploadPartAsync(1, "payload");
+            var parts = new[] { part }.Select(value => value);
+            var completed = await upload.CompleteAsync(parts);
+            var stored = await multipartBucket.GetAsync("sequence-multipart");
+            var text = await stored!.TextAsync();
+            await multipartBucket.DeleteAsync("sequence-multipart");
+            return Response.Json(new { completed.Size, text });
+        }
+        if (path == "/r2-sequence-delete")
+        {
+            var sequenceBucket = environment.R2("BUCKET");
+            await sequenceBucket.PutAsync("sequence-one", "one");
+            await sequenceBucket.PutAsync("sequence-two", "two");
+            var keys = new[] { "sequence-one", "sequence-two" }.Select(key => key);
+            await sequenceBucket.DeleteAsync(keys);
+            return Response.Json(new {
+                first = await sequenceBucket.HeadAsync("sequence-one") is null,
+                second = await sequenceBucket.HeadAsync("sequence-two") is null
+            });
+        }
+        if (path == "/kv-sequence-read")
+        {
+            var keys = new[] { "__sequence_first__", "__sequence_second__" }.Select(key => key);
+            var sequenceKv = environment.KV("KV");
+            await sequenceKv.PutAsync("__sequence_first__", "7");
+            var values = await sequenceKv.GetAsync(keys);
+            var jsonValues = await sequenceKv.GetJsonAsync<JsonValue>(keys);
+            await sequenceKv.DeleteAsync("__sequence_first__");
+            return Response.Json(new {
+                count = values.Count, first = values["__sequence_first__"], second = values["__sequence_second__"],
+                jsonCount = jsonValues.Count, number = jsonValues["__sequence_first__"]!.AsNumber(),
+                missing = jsonValues["__sequence_second__"] is null
+            });
+        }
+        if (path == "/d1-sequence-batch" || path == "/d1-session-sequence-batch")
+        {
+            var batchDatabase = environment.D1("DB");
+            var statements = new[] { 7, 11 }.Select(value => batchDatabase.Prepare("SELECT ? AS value").Bind(value));
+            var rows = path == "/d1-session-sequence-batch"
+                ? await batchDatabase.WithSession().BatchAsync<JsonValue>(statements)
+                : await batchDatabase.BatchAsync<JsonValue>(statements);
+            return Response.Json(new {
+                first = rows[0].Results[0]["value"].AsNumber(),
+                second = rows[1].Results[0]["value"].AsNumber()
+            });
+        }
         if (path == "/durable")
         {
             var stub = environment.DurableObject("ECHO").GetByName("generated-csharp");
@@ -274,6 +332,42 @@ public sealed class EchoObject : DurableObject
         await Ctx.Storage.DeleteAsync("typed");
         var typedMissing = await Ctx.Storage.GetAsync<StoredValue>("typed");
         return deleted && value is null && typed!.Value == 42 && typedMissing is null;
+    }
+
+    public async Task<int> ReadSequenceAsync(bool transaction)
+    {
+        await Ctx.Storage.PutAsync("sequence-one", 7);
+        await Ctx.Storage.PutAsync("sequence-two", 11);
+        var keys = new[] { "sequence-one", "sequence-two" }.Select(key => key);
+        var values = transaction
+            ? await Ctx.Storage.TransactionAsync(tx => tx.GetAsync<int>(keys))
+            : await Ctx.Storage.GetAsync<int>(keys);
+        return values["sequence-one"] + values["sequence-two"];
+    }
+
+    public async Task<int> DeleteSequenceAsync()
+    {
+        await Ctx.Storage.PutAsync("sequence-one", 7);
+        await Ctx.Storage.PutAsync("sequence-two", 11);
+        var keys = new[] { "sequence-one", "sequence-two" }.Select(key => key);
+        return await Ctx.Storage.DeleteAsync(keys);
+    }
+
+    public int[] InspectSocketTags(string mode)
+    {
+        var pair = new WebSocketPair();
+        IEnumerable<string>? tags = mode == "null" ? null
+            : mode == "lazy" ? new[] { "first", "second" }.Select(tag => tag)
+            : new[] { "first", "second" };
+        Ctx.AcceptWebSocket(pair.Server, tags);
+        pair.Client.Accept();
+        var counts = new[] {
+            Ctx.GetTags(pair.Server).Count,
+            Ctx.GetWebSockets(null).Count,
+            Ctx.GetWebSockets("null").Count
+        };
+        pair.Client.Close(1000, "done");
+        return counts;
     }
 
     public async Task<bool> TransactionLifecycleAsync()

@@ -12,9 +12,11 @@ internal sealed partial class JavaScriptEmitter
         string type)
     {
         var key = arguments.Single(item => item.Parameter.Name is "key" or "keys").Value;
+        var multiple = arguments.Any(item => item.Parameter.Name == "keys");
+        if (multiple) key = $"Array.from({key})";
         var options = arguments.FirstOrDefault(item => item.Parameter.Name == "options").Value;
         var invocation = $"{receiver}.{method}({key}{KvGetOptions(options, type)})";
-        if (arguments.Any(item => item.Parameter.Name == "keys"))
+        if (multiple)
             return $"{invocation}.then(value => Object.fromEntries(value))";
         if (type != "arrayBuffer")
             return invocation;
@@ -42,7 +44,7 @@ internal sealed partial class JavaScriptEmitter
         IMethodSymbol method,
         IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
     {
-        var invocation = $"{receiver}.get({string.Join(", ", arguments.Select(item => item.Value))})";
+        var invocation = $"{receiver}.get({string.Join(", ", arguments.Select(item => item.Parameter.Name == "keys" ? $"Array.from({item.Value})" : item.Value))})";
         return method.Parameters[0].Type.SpecialType == SpecialType.System_String
             ? $"{invocation}.then(value => value ?? null)"
             : $"{invocation}.then(value => Object.fromEntries(value))";

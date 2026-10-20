@@ -12,6 +12,7 @@ internal enum BindingIntrinsicKind
     KvGet,
     KvGetWithMetadata,
     KvJsonPut,
+    ArrayArguments,
     R2Get,
     DurableObjectGet,
     DictionaryObject,
@@ -36,7 +37,8 @@ internal enum BindingIntrinsicKind
     CryptoExportJwk
 }
 
-internal sealed record BindingIntrinsic(string JavascriptName, BindingIntrinsicKind Kind = BindingIntrinsicKind.Direct);
+internal sealed record BindingIntrinsic(string JavascriptName, BindingIntrinsicKind Kind = BindingIntrinsicKind.Direct,
+    bool NullDefaultsAreUndefined = false);
 
 /// <summary>
 /// The complete set of Workers binding calls that may cross directly into the
@@ -87,7 +89,8 @@ internal static class BindingIntrinsicRegistry
     }
 
     private static bool HasMethod((string Type, string Method) key) => MethodSets.Any(methods => methods.ContainsKey(key));
-    internal static BindingIntrinsic Direct(string name) => new(name);
+    internal static BindingIntrinsic Direct(string name, bool nullDefaultsAreUndefined = false) =>
+        new(name, NullDefaultsAreUndefined: nullDefaultsAreUndefined);
     internal static (string Type, string Method) Key(string type, string method) => (type, method);
     private static string TypeName(INamedTypeSymbol type) => type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
 }

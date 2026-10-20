@@ -121,12 +121,18 @@ internal sealed partial class JavaScriptEmitter
                     && RpcResultNeedsConversion(argument.Parameter.Type)
                         ? $"{RequireHelperName(JavaScriptHelper.RpcArguments, "rpcValue")}({argument.Value})"
                         : argument.Value)).ToArray();
-        var values = string.Join(", ", arguments.Select(item => item.Value));
+        if (intrinsic.Kind == BindingIntrinsicKind.ArrayArguments)
+            arguments = arguments.Select(item => (item.Parameter,
+                Value: ArrayBindingArgument(item.Parameter, item.Value))).ToArray();
+        // These optional Web API arguments use null in C# to request the native default.
+        var values = string.Join(", ", arguments.Select(item => intrinsic.NullDefaultsAreUndefined
+            && item.Parameter.HasExplicitDefaultValue && item.Parameter.ExplicitDefaultValue is null
+                ? $"({item.Value}) ?? undefined" : item.Value));
         if (method.ContainingType.ToDisplayString() == "Workers.Queue" && method.Name is "SendAsync" or "SendBatchAsync")
             return $"{RequireHelperName(JavaScriptHelper.QueueMessages, method.Name == "SendAsync" ? "queueSend" : "queueSendBatch")}({receiver}, {values})";
         return intrinsic.Kind switch
         {
-            BindingIntrinsicKind.Direct => $"{receiver}.{intrinsic.JavascriptName}({values})",
+            BindingIntrinsicKind.Direct or BindingIntrinsicKind.ArrayArguments => $"{receiver}.{intrinsic.JavascriptName}({values})",
             BindingIntrinsicKind.Property => $"{receiver}.{intrinsic.JavascriptName}",
             BindingIntrinsicKind.PropertyByName => $"{receiver}[{arguments[0].Value}]",
             BindingIntrinsicKind.Fluent => EmitFluentBinding(receiver, intrinsic.JavascriptName, arguments),
@@ -156,7 +162,7 @@ internal sealed partial class JavaScriptEmitter
             // Every name maps to all of its values; scalar members take the first one.
             BindingIntrinsicKind.QueryAs =>
                 $"((parameters) => Object.fromEntries(Array.from(new Set(parameters.keys()), name => [name, parameters.getAll(name)])))({receiver})",
-            BindingIntrinsicKind.ReadableFromEnumerable => EmitReadableFrom(arguments[0].Value),
+            BindingIntrinsicKind.ReadableFromEnumerable => $"ReadableStream.from({arguments[0].Value})",
             BindingIntrinsicKind.WebSocketMessageText => $"(message => typeof message === \"string\" ? message : new TextDecoder().decode(message))({receiver})",
             BindingIntrinsicKind.WebSocketMessageBytes => $"(message => typeof message === \"string\" ? new TextEncoder().encode(message) : new Uint8Array(message))({receiver})",
             BindingIntrinsicKind.EventListener => intrinsic.JavascriptName == "message"
@@ -172,6 +178,14 @@ internal sealed partial class JavaScriptEmitter
         };
     }
 
+    private static string ArrayBindingArgument(IParameterSymbol parameter, string value)
+    {
+        if (parameter.Type.OriginalDefinition.SpecialType != SpecialType.System_Collections_Generic_IEnumerable_T) return value;
+        return parameter.HasExplicitDefaultValue && parameter.ExplicitDefaultValue is null
+            ? $"(values => values == null ? undefined : Array.from(values))({value})"
+            : $"Array.from({value})";
+    }
+
     private static string EmitFluentBinding(string receiver, string method,
         IReadOnlyList<(IParameterSymbol Parameter, string Value)> arguments)
     {
@@ -182,8 +196,6 @@ internal sealed partial class JavaScriptEmitter
         return $"((value{(parameters.Length == 0 ? "" : ", " + names)}) => {{ value.{method}({names}); return value; }})"
             + $"({receiver}{(parameters.Length == 0 ? "" : ", " + values)})";
     }
-
-    private string EmitReadableFrom(string value) => $"{_helpers.Require(JavaScriptHelper.StreamFrom)}({value})";
 
     private IReadOnlyList<(IParameterSymbol Parameter, string Value)> BindingArguments(
         InvocationExpressionSyntax invocation,

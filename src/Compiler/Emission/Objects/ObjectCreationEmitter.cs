@@ -138,7 +138,7 @@ internal sealed partial class JavaScriptEmitter
     // Constructors whose JavaScript form wraps arguments: blob parts are an array, and options are a dictionary.
     private string NativeObjectCreation(string type, IReadOnlyList<string> values)
     {
-        string Option(int index, string name) => values.Count > index ? $"{{ {name}: {values[index]} ?? undefined }}" : "undefined";
+        string Option(int index, string name) => values.Count > index ? $"{{ {name}: ({values[index]}) ?? undefined }}" : "undefined";
         return type switch
         {
             "Workers.Blob" => $"new Blob([{values[0]}], {Option(1, "type")})",

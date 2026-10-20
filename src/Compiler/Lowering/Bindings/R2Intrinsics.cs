@@ -8,7 +8,7 @@ internal static class R2Intrinsics
             [Key("Workers.R2Bucket", "HeadAsync")] = Direct("head"),
             [Key("Workers.R2Bucket", "GetAsync")] = new("get", BindingIntrinsicKind.R2Get),
             [Key("Workers.R2Bucket", "PutAsync")] = Direct("put"),
-            [Key("Workers.R2Bucket", "DeleteAsync")] = Direct("delete"),
+            [Key("Workers.R2Bucket", "DeleteAsync")] = new("delete", BindingIntrinsicKind.ArrayArguments),
             [Key("Workers.R2Bucket", "ListAsync")] = Direct("list"),
             [Key("Workers.R2Bucket", "CreateMultipartUploadAsync")] = Direct("createMultipartUpload"),
             [Key("Workers.R2Bucket", "ResumeMultipartUpload")] = Direct("resumeMultipartUpload"),
@@ -19,6 +19,6 @@ internal static class R2Intrinsics
             [Key("Workers.R2ObjectBody", "BlobAsync")] = Direct("blob"),
             [Key("Workers.R2MultipartUpload", "UploadPartAsync")] = Direct("uploadPart"),
             [Key("Workers.R2MultipartUpload", "AbortAsync")] = Direct("abort"),
-            [Key("Workers.R2MultipartUpload", "CompleteAsync")] = Direct("complete")
+            [Key("Workers.R2MultipartUpload", "CompleteAsync")] = new("complete", BindingIntrinsicKind.ArrayArguments)
         };
 }

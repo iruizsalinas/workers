@@ -126,7 +126,7 @@ internal static partial class HelperSource
             }
           };
           const response = await dispatch(0);
-          if (method !== "HEAD") return response;
+          if (method !== "HEAD" || response.body === null) return response;
           // A tee's cancellation waits for its other branch; cleanup must not block HEAD.
           response.body?.cancel().catch(() => {});
           return new Response(null, response);
