@@ -32,7 +32,7 @@ internal sealed partial class JavaScriptEmitter
             || declaration is not RecordDeclarationSyntax { ParameterList: not null }
                 && !user.InstanceConstructors.Any(constructor => constructor.Parameters.Length == 0))
             throw new NotSupportedException($"WRK119: Typed JSON reads need a record or a class with a parameterless constructor, not '{user}'.");
-        ValidateJsonAttributes(user);
+        ValidateJsonAttributes(user, typedRead: true);
         QueueUserType(user, source);
         _pendingJsonReaders.Enqueue((user, mode));
         HashSet<string> constructorProperties = declaration is RecordDeclarationSyntax { ParameterList: { } parameters }
@@ -177,7 +177,7 @@ internal sealed partial class JavaScriptEmitter
         property.DeclaredAccessibility == Accessibility.Public && !property.IsStatic && !property.IsIndexer
         && !HasAttribute(property, "Workers.JsonIgnoreAttribute");
 
-    private static void ValidateJsonAttributes(INamedTypeSymbol type)
+    private static void ValidateJsonAttributes(INamedTypeSymbol type, bool typedRead = false)
     {
         var legacy = type.GetMembers().Prepend(type).SelectMany(member => member.GetAttributes())
             .FirstOrDefault(attribute => attribute.AttributeClass?.ContainingNamespace.ToDisplayString()
@@ -185,8 +185,11 @@ internal sealed partial class JavaScriptEmitter
         if (legacy is not null)
             throw new NotSupportedException($"WRK119: '{legacy.AttributeClass}' is outside the Workers JSON contract. Use Workers.JsonName or Workers.JsonIgnore.");
         var collision = JsonContractProperties(type)
-            .GroupBy(property => JsonPropertyName(property) ?? property.Name, StringComparer.Ordinal)
-            .FirstOrDefault(group => group.Count() > 1);
+            .GroupBy(property => JsonPropertyName(property) ?? LowerFirst(property.Name), StringComparer.Ordinal)
+            // Case-distinct C# properties remain usable internally; typed reads need an
+            // unambiguous wire name, and explicit JsonName collisions are always errors.
+            .FirstOrDefault(group => group.Count() > 1
+                && (typedRead || group.Any(property => JsonPropertyName(property) is not null)));
         if (collision is not null)
             throw new NotSupportedException($"WRK119: User type '{type}' contains conflicting JSON property name '{collision.Key}'.");
     }

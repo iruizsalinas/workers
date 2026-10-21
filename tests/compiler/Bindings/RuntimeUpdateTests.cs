@@ -76,7 +76,7 @@ public sealed class RuntimeUpdateTests
 
         Assert.Contains("(($workers$receiver, $workers$arg1) => $workers$notNull($workers$receiver).createBatch($workers$arg1))(flow, { count: 3, params: { source: \"api\" }, retention: { successRetention: \"1 day\" }, locationHint: \"weur\" })", module);
         Assert.Contains("(($workers$receiver$2, $workers$arg1$2) => $workers$notNull($workers$receiver$2).createBatch($workers$arg1$2))(flow, { instances: [{ id: \"a\" }] })", module);
-        Assert.Contains("(($workers$receiver$3, $workers$arg1$3) => $workers$notNull($workers$receiver$3).deleteBatch($workers$arg1$3))(flow, [\"a\", \"b\"])", module);
+        Assert.Contains("(($workers$receiver$3, $workers$arg1$3) => $workers$notNull($workers$receiver$3).deleteBatch(Array.from($workers$arg1$3)))(flow, [\"a\", \"b\"])", module);
         Assert.Contains("(($workers$receiver$4, $workers$arg1$4) => $workers$notNull($workers$receiver$4).sendEvent($workers$arg1$4))(instance, { type: \"approved\", payload: true })", module);
         Assert.Contains("(($workers$receiver$5, $workers$arg1$5) => $workers$notNull($workers$receiver$5).subscribe($workers$arg1$5))(instance, { cursor: 4, filter: [\"step_completed\", \"workflow_completed\"] })", module);
         Assert.Contains("$workers$notNull(events).next().then(item => item.done ? null : item.value)", module);

@@ -101,6 +101,8 @@ internal sealed partial class JavaScriptEmitter
             "Workers.R2Checksums" => $"(value => value == null ? null : new Uint8Array(value))({receiver}.{LowerFirst(property.Name)})",
             // new Date normalizes the log's timestamp whether the binding returns a Date or an ISO string.
             "Workers.AiGatewayLog" when property.Name == "CreatedAt" => $"new Date({receiver}.created_at)",
+            "Workers.QueueMetrics" when property.Name == "OldestMessageTimestamp" =>
+                $"(value => value == null ? null : new Date(value))({receiver}.oldestMessageTimestamp)",
             "Workers.EncapsulatedKey" when property.Name == "Ciphertext" => $"new Uint8Array({receiver}.ciphertext)",
             "Workers.JsonValue" => property.Name switch
             {
