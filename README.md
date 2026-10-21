@@ -34,13 +34,13 @@ Tested locally with Wrangler using a simple SHA-256 worker (1 MiB payload).
 
 | | Old: WebAssembly (0.2.0) | New: JavaScript (0.3.0+) | Improvement |
 |---|---:|---:|---:|
-| Cold request | 356.8 ms | 12.6 ms | **28.3× faster** |
-| Warm request | 143.14 ms | 5.72 ms | **25× faster** |
-| Memory usage | 77.4 MB | 306 KB | **253× lower** |
-| Bundle size (uncompressed) | 4.58 MB | 6.96 KB | **659× smaller** |
+| Cold request | 356.8 ms | 12.6 ms | **28.3x faster** |
+| Warm request | 143.14 ms | 5.72 ms | **25x faster** |
+| Memory usage | 77.4 MB | 306 KB | **253x lower** |
+| Bundle size | 4.58 MB | 6.96 KB | **659x smaller** |
 
 ## Examples
 
-Start with [HelloWorld](./examples/HelloWorld), or browse the [examples and usage notes](./examples/README.md) for HTTP, routing, cookies, storage, queues, and scheduled events.
+Start with a simple [Hello World](./examples/HelloWorld) example, or browse the [examples and usage notes](./examples/README.md) for HTTP, routing, cookies, storage, queues, and scheduled events.
 
 You can also explore a [live demo](https://cloudflare-workers-dotnet.mailpost.workers.dev/) built by [Michiel Post](https://github.com/michielpost).
